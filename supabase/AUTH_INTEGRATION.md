@@ -3,6 +3,18 @@
 ## Prototype status
 `auth-adapter.js` is a small ES-module prototype for Supabase Auth only. It is not imported by the current app and does not sync clinic data. It does not create users, assign roles, or upload local records.
 
+## First data-access slice: patients
+
+`patient-repository.js` is the first repository module, but it is still not imported by `index.html`. It provides branch-scoped read, create, update, and archive functions for the normalized `clinic_patients` table. It requires explicit remote clinic/branch UUIDs and never infers them from local branch IDs.
+
+Before connecting it to the UI, complete these gates:
+- Test each operation with owner, manager, dentist, reception, accountant, readonly, inactive, other-clinic, and unassigned-branch accounts in a disposable Supabase project.
+- Decide and implement the field mapping for local-only patient fields: governorate, source, assigned dentist, tags, notes, local audit fields, and local file-number sequences.
+- Build an owner-controlled import preview that maps local branch IDs to remote UUIDs and detects duplicate file numbers/phones; do not upload the whole `D` object.
+- Keep local storage as the source of truth until remote CRUD and conflict/error handling pass on two devices.
+
+The module's basic field mapping is intentionally incomplete. It must not be described as production sync or enabled in the live UI yet.
+
 ## Why authentication is separate from local app users
 The current app's `D.users` entries contain local password hashes and recovery/session data. These are not valid Supabase Auth credentials. Do not copy those values into `auth.users`, and do not let a browser client assign its own role or branch membership.
 

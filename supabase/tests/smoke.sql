@@ -1,6 +1,18 @@
 -- Synthetic-only schema/RLS/trigger smoke tests.
 \set ON_ERROR_STOP on
 
+-- Inventory ledger INSERT must not be granted to client roles directly.
+do $smoke$
+begin
+  if has_table_privilege('authenticated','public.clinic_inventory_movements','INSERT') then
+    raise exception 'Privilege test failed: authenticated still has direct inventory movement INSERT';
+  end if;
+  if has_table_privilege('anon','public.clinic_inventory_movements','INSERT') then
+    raise exception 'Privilege test failed: anon still has direct inventory movement INSERT';
+  end if;
+end
+$smoke$;
+
 insert into auth.users(id) values
  ('00000000-0000-0000-0000-000000000001'),
  ('00000000-0000-0000-0000-000000000002'),

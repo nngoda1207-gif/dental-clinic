@@ -8,8 +8,10 @@ import {
   signOutSupabase, getCurrentClinicMembership, listAssignedRemoteBranches
 } from './auth-adapter.js';
 import { listPatientsForAssignedBranch } from './patient-sync-service.js';
+import { preparePatientImport, importNewPatients } from './patient-import-service.js';
 
 const CONFIG_KEY = 'dcos_supabase_public_config_v1';
+let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null;
 const el = (tag, attrs = {}, html = '') => {
   const n = document.createElement(tag);
   Object.entries(attrs).forEach(([k, v]) => k === 'class' ? n.className = v : n.setAttribute(k, v));
@@ -112,7 +114,9 @@ async function loadWorkspace() {
     return;
   }
   const membership = result.membership;
+  activeMembership = membership;
   const branches = await listAssignedRemoteBranches(membership.clinic_id);
+  activeBranches = branches;
   if (!branches.length) {
     host.innerHTML = '<p>الحساب عضو في العيادة، لكن لا يوجد فرع مسند إليه. اطلب من مالك العيادة إسناد فرع لهذا الحساب.</p>';
     status('تم التحقق من العضوية، ولا توجد فروع مسندة.');
@@ -120,9 +124,10 @@ async function loadWorkspace() {
   }
   host.innerHTML = `<p><b>الدور:</b> ${escapeHtml(membership.role)} <span class="muted">· تم التحقق من العضوية النشطة</span></p>
     <label>الفرع السحابي<select id="dcos-cloud-branch">${branches.map(b => `<option value="${escapeAttr(b.id)}">${escapeHtml(b.name)}</option>`).join('')}</select></label>
-    <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button">تحميل مرضى الفرع</button></div>
-    <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div>`;
+    <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button">تحميل مرضى الفرع</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
+    <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
   $('dcos-load-patients').addEventListener('click', loadPatients);
+  $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
 }
 async function createClinic() {
@@ -148,6 +153,60 @@ async function createClinic() {
     await loadWorkspace();
   } catch (e) { status(e.message || 'تعذر إنشاء العيادة.'); }
 }
+
+function beginPatientImport() {
+  const host = $('dcos-patient-import');
+  try {
+    const raw = localStorage.getItem('dcos1');
+    if (!raw) throw new Error('لا توجد قاعدة بيانات محلية محفوظة على هذا الجهاز.');
+    localImportSnapshot = JSON.parse(raw);
+    if (!Array.isArray(localImportSnapshot.patients) || !Array.isArray(localImportSnapshot.branches)) throw new Error('بيانات المرضى أو الفروع المحلية غير مكتملة.');
+    importPreview = null;
+    const options = activeBranches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('');
+    host.hidden = false;
+    host.innerHTML = '<h3>ربط الفروع المحلية بالسحابية</h3><p class="muted">اختر فرعًا سحابيًا لكل فرع محلي. لا يتم رفع بيانات في هذه الخطوة.</p>' +
+      localImportSnapshot.branches.map((b,i) => '<label>' + escapeHtml(b.name || ('فرع ' + (i+1))) + '<select data-local-branch="' + escapeAttr(String(b.id ?? '')) + '"><option value="">اختر الفرع السحابي</option>' + options + '</select></label>').join('') +
+      '<button class="primary" id="dcos-preview-patient-import" type="button">معاينة الاستيراد</button><div id="dcos-import-preview-result" class="muted"></div>';
+    $('dcos-preview-patient-import').addEventListener('click', previewPatientImportNow);
+    status('تم تجهيز البيانات المحلية للمعاينة فقط؛ لم يتم الرفع.');
+  } catch (e) { status(e.message || 'تعذر تجهيز المعاينة.'); }
+}
+
+async function previewPatientImportNow() {
+  const result = $('dcos-import-preview-result');
+  try {
+    const selects = [...$('dcos-patient-import').querySelectorAll('select[data-local-branch]')];
+    importBranchMap = {};
+    for (const select of selects) {
+      if (!select.value) throw new Error('اربط كل الفروع المحلية بفرع سحابي قبل المعاينة.');
+      importBranchMap[select.dataset.localBranch] = select.value;
+    }
+    const remoteIds = [...new Set(Object.values(importBranchMap))];
+    const lists = await Promise.all(remoteIds.map(branchId => listPatientsForAssignedBranch({branchId, limit:1000})));
+    importPreview = preparePatientImport({localState:localImportSnapshot, clinicId:activeMembership.clinic_id, branchMap:importBranchMap, remotePatients:lists.flat()});
+    const n = importPreview.counts;
+    result.innerHTML = '<p><b>معاينة — بيانات المرضى الأساسية فقط</b></p><p>جديد: ' + n.new + ' · موجود: ' + n.duplicate + ' · تعارض: ' + n.conflict + ' · مستبعد: ' + n.blocked + '</p>' +
+      '<p class="muted">لن يتم رفع السجلات العلاجية أو الأشعة أو الوصفات أو المدفوعات، ولن يتم تعديل مريض موجود.</p><ul>' +
+      importPreview.rows.filter(x => x.state !== 'new').slice(0,30).map(x => '<li>' + escapeHtml(x.localId) + ' — ' + escapeHtml(x.reason) + '</li>').join('') + '</ul>' +
+      (n.new ? '<button class="primary" id="dcos-confirm-patient-import" type="button">تأكيد رفع المرضى الجدد فقط</button>' : '<p>لا توجد سجلات جديدة جاهزة للرفع.</p>');
+    if (n.new) $('dcos-confirm-patient-import').addEventListener('click', confirmPatientImport);
+    status('اكتملت المعاينة دون كتابة أي بيانات على Supabase.');
+  } catch (e) { result.textContent = e.message || 'تعذر إعداد المعاينة.'; }
+}
+
+async function confirmPatientImport() {
+  const result = $('dcos-import-preview-result');
+  const button = $('dcos-confirm-patient-import');
+  if (!importPreview || !window.confirm('سيتم رفع ' + importPreview.counts.new + ' مريضًا جديدًا ببياناتهم الأساسية فقط. هل تريد المتابعة؟')) return;
+  button.disabled = true;
+  result.textContent = 'جارٍ رفع السجلات الجديدة واحدًا تلو الآخر…';
+  try {
+    const outcome = await importNewPatients({localState:localImportSnapshot, branchMap:importBranchMap, preview:importPreview});
+    result.textContent = 'انتهى الاستيراد: تمت إضافة ' + outcome.imported + '، وفشل ' + outcome.failed + '. أعد المعاينة قبل إعادة المحاولة؛ السجلات التي أضيفت ستظهر كموجودة بالفعل.';
+    status('انتهت محاولة استيراد المرضى. لم يتم رفع أي بيانات طبية فرعية.');
+  } catch (e) { result.textContent = e.message || 'توقف الاستيراد بسبب خطأ.'; button.disabled = false; }
+}
+
 async function loadPatients() {
   const branchId = $('dcos-cloud-branch').value;
   const host = $('dcos-cloud-patients');

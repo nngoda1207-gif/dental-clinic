@@ -25,7 +25,7 @@ assert.match(validation, /Date of birth must be a valid date in the past/, 'inva
 assert.match(validation, /Patient status is invalid/, 'unknown status values must not silently become active');
 assert.match(validation, /Sex must be male, female, other, or empty/, 'unknown sex values must not be silently discarded');
 assert.match(validation, /Patient email address is invalid/, 'malformed email must be rejected');
-assert.match(validation, /One or more patient contact fields are too long/, 'oversized contact fields must be rejected');
+assert.match(validation, /One or more patient profile fields are too long/, 'oversized patient profile fields must be rejected');
 assert.doesNotMatch(repo, /localStorage|dcos1|\.from\(['"]clinic_state['"]\)/, 'repository must not sync the local D blob');
 assert.match(auth, /storageKey: 'dcos_supabase_auth_v1'/, 'Supabase auth storage must be isolated from the app dataset');
 

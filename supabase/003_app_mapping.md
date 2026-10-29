@@ -23,8 +23,8 @@ Other modules are initialized or used later in the app, including services/proce
 | `branches` | `clinic_branches` | Keep stable branch IDs or maintain an explicit ID map |
 | `users` | `auth.users` + `clinic_members` + `clinic_member_branches` | Never migrate local password hashes, session tokens, or recovery tokens as Supabase credentials |
 | `patients` | `clinic_patients` | Map every current patient field; preserve file numbers and branch IDs |
-| appointments (`appts`) | `clinic_appointments` | Preserve duration, status history, source, dentist, branch, patient and chair. **Chair/resource table is still missing.** |
-| chairs/rooms (`chairs`) | New `clinic_chairs` table required | Include branch, name, active status and optional resource type; appointment conflict checks must be server-side to avoid simultaneous double-booking |
+| appointments (`appts`) | `clinic_appointments` + `clinic_appointment_events` | Preserve duration, status history, source, dentist, branch, patient and chair; validate appointment chair references and overlap behavior server-side. |
+| chairs/rooms (`chairs`) | `clinic_chairs` | Table exists in `003_supplemental_clinical_tables.sql`; verify the current app’s chair IDs and scheduling behavior map cleanly. |
 | visit notes (`patients[].visits`) | `clinic_clinical_records` | Current visit object also includes medication/material use and completed procedure references; map those to child rows rather than one opaque note |
 | medical history / odontogram / perio (`mh`, `teeth`, `perio`) | New structured clinical tables or a carefully typed clinical extension | These are sensitive clinical records and must inherit the same branch/role rules; do not flatten away tooth-level history |
 | prescriptions / consents (`rx`, `cons`) | `clinic_clinical_records` plus child/detail tables | Preserve signature, signer relationship, issue/void history, and prescription item details |

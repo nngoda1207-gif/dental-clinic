@@ -6,7 +6,7 @@ import {getCurrentClinicMembership,listAssignedRemoteBranches} from './auth-adap
 import {requireActiveClinicContext,requireAssignedRemoteBranch} from './clinic-context.js';
 import * as repository from './treatment-repository.js';
 const CLINICAL_ROLES=new Set(['owner','manager','dentist']);
-const READ_ROLES=new Set(['owner','manager','dentist','nurse','accountant','reception','readonly']);
+const READ_ROLES=new Set(['owner','manager','dentist','nurse','readonly']);
 async function resolve(branchId,write=false){
  const context=requireActiveClinicContext(await getCurrentClinicMembership());
  if(!(write?CLINICAL_ROLES:READ_ROLES).has(context.role))throw new Error('Your clinic role does not allow this treatment operation.');

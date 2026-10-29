@@ -32,7 +32,11 @@ Use two branches in Clinic A and a second clinic with synthetic patients.
 - Owner can view all branches in their clinic, but cannot read another clinic's data.
 - Manager can access only assigned branches and cannot promote self/others to owner.
 - Dentist can read/write clinical records, odontogram, periodontal measurements and consent data only in assigned branches.
-- Reception can access patient demographics and appointments only as permitted by the approved product matrix; cannot read clinical notes, prescriptions, medical history, odontogram or periodontal measurements.
+- Reception can access patient demographics and appointments only as permitted by the approved product matrix; reception must not read or write clinical notes/diagnoses, but may read permitted invoice information.
+- Accountant can read permitted invoices/payments but cannot read clinical notes/diagnoses or write clinical records.
+- Read-only users cannot insert, update, or delete any clinic data.
+- Inactive members immediately lose access; unassigned-branch members cannot read or write that branch.
+- No staff role can read another clinic’s records, even if it guesses UUIDs; cannot read clinical notes, prescriptions, medical history, odontogram or periodontal measurements.
 - Accountant can access invoices/payments and permitted lab finance records, but not clinical notes or medical history.
 - Read-only member can read only the approved modules and cannot insert/update/delete.
 - Inactive membership loses access immediately.

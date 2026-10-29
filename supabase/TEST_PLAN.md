@@ -12,8 +12,9 @@ Run only in a disposable/test Supabase project with synthetic records. Do not us
 7. `007_stock_privileges_and_appointment_overlap.sql`
 8. `008_inventory_rpc_only.sql`
 9. `009_patient_profile_fields.sql`
+10. `010_atomic_invoice_payments.sql`
 
-The SQL files have not been executed against the connected Supabase project as part of this repository change. The CI workflow provides a PostgreSQL compatibility/smoke test, but passing it does not prove Supabase Auth/RLS behavior; still test on a disposable Supabase project. Do not apply migrations to a project containing real patient data until the RLS and role matrix has been reviewed and tested.
+The SQL files have not been executed against the connected Supabase project as part of this repository change. The CI workflow applies all ten migrations and runs synthetic PostgreSQL compatibility/smoke tests, including atomic payment/refund checks, but passing it does not prove Supabase Auth/RLS behavior; still test on a disposable Supabase project. Do not apply migrations to a project containing real patient data until the RLS and role matrix has been reviewed and tested.
 
 ## Required test identities
 Create synthetic Auth users for:
@@ -47,7 +48,10 @@ Use two branches in Clinic A and a second clinic with synthetic patients.
 - Appointment events reject update/delete attempts and require the actor to be the authenticated user with an appointment-managing role.
 - An update cannot move a record into a branch the user is not assigned to.
 - Appointment overlap tests must eventually run through a server-side transaction/RPC; two simultaneous requests for the same chair and time must not both succeed.
-- Invoice payments, lab payments, inventory movements and audit events reject update/delete; test that corrections are recorded as new reversal/adjustment events.
+- Invoice payments, invoice refunds, lab payments, inventory movements and audit events reject update/delete; test that corrections are recorded as new reversal/adjustment events.
+- Invoice payment posting locks the invoice, rejects amounts above the outstanding balance, and updates invoice status atomically.
+- Partial/full refunds must reference an original payment, cannot exceed its unrefunded amount, update the invoice's net-paid status atomically, and remain immutable.
+- Authenticated clients cannot insert invoice-payment ledger rows directly; payment/refund RPCs enforce owner/manager/accountant role and assigned-branch access.
 - Inventory quantity changes must be posted atomically with movement history.
 - Audit actor IDs must come from the authenticated identity, not a client-supplied user ID.
 

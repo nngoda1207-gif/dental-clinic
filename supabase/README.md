@@ -6,6 +6,7 @@
 - `002_operational_tables.sql` adds normalized operational tables for patients, appointments, clinical records, treatment items, invoices/payments, services, suppliers, inventory, lab cases, and audit events.
 - `003_supplemental_clinical_tables.sql` adds chairs/rooms, a laboratory directory, lab payments, medical history, tooth-level records, periodontal measurements, prescription items, consents, and appointment events.
 - `004_integrity_guards.sql` adds branch-to-parent consistency triggers, appointment duration validation, and append-only appointment event protection.
+- `005_ledger_and_parent_guards.sql` adds further parent-branch checks and protects payment, inventory movement, and audit ledgers from edits/deletions.
 - `003_app_mapping.md` maps the existing UI/data to the proposed schema; `TEST_PLAN.md` lists required synthetic-data RLS and migration tests.
 - `auth-adapter.js` is an isolated Auth prototype only; it is not imported into the app and does not sync records.
 - The current app in `index.html` still uses local storage for its full `D` state and its custom local login.
@@ -16,7 +17,7 @@
 
 1. Test in a separate Supabase project first, using synthetic data only.
 2. Apply SQL in this order: `001_clinic_membership.sql`, `002_operational_tables.sql`, then `003_supplemental_clinical_tables.sql`.
-3. Apply `004_integrity_guards.sql` after the first three migrations, then follow `TEST_PLAN.md`; do not treat a successful SQL run alone as proof that role/branch security is correct.
+3. Apply `004_integrity_guards.sql` and `005_ledger_and_parent_guards.sql` after the first three migrations, then follow `TEST_PLAN.md`; do not treat a successful SQL run alone as proof that role/branch security is correct.
 4. Confirm the project has a recent backup.
 5. Review the SQL and confirm the desired owner/member workflow.
 6. Run the migration only after review; it is not automatically executed by GitHub.
@@ -31,7 +32,7 @@ Supabase Auth must also be integrated with the current local login carefully. Th
 
 ## Planned implementation order
 
-1. Review and test all four SQL migrations in a separate Supabase project.
+1. Review and test all five SQL migrations in a separate Supabase project.
 2. Audit the policies against the clinic's exact role/branch workflow; these are an initial draft and need security testing.
 3. Integrate and test the Auth prototype through a controlled onboarding/invitation flow; do not migrate local password hashes.
 4. Add a controlled migration path for existing local accounts.

@@ -19,6 +19,11 @@ assert.match(repo, /\.eq\('clinic_id', clinicId\)/, 'reads/writes must be clinic
 assert.match(repo, /\.eq\('branch_id', branchId\)/, 'reads/writes must be branch-scoped');
 assert.match(repo, /created_by: userId/, 'creator must come from the authenticated session');
 assert.match(repo, /status: 'archived'/, 'archiving should preserve patient history');
+assert.match(repo, /Date of birth must be a valid date in the past/, 'invalid calendar/future birth dates must be rejected');
+assert.match(repo, /Patient status is invalid/, 'unknown status values must not silently become active');
+assert.match(repo, /Sex must be male, female, other, or empty/, 'unknown sex values must not be silently discarded');
+assert.match(repo, /Patient email address is invalid/, 'malformed email must be rejected');
+assert.match(repo, /One or more patient contact fields are too long/, 'oversized contact fields must be rejected');
 assert.doesNotMatch(repo, /localStorage|dcos1|\.from\(['"]clinic_state['"]\)/, 'repository must not sync the local D blob');
 assert.match(auth, /storageKey: 'dcos_supabase_auth_v1'/, 'Supabase auth storage must be isolated from the app dataset');
 

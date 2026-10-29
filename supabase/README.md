@@ -32,7 +32,7 @@
 ## Before running the migration
 
 1. The GitHub Actions PostgreSQL smoke test should pass, then test in a separate Supabase project using synthetic data only.
-2. Apply all nine SQL files in numerical order (`001` through `009`) in a separate disposable Supabase project.
+2. Apply all twelve SQL files in numerical order (`001` through `012`) in a separate disposable Supabase project.
 3. Follow `TEST_PLAN.md`; do not treat a successful SQL run alone as proof that role/branch security is correct.
 4. Confirm the project has a recent backup.
 5. Review the SQL and confirm the desired owner/member workflow.
@@ -48,7 +48,7 @@ Supabase Auth must also be integrated with the current local login carefully. Th
 
 ## Planned implementation order
 
-1. Review and test all nine SQL migrations in a separate Supabase project.
+1. Review and test all twelve SQL migrations in a separate Supabase project.
 2. Audit the policies against the clinic's exact role/branch workflow; these are an initial draft and need security testing.
 3. Integrate and test the Auth prototype through a controlled onboarding/invitation flow; do not migrate local password hashes.
 4. Add a controlled migration path for existing local accounts.

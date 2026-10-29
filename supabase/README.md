@@ -6,6 +6,7 @@
 - `002_operational_tables.sql` adds normalized operational tables for patients, appointments, clinical records, treatment items, invoices/payments, services, suppliers, inventory, lab cases, and audit events.
 - `003_supplemental_clinical_tables.sql` adds chairs/rooms, a laboratory directory, lab payments, medical history, tooth-level records, periodontal measurements, prescription items, consents, and appointment events.
 - `003_app_mapping.md` maps the existing UI/data to the proposed schema; `TEST_PLAN.md` lists required synthetic-data RLS and migration tests.
+- `auth-adapter.js` is an isolated Auth prototype only; it is not imported into the app and does not sync records.
 - The current app in `index.html` still uses local storage for its full `D` state and its custom local login.
 - This migration does **not** turn on app sync and does **not** migrate existing local users.
 - Do not put a Supabase secret/service-role key in browser or APK code.
@@ -31,8 +32,9 @@ Supabase Auth must also be integrated with the current local login carefully. Th
 
 1. Review and test all three SQL migrations in a separate Supabase project.
 2. Audit the policies against the clinic's exact role/branch workflow; these are an initial draft and need security testing.
-3. Add Supabase Auth and a controlled migration path for existing local accounts.
-4. Map the existing `D` object and each current screen/action to normalized records; keep backup/restore available.
-5. Implement load/save, validation, and conflict handling in the app.
-6. Test with two devices and test every role/branch, including attempts to access another branch.
-7. Build and install a new APK only after the web app tests pass.
+3. Integrate and test the Auth prototype through a controlled onboarding/invitation flow; do not migrate local password hashes.
+4. Add a controlled migration path for existing local accounts.
+5. Map the existing `D` object and each current screen/action to normalized records; keep backup/restore available.
+6. Implement load/save, validation, and conflict handling in the app.
+7. Test with two devices and test every role/branch, including attempts to access another branch.
+8. Build and install a new APK only after the web app tests pass.

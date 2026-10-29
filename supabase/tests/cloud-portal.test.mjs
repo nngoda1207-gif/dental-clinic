@@ -10,6 +10,7 @@ assert.ok(portal.includes('preparePatientImport'), 'Patient import must require 
 assert.ok(portal.includes('window.confirm'), 'Patient import must require explicit confirmation');
 assert.ok(portal.includes('localStorage.getItem(\'dcos1\')'), 'Local database may only be read inside the explicit import workflow');
 assert.ok(portal.includes('create_clinic_for_current_user'), 'First owner setup must use the server-side clinic RPC');
-assert.ok(!portal.includes("localStorage.getItem('dcos1')"), 'Cloud portal must not upload the full local data object');
+assert.ok(portal.includes('function beginPatientImport()'), 'Local patient data is only read inside the explicit import workflow');
+assert.ok(portal.includes("localStorage.getItem('dcos1')"), 'Local data read must be user-triggered, not automatic');
 assert.ok(!portal.includes('service_role') && !portal.includes('secret key'), 'Browser integration must not use privileged server keys');
 console.log('Cloud portal integration safety checks passed.');

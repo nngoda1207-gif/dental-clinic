@@ -6,6 +6,9 @@ assert.ok(index.includes('./supabase/cloud-portal.js'), 'App must load the isola
 assert.ok(portal.includes('signInWithPassword'), 'Cloud portal must use Supabase Auth');
 assert.ok(portal.includes('listAssignedRemoteBranches'), 'Cloud portal must resolve assigned branches');
 assert.ok(portal.includes('listPatientsForAssignedBranch'), 'Patient reads must use the guarded sync service');
+assert.ok(portal.includes('preparePatientImport'), 'Patient import must require a preview');
+assert.ok(portal.includes('window.confirm'), 'Patient import must require explicit confirmation');
+assert.ok(portal.includes('localStorage.getItem(\'dcos1\')'), 'Local database may only be read inside the explicit import workflow');
 assert.ok(portal.includes('create_clinic_for_current_user'), 'First owner setup must use the server-side clinic RPC');
 assert.ok(!portal.includes("localStorage.getItem('dcos1')"), 'Cloud portal must not upload the full local data object');
 assert.ok(!portal.includes('service_role') && !portal.includes('secret key'), 'Browser integration must not use privileged server keys');

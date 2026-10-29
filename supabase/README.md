@@ -3,14 +3,18 @@
 ## Current status
 
 - `001_clinic_membership.sql` is an initial, additive schema for a clinic, staff memberships, branches, and branch assignments.
-- `002_operational_tables.sql` adds separate tables for patients, appointments, clinical records, treatment items, invoices/payments, services, suppliers, inventory, lab cases, and audit events, with initial role/branch RLS policies.
+- `002_operational_tables.sql` adds normalized operational tables for patients, appointments, clinical records, treatment items, invoices/payments, services, suppliers, inventory, lab cases, and audit events.
+- `003_supplemental_clinical_tables.sql` adds chairs/rooms, a laboratory directory, lab payments, medical history, tooth-level records, periodontal measurements, prescription items, consents, and appointment events.
+- `003_app_mapping.md` maps the existing UI/data to the proposed schema; `TEST_PLAN.md` lists required synthetic-data RLS and migration tests.
 - The current app in `index.html` still uses local storage for its full `D` state and its custom local login.
 - This migration does **not** turn on app sync and does **not** migrate existing local users.
 - Do not put a Supabase secret/service-role key in browser or APK code.
 
 ## Before running the migration
 
-1. Test in a separate Supabase project first.
+1. Test in a separate Supabase project first, using synthetic data only.
+2. Apply SQL in this order: `001_clinic_membership.sql`, `002_operational_tables.sql`, then `003_supplemental_clinical_tables.sql`.
+3. Follow `TEST_PLAN.md`; do not treat a successful SQL run alone as proof that role/branch security is correct.
 2. Confirm the project has a recent backup.
 3. Review the SQL and confirm the desired owner/member workflow.
 4. Run the migration only after review; it is not automatically executed by GitHub.
@@ -25,7 +29,7 @@ Supabase Auth must also be integrated with the current local login carefully. Th
 
 ## Planned implementation order
 
-1. Review and test both SQL migrations in a separate Supabase project.
+1. Review and test all three SQL migrations in a separate Supabase project.
 2. Audit the policies against the clinic's exact role/branch workflow; these are an initial draft and need security testing.
 3. Add Supabase Auth and a controlled migration path for existing local accounts.
 4. Map the existing `D` object and each current screen/action to normalized records; keep backup/restore available.

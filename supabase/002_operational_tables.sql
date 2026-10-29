@@ -40,6 +40,7 @@ create table if not exists public.clinic_appointments (
   created_by uuid not null references auth.users(id) on delete restrict,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  unique (clinic_id, id),
   foreign key (clinic_id, branch_id)
     references public.clinic_branches(clinic_id, id) on delete restrict,
   foreign key (clinic_id, patient_id)
@@ -64,10 +65,13 @@ create table if not exists public.clinic_clinical_records (
   created_by uuid not null references auth.users(id) on delete restrict,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  unique (clinic_id, id),
   foreign key (clinic_id, branch_id)
     references public.clinic_branches(clinic_id, id) on delete restrict,
   foreign key (clinic_id, patient_id)
-    references public.clinic_patients(clinic_id, id) on delete restrict
+    references public.clinic_patients(clinic_id, id) on delete restrict,
+  foreign key (clinic_id, appointment_id)
+    references public.clinic_appointments(clinic_id, id) on delete restrict
 );
 
 create table if not exists public.clinic_treatment_items (
@@ -89,6 +93,8 @@ create table if not exists public.clinic_treatment_items (
     references public.clinic_branches(clinic_id, id) on delete restrict,
   foreign key (clinic_id, patient_id)
     references public.clinic_patients(clinic_id, id) on delete restrict,
+  foreign key (clinic_id, clinical_record_id)
+    references public.clinic_clinical_records(clinic_id, id) on delete restrict,
   check (discount <= quantity * unit_price)
 );
 

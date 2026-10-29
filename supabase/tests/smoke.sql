@@ -121,7 +121,7 @@ values ('60000000-0000-0000-0000-000000000001',
         '20000000-0000-0000-0000-000000000001',
         '30000000-0000-0000-0000-000000000001',
         'Synthetic Lab','00000000-0000-0000-0000-000000000001');
-do $
+do $smoke$
 begin
   begin
     insert into public.clinic_lab_payments(clinic_id,branch_id,lab_case_id,amount,created_by)
@@ -140,7 +140,7 @@ insert into public.clinic_audit_events(clinic_id,branch_id,actor_user_id,action,
 values ('10000000-0000-0000-0000-000000000001',
         '20000000-0000-0000-0000-000000000001',
         '00000000-0000-0000-0000-000000000001','test','synthetic');
-do $
+do $smoke$
 begin
   begin
     update public.clinic_audit_events set action='rewritten' where action='test' and entity_type='synthetic';

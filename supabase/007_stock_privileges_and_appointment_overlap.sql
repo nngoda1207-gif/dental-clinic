@@ -13,6 +13,7 @@ grant update (
 create or replace function public.prevent_dentist_appointment_overlap()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $$
 declare
@@ -60,5 +61,7 @@ before insert or update of clinic_id, dentist_user_id, starts_at, ends_at, statu
 on public.clinic_appointments
 for each row execute function public.prevent_dentist_appointment_overlap();
 
+revoke all on function public.prevent_dentist_appointment_overlap() from public, anon, authenticated;
+
 comment on function public.prevent_dentist_appointment_overlap()
-is 'Serializes appointment writes per clinic and prevents overlapping active appointments for one dentist.';
+is 'SECURITY DEFINER trigger function: serializes appointment writes per clinic and prevents overlapping active appointments for one dentist, including rows hidden by caller RLS.';

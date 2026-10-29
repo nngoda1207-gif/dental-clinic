@@ -6,6 +6,7 @@ Run only in a disposable/test Supabase project with synthetic records. Do not us
 1. `001_clinic_membership.sql`
 2. `002_operational_tables.sql`
 3. `003_supplemental_clinical_tables.sql`
+4. `004_integrity_guards.sql`
 
 The SQL files have not been executed against the user's Supabase project as part of this repository change. Treat them as reviewed drafts until tested on a separate project.
 
@@ -32,13 +33,16 @@ Use two branches in Clinic A and a second clinic with synthetic patients.
 - Inactive membership loses access immediately.
 - A user cannot assign themselves a role, clinic membership, or branch membership.
 - A record cannot reference a patient, invoice, appointment, or clinical record from another clinic.
+- Medical history, tooth/perio rows, consents, lab payments and appointment events must reject a branch mismatch with their parent record.
+- Appointments reject an end time that is equal to or earlier than the start time.
+- Appointment events reject update/delete attempts and require the actor to be the authenticated user with an appointment-managing role.
 - An update cannot move a record into a branch the user is not assigned to.
 - Appointment overlap tests must eventually run through a server-side transaction/RPC; two simultaneous requests for the same chair and time must not both succeed.
 - Inventory quantity changes and lab/invoice payments must be atomic and preserve append-only movement/payment history.
 - Audit actor IDs must come from the authenticated identity, not a client-supplied user ID.
 
 ## Acceptance criteria before merge
-- All three SQL migrations execute cleanly on a fresh disposable project.
+- All four SQL migrations execute cleanly on a fresh disposable project.
 - RLS tests pass for every role, branch, inactive user, and cross-clinic case.
 - The existing app's fields have an explicit migration mapping; no field silently dropped.
 - Import preview reports counts and validation failures, and a backup can be restored.

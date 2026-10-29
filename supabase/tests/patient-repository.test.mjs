@@ -5,6 +5,7 @@ const repo = readFileSync('supabase/patient-repository.js', 'utf8');
 const auth = readFileSync('supabase/auth-adapter.js', 'utf8');
 const validation = readFileSync('supabase/patient-validation.js', 'utf8');
 const schema = readFileSync('supabase/002_operational_tables.sql', 'utf8');
+const patientFields = readFileSync('supabase/009_patient_profile_fields.sql', 'utf8');
 const mapping = readFileSync('supabase/003_app_mapping.md', 'utf8');
 
 for (const method of [
@@ -37,6 +38,10 @@ for (const policy of [
   assert.ok(schema.includes('create policy ' + policy), 'missing patient RLS policy: ' + policy);
 }
 assert.match(schema, /created_by = auth\.uid\(\)/, 'patient creation must bind creator to auth.uid()');
+for (const field of ['english_name', 'governorate', 'source', 'assigned_dentist_user_id', 'tags']) {
+  assert.match(patientFields, new RegExp('add column if not exists ' + field), 'missing patient field: ' + field);
+  assert.ok(repo.includes(field), 'repository must map patient field: ' + field);
+}
 assert.match(mapping, /Do not automatically merge local `dcos1` blobs/, 'migration plan must prohibit blind local blob merging');
 
 console.log('Patient repository static safety checks passed.');

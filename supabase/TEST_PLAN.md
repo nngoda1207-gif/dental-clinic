@@ -53,6 +53,7 @@ Use two branches in Clinic A and a second clinic with synthetic patients.
 - Invoice payments, invoice refunds, lab payments, inventory movements and audit events reject update/delete; test that corrections are recorded as new reversal/adjustment events.
 - Invoice payment posting locks the invoice, rejects amounts above the outstanding balance, and updates invoice status atomically.
 - Only completed treatment items can be invoiced; the operation locks treatment rows and a unique constraint prevents billing the same treatment item twice.
+- Treatment workflow service exposes branch-scoped service catalog and patient treatment reads; only owner/manager/dentist can add or update planned treatment items, and only planned items can transition to done/cancelled. Static tests check role gates, branch checks, and the billing RPC link.
 - Partial/full refunds must reference an original payment, cannot exceed its unrefunded amount, update the invoice's net-paid status atomically, and remain immutable.
 - Authenticated clients cannot insert invoice-payment ledger rows directly; payment/refund RPCs enforce owner/manager/accountant role and assigned-branch access.
 - Inventory quantity changes must be posted atomically with movement history.

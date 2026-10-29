@@ -70,6 +70,7 @@ jobs:
           node supabase/tests/prescription-consent-sync-service.test.mjs
           node supabase/tests/financial-sync-service.test.mjs
           node supabase/tests/treatment-sync-service.test.mjs
+          node supabase/tests/cloud-portal.test.mjs
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Bootstrap minimal Supabase Auth compatibility

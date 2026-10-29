@@ -40,6 +40,7 @@ jobs:
       - name: Validate Supabase ES module syntax
         run: |
           node --input-type=module --check < supabase/auth-adapter.js
+          node --input-type=module --check < supabase/cloud-portal.js
           node --input-type=module --check < supabase/patient-repository.js
           node --input-type=module --check < supabase/patient-validation.js
           node --input-type=module --check < supabase/import-preview.js

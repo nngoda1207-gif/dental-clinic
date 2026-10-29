@@ -10,7 +10,7 @@ import { getSupabaseClient, getCurrentSupabaseSession } from './auth-adapter.js'
 import { normalizePatient } from './patient-validation.js';
 
 const PATIENT_FIELDS = [
-  'id', 'clinic_id', 'branch_id', 'file_no', 'full_name', 'phone', 'phone_alt',
+  'id', 'clinic_id', 'branch_id', 'file_no', 'full_name', 'english_name', 'governorate', 'source', 'tags', 'assigned_dentist_user_id', 'phone', 'phone_alt',
   'email', 'date_of_birth', 'sex', 'address', 'emergency_contact', 'status',
   'created_by', 'created_at', 'updated_at'
 ].join(',');
@@ -35,6 +35,11 @@ function toLocalPatient(row) {
     remoteId: row.id,
     no: row.file_no,
     name: row.full_name,
+    en: row.english_name || '',
+    gov: row.governorate || '',
+    so: row.source || '',
+    tg: row.tags || [],
+    remoteDentistId: row.assigned_dentist_user_id || '',
     ph: row.phone,
     ph2: row.phone_alt,
     em: row.email,

@@ -9,7 +9,7 @@ Run only in a disposable/test Supabase project with synthetic records. Do not us
 4. `004_integrity_guards.sql`
 5. `005_ledger_and_parent_guards.sql`
 
-The SQL files have not been executed against the user's Supabase project as part of this repository change. Treat them as reviewed drafts until tested on a separate project.
+The SQL files have not been executed against the user's Supabase project as part of this repository change. The CI workflow provides a PostgreSQL compatibility/smoke test, but passing it does not prove Supabase Auth/RLS behavior; still test on a disposable Supabase project.
 
 ## Required test identities
 Create synthetic Auth users for:
@@ -44,7 +44,7 @@ Use two branches in Clinic A and a second clinic with synthetic patients.
 - Audit actor IDs must come from the authenticated identity, not a client-supplied user ID.
 
 ## Acceptance criteria before merge
-- All five SQL migrations execute cleanly on a fresh disposable project.
+- All five SQL migrations execute cleanly in GitHub Actions PostgreSQL CI and on a fresh disposable Supabase project.
 - RLS tests pass for every role, branch, inactive user, and cross-clinic case.
 - The existing app's fields have an explicit migration mapping; no field silently dropped.
 - Import preview reports counts and validation failures, and a backup can be restored.

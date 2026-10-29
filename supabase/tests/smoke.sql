@@ -245,14 +245,19 @@ reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000006',false);
 do $smoke$
-declare n integer;
+declare n integer; affected integer := 0;
 begin
   select count(*) into n from public.clinic_patients;
   if n <> 1 then raise exception 'RLS test failed: manager expected only assigned-branch patient, got %', n; end if;
-  update public.clinic_patients
-     set branch_id='20000000-0000-0000-0000-000000000002'
-   where id='30000000-0000-0000-0000-000000000001';
-  if found then
+  begin
+    update public.clinic_patients
+       set branch_id='20000000-0000-0000-0000-000000000002'
+     where id='30000000-0000-0000-0000-000000000001';
+    get diagnostics affected = row_count;
+  exception when insufficient_privilege then
+    affected := 0;
+  end;
+  if affected <> 0 then
     raise exception 'RLS test failed: manager moved patient into unassigned branch';
   end if;
 end

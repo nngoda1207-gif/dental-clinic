@@ -356,7 +356,7 @@ for select to authenticated
 using (
   public.has_clinic_role(clinic_id, array['owner'])
   or (
-    public.has_clinic_role(clinic_id, array['manager','dentist','nurse','readonly'])
+    public.has_clinic_role(clinic_id, array['manager','dentist','nurse'])
     and public.can_access_clinic_branch(clinic_id, branch_id)
   )
 );

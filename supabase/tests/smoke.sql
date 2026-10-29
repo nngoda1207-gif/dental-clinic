@@ -31,6 +31,13 @@ insert into public.clinic_member_branches(clinic_id,user_id,branch_id) values
 insert into public.clinic_patients(id,clinic_id,branch_id,file_no,full_name,created_by) values
  ('30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','A-001','Synthetic Patient A','00000000-0000-0000-0000-000000000001'),
  ('30000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000002','B-001','Synthetic Patient B','00000000-0000-0000-0000-000000000001');
+insert into public.clinic_inventory_items(id,clinic_id,branch_id,sku,name,quantity,created_by)
+values ('80000000-0000-0000-0000-000000000001',
+        '10000000-0000-0000-0000-000000000001',
+        '20000000-0000-0000-0000-000000000001',
+        'SYN-ITEM-1','Synthetic inventory item',0,
+        '00000000-0000-0000-0000-000000000001');
+
 insert into public.clinic_invoices(id,clinic_id,branch_id,patient_id,invoice_no,subtotal,total,created_by) values
  ('40000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','INV-A-1',100,100,'00000000-0000-0000-0000-000000000001');
 insert into public.clinic_invoice_payments(id,clinic_id,branch_id,invoice_id,amount,created_by) values
@@ -286,8 +293,46 @@ reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000006',false);
 do $smoke$
-declare n integer; affected integer := 0;
+declare n integer; affected integer := 0; stock numeric;
 begin
+  -- Atomic stock posting updates both the balance and immutable movement ledger.
+  perform public.post_inventory_movement(
+    '80000000-0000-0000-0000-000000000001','purchase',10,2.50,'TEST-IN','synthetic purchase'
+  );
+  perform public.post_inventory_movement(
+    '80000000-0000-0000-0000-000000000001','use',-3,2.50,'TEST-USE','synthetic use'
+  );
+  select quantity into stock from public.clinic_inventory_items
+   where id='80000000-0000-0000-0000-000000000001';
+  if stock <> 7 then
+    raise exception 'Inventory test failed: expected stock 7 after +10 and -3, got %', stock;
+  end if;
+
+  begin
+    perform public.post_inventory_movement(
+      '80000000-0000-0000-0000-000000000001','use',-20,2.50,'TEST-OVERDRAW','must fail'
+    );
+    raise exception 'Inventory test failed: overdraw was accepted';
+  exception when check_violation then null;
+  end;
+  select quantity into stock from public.clinic_inventory_items
+   where id='80000000-0000-0000-0000-000000000001';
+  if stock <> 7 then
+    raise exception 'Inventory test failed: rejected overdraw changed stock, got %', stock;
+  end if;
+
+  begin
+    update public.clinic_inventory_movements set notes='rewritten'
+     where reference='TEST-IN';
+    raise exception 'Inventory test failed: movement update accepted';
+  exception when sqlstate '55000' then null;
+  end;
+  begin
+    delete from public.clinic_inventory_movements where reference='TEST-IN';
+    raise exception 'Inventory test failed: movement deletion accepted';
+  exception when sqlstate '55000' then null;
+  end;
+
   select count(*) into n from public.clinic_patients;
   if n <> 1 then raise exception 'RLS test failed: manager expected only assigned-branch patient, got %', n; end if;
   begin

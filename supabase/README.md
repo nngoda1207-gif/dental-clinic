@@ -14,6 +14,7 @@
 - `003_app_mapping.md` maps the existing UI/data to the proposed schema; `TEST_PLAN.md` lists required synthetic-data RLS and migration tests.
 - `.github/workflows/supabase-schema-test.yml` runs migrations `001`–`009` against a disposable PostgreSQL service and executes synthetic smoke tests. This is a compatibility smoke test, not a substitute for testing on Supabase itself.
 - `auth-adapter.js` is an isolated Auth prototype only; it is not imported into the app and does not sync records.
+- `clinic-context.js` validates active membership and explicit remote branch assignment for UI gating; PostgreSQL RLS remains authoritative.
 - `import-preview.js` is also not wired into the app; it is a tested safety primitive, not a production import workflow.
 - `import-preview.js` is a read-only legacy-backup preview: it checks patient demographics and explicit branch mappings, reports blocked rows and unmodeled top-level modules, and never writes data.
 - `patient-repository.js` is the first branch-scoped data-access slice (read/create/update/archive) for normalized patients. It is not wired into the app and its field mapping is incomplete; do not treat it as production sync.

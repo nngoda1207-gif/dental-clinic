@@ -80,16 +80,24 @@ begin
 end
 $$;
 
--- Immutable ledger rejects payment edits/deletions.
-do $$
+-- Immutable ledger rejects both edits and deletions of payment history.
+do $
 begin
   begin
     update public.clinic_invoice_payments set amount=75 where id='50000000-0000-0000-0000-000000000001';
     raise exception 'Integrity test failed: invoice payment edit accepted';
   exception when sqlstate '55000' then null;
   end;
+  begin
+    delete from public.clinic_invoice_payments where id='50000000-0000-0000-0000-000000000001';
+    raise exception 'Integrity test failed: invoice payment deletion accepted';
+  exception when sqlstate '55000' then null;
+  end;
+  if not exists (select 1 from public.clinic_invoice_payments where id='50000000-0000-0000-0000-000000000001') then
+    raise exception 'Integrity test failed: payment row disappeared after rejected mutation';
+  end if;
 end
-$$;
+$;
 
 -- Appointment end must be after start.
 do $$
@@ -281,6 +289,8 @@ reset role;
 -- Reception cannot read medical history or prescription details.
 insert into public.clinic_patient_medical_history(clinic_id,branch_id,patient_id,updated_by)
 values ('10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001');
+insert into public.clinic_prescription_items(clinic_id,clinical_record_id,medication_name)
+values ('10000000-0000-0000-0000-000000000001','70000000-0000-0000-0000-000000000001','Synthetic medication');
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000004',false);
 do $smoke$

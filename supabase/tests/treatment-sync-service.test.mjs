@@ -9,7 +9,7 @@ assert.ok(repo.includes(".eq('status','planned')"),'Treatment update must only c
 assert.ok(repo.includes("['done','cancelled']"),'Only completion/cancellation status transitions supported');
 assert.ok(repo.includes("from('clinic_services')")&&repo.includes(".eq('active',true)"),'Only active clinic services listed');
 assert.ok(service.includes("new Set(['owner','manager','dentist'])"),'Only clinical authoring roles may change treatment plans');
-assert.ok(service.includes("new Set(['owner','manager','dentist','nurse','accountant','reception','readonly'])"),'Read role list should be explicit');
+assert.ok(service.includes("new Set(['owner','manager','dentist','nurse','readonly'])"),'Read role list should be explicit');
 assert.ok(service.includes('requireAssignedRemoteBranch'),'Treatment operations must enforce assigned branches');
 assert.ok(migration.includes("if v_item.status <> 'done'"),'Only completed procedures billable');
 assert.ok(migration.includes('clinic_invoice_items_one_bill_per_treatment_idx'),'Duplicate billing must be prevented');

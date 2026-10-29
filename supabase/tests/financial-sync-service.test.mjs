@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const repo = readFileSync(new URL('../financial-repository.js', import.meta.url), 'utf8');
+const service = readFileSync(new URL('../financial-sync-service.js', import.meta.url), 'utf8');
+for (const table of ['clinic_invoices','clinic_invoice_payments']) assert.ok(repo.includes(table));
+for (const fn of ['listRemoteInvoices','createRemoteInvoice','listRemoteInvoicePayments']) assert.ok(repo.includes('function '+fn));
+assert.ok(repo.includes("status !== 'open'"));
+assert.ok(repo.includes('discount > subtotal'));
+assert.ok(repo.includes('subtotal - discount'));
+assert.ok(repo.includes('created_by: actorId'));
+assert.ok(!repo.includes('from(\'clinic_invoice_payments\').insert'));
+assert.ok(!repo.includes('.update(') && !repo.includes('.delete('));
+assert.ok(service.includes("new Set(['owner','manager','accountant'])"));
+assert.ok(service.includes("new Set(['owner','manager','accountant','reception','readonly'])"));
+assert.ok(service.includes('requireAssignedRemoteBranch'));
+assert.ok(!repo.includes('localStorage') && !service.includes('localStorage'));
+assert.ok(!repo.includes('service_role') && !service.includes('service_role'));
+console.log('Financial repository/service tests passed.');

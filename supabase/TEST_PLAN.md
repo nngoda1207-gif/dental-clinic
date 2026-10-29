@@ -11,6 +11,7 @@ Run only in a disposable/test Supabase project with synthetic records. Do not us
 6. `006_atomic_inventory_posting.sql`
 7. `007_stock_privileges_and_appointment_overlap.sql`
 8. `008_inventory_rpc_only.sql`
+9. `009_patient_profile_fields.sql`
 
 The SQL files have not been executed against the connected Supabase project as part of this repository change. The CI workflow provides a PostgreSQL compatibility/smoke test, but passing it does not prove Supabase Auth/RLS behavior; still test on a disposable Supabase project. Do not apply migrations to a project containing real patient data until the RLS and role matrix has been reviewed and tested.
 
@@ -47,7 +48,7 @@ Use two branches in Clinic A and a second clinic with synthetic patients.
 - Audit actor IDs must come from the authenticated identity, not a client-supplied user ID.
 
 ## Acceptance criteria before merge
-- All seven SQL migrations execute cleanly in GitHub Actions PostgreSQL CI and on a fresh disposable Supabase project.
+- All nine SQL migrations execute cleanly in GitHub Actions PostgreSQL CI and on a fresh disposable Supabase project.
 - RLS tests pass for every role, branch, inactive user, and cross-clinic case.
 - The existing app's fields have an explicit migration mapping; no field silently dropped.
 - Import preview reports counts and validation failures, and a backup can be restored.

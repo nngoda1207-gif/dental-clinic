@@ -82,6 +82,39 @@ export async function getCurrentClinicMembership() {
   return { session, membership: data[0] };
 }
 
+
+/**
+ * Return only active branches explicitly assigned to the authenticated member.
+ * This is for UI selection; table RLS must independently enforce the same scope.
+ */
+export async function listAssignedRemoteBranches(clinicId) {
+  const supabase = getSupabaseClient();
+  const session = await getCurrentSupabaseSession();
+  if (!session?.user?.id) throw new Error('Sign in before loading clinic branches.');
+  if (typeof clinicId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clinicId)) {
+    throw new Error('A valid remote clinic ID is required.');
+  }
+
+  const { data: assignments, error: assignmentError } = await supabase
+    .from('clinic_member_branches')
+    .select('branch_id')
+    .eq('clinic_id', clinicId)
+    .eq('user_id', session.user.id);
+  if (assignmentError) throw assignmentError;
+  const ids = [...new Set((assignments || []).map(row => row.branch_id).filter(Boolean))];
+  if (!ids.length) return [];
+
+  const { data: branches, error: branchError } = await supabase
+    .from('clinic_branches')
+    .select('id,name,address,phone,active')
+    .eq('clinic_id', clinicId)
+    .eq('active', true)
+    .in('id', ids)
+    .order('name', { ascending: true });
+  if (branchError) throw branchError;
+  return branches || [];
+}
+
 /*
  * Intentionally omitted here:
  * - client-side sign-up/invite or role assignment;

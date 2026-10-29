@@ -327,11 +327,20 @@ begin
     raise exception 'Inventory test failed: movement update accepted';
   exception when sqlstate '55000' then null;
   end;
+  affected := 0;
   begin
     delete from public.clinic_inventory_movements where reference='TEST-IN';
-    raise exception 'Inventory test failed: movement deletion accepted';
-  exception when sqlstate '55000' then null;
+    get diagnostics affected = row_count;
+    if affected <> 0 then
+      raise exception 'Inventory test failed: movement deletion removed % ledger row(s)', affected;
+    end if;
+  exception when sqlstate '55000' then
+    affected := 0;
   end;
+  select count(*) into n from public.clinic_inventory_movements where reference='TEST-IN';
+  if n <> 1 then
+    raise exception 'Inventory test failed: original movement was not preserved after delete attempt';
+  end if;
 
   select count(*) into n from public.clinic_patients;
   if n <> 1 then raise exception 'RLS test failed: manager expected only assigned-branch patient, got %', n; end if;

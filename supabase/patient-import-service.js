@@ -1,6 +1,5 @@
 import { previewLocalImport } from './import-preview.js';
 import { normalizePatient } from './patient-validation.js';
-import { createPatientInAssignedBranch } from './patient-sync-service.js';
 
 const digits = value => String(value || '').replace(/\D/g, '');
 const sameIdentity = (local, remote) =>
@@ -75,6 +74,7 @@ export async function importNewPatients({ localState, branchMap, preview } = {})
   if (!preview || preview.mode !== 'patient-demographics-only' || preview.writesPerformed !== 0) {
     throw new Error('A fresh patient import preview is required.');
   }
+  const { createPatientInAssignedBranch } = await import('./patient-sync-service.js');
   const results = [];
   for (const row of preview.rows.filter(item => item.state === 'new')) {
     const patient = localState.patients.find((item, index) =>

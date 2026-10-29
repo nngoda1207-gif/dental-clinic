@@ -7,8 +7,11 @@
 - `003_supplemental_clinical_tables.sql` adds chairs/rooms, a laboratory directory, lab payments, medical history, tooth-level records, periodontal measurements, prescription items, consents, and appointment events.
 - `004_integrity_guards.sql` adds branch-to-parent consistency triggers, appointment duration validation, and append-only appointment event protection.
 - `005_ledger_and_parent_guards.sql` adds further parent-branch checks and protects payment, inventory movement, and audit ledgers from edits/deletions.
+- `006_atomic_inventory_posting.sql` posts stock movements and updates balances in one transaction.
+- `007_stock_privileges_and_appointment_overlap.sql` limits stock metadata updates and prevents overlapping active appointments for the same dentist.
+- `008_inventory_rpc_only.sql` revokes direct authenticated inserts into the stock ledger so stock changes must use the atomic RPC.
 - `003_app_mapping.md` maps the existing UI/data to the proposed schema; `TEST_PLAN.md` lists required synthetic-data RLS and migration tests.
-- `.github/workflows/supabase-schema-test.yml` runs all five SQL files against a disposable PostgreSQL service and executes synthetic smoke tests. This is a compatibility smoke test, not a substitute for testing on Supabase itself.
+- `.github/workflows/supabase-schema-test.yml` runs migrations `001`–`008` against a disposable PostgreSQL service and executes synthetic smoke tests. This is a compatibility smoke test, not a substitute for testing on Supabase itself.
 - `auth-adapter.js` is an isolated Auth prototype only; it is not imported into the app and does not sync records.
 - The current app in `index.html` still uses local storage for its full `D` state and its custom local login.
 - This migration does **not** turn on app sync and does **not** migrate existing local users.
@@ -17,7 +20,7 @@
 ## Before running the migration
 
 1. The GitHub Actions PostgreSQL smoke test should pass, then test in a separate Supabase project using synthetic data only.
-2. Apply all seven SQL files in numerical order (`001` through `007`) in a separate disposable Supabase project.
+2. Apply all eight SQL files in numerical order (`001` through `008`) in a separate disposable Supabase project.
 3. Follow `TEST_PLAN.md`; do not treat a successful SQL run alone as proof that role/branch security is correct.
 4. Confirm the project has a recent backup.
 5. Review the SQL and confirm the desired owner/member workflow.

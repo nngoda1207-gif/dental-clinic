@@ -1,0 +1,93 @@
+/*
+ * Supabase Auth adapter prototype for Dental Clinic OS.
+ *
+ * This module is intentionally NOT wired into index.html yet. Integrate only after
+ * the schema and RLS policies pass supabase/TEST_PLAN.md. The app currently uses
+ * a single localStorage object, so enabling remote writes before the data-access
+ * layer and per-role RLS are ready could expose patient data.
+ *
+ * Configure the URL and publishable/anon key through a deployment-time config.
+ * Never place a service_role/secret key here.
+ */
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+let client = null;
+
+export function configureSupabase({ url, publishableKey }) {
+  if (!url || !publishableKey) {
+    throw new Error('Supabase URL and publishable key are required.');
+  }
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) {
+    throw new Error('Unexpected Supabase project URL.');
+  }
+  client = createClient(url, publishableKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storage: window.localStorage,
+      storageKey: 'dcos_supabase_auth_v1'
+    },
+    global: {
+      headers: { 'X-Client-Info': 'dental-clinic-web-prototype' }
+    }
+  });
+  return client;
+}
+
+export function getSupabaseClient() {
+  if (!client) throw new Error('Supabase client has not been configured.');
+  return client;
+}
+
+export async function signInWithPassword(email, password) {
+  const { data, error } = await getSupabaseClient().auth.signInWithPassword({
+    email: String(email || '').trim(),
+    password: String(password || '')
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function signOutSupabase() {
+  const { error } = await getSupabaseClient().auth.signOut();
+  if (error) throw error;
+}
+
+export async function getCurrentSupabaseSession() {
+  const { data, error } = await getSupabaseClient().auth.getSession();
+  if (error) throw error;
+  return data.session;
+}
+
+export async function getCurrentClinicMembership() {
+  const supabase = getSupabaseClient();
+  const session = await getCurrentSupabaseSession();
+  if (!session?.user) return null;
+
+  // RLS limits this query to the signed-in user's own membership and memberships
+  // for clinics they own. The app must still validate active membership and branch
+  // assignment before exposing any screen or data.
+  const { data, error } = await supabase
+    .from('clinic_members')
+    .select('clinic_id,user_id,role,active,created_at')
+    .eq('user_id', session.user.id)
+    .eq('active', true)
+    .limit(2);
+  if (error) throw error;
+  if (!data?.length) return null;
+  if (data.length > 1) {
+    throw new Error('Multiple clinic memberships found; clinic selection is required.');
+  }
+  return { session, membership: data[0] };
+}
+
+/*
+ * Intentionally omitted here:
+ * - client-side sign-up/invite or role assignment;
+ * - writing patient/clinical/financial data;
+ * - importing local D into remote tables;
+ * - assuming a user is an owner because of local app data.
+ *
+ * Staff provisioning must be performed by a trusted owner-authorized backend flow.
+ */

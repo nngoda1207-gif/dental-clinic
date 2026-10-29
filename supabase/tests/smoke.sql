@@ -6,7 +6,8 @@ insert into auth.users(id) values
  ('00000000-0000-0000-0000-000000000002'),
  ('00000000-0000-0000-0000-000000000003'),
  ('00000000-0000-0000-0000-000000000004'),
- ('00000000-0000-0000-0000-000000000005')
+ ('00000000-0000-0000-0000-000000000005'),
+ ('00000000-0000-0000-0000-000000000006')
 on conflict do nothing;
 
 insert into public.clinics(id,name,created_by) values
@@ -16,7 +17,8 @@ insert into public.clinic_members(clinic_id,user_id,role) values
  ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002','dentist'),
  ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000003','readonly'),
  ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000004','reception'),
- ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000005','accountant');
+ ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000005','accountant'),
+ ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000006','manager');
 insert into public.clinic_branches(id,clinic_id,name) values
  ('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','Branch A'),
  ('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','Branch B');
@@ -24,7 +26,8 @@ insert into public.clinic_member_branches(clinic_id,user_id,branch_id) values
  ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002','20000000-0000-0000-0000-000000000001'),
  ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000003','20000000-0000-0000-0000-000000000001'),
  ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000004','20000000-0000-0000-0000-000000000001'),
- ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000005','20000000-0000-0000-0000-000000000001');
+ ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000005','20000000-0000-0000-0000-000000000001'),
+ ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000006','20000000-0000-0000-0000-000000000001');
 insert into public.clinic_patients(id,clinic_id,branch_id,file_no,full_name,created_by) values
  ('30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','A-001','Synthetic Patient A','00000000-0000-0000-0000-000000000001'),
  ('30000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000002','B-001','Synthetic Patient B','00000000-0000-0000-0000-000000000001');
@@ -233,6 +236,56 @@ begin
     raise exception 'RLS test failed: member self-promoted/inserted membership';
   exception when insufficient_privilege then null;
   end;
+end
+$smoke$;
+reset role;
+
+
+-- Manager is restricted to assigned branches and cannot move rows into an unassigned branch.
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000006',false);
+do $smoke$
+declare n integer;
+begin
+  select count(*) into n from public.clinic_patients;
+  if n <> 1 then raise exception 'RLS test failed: manager expected only assigned-branch patient, got %', n; end if;
+  begin
+    update public.clinic_patients
+       set branch_id='20000000-0000-0000-0000-000000000002'
+     where id='30000000-0000-0000-0000-000000000001';
+    raise exception 'RLS test failed: manager moved patient into unassigned branch';
+  exception when insufficient_privilege then null;
+  end;
+end
+$smoke$;
+reset role;
+
+-- Owner of Clinic A cannot enumerate or read another clinic.
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
+do $smoke$
+declare n integer;
+begin
+  select count(*) into n from public.clinics;
+  if n <> 1 then raise exception 'RLS test failed: clinic owner can see another clinic'; end if;
+  select count(*) into n from public.clinic_patients where clinic_id='10000000-0000-0000-0000-000000000002';
+  if n <> 0 then raise exception 'RLS test failed: clinic owner can see other-clinic patients'; end if;
+end
+$smoke$;
+reset role;
+
+-- Reception cannot read medical history or prescription details.
+insert into public.clinic_patient_medical_history(clinic_id,branch_id,patient_id,created_by)
+values ('10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001');
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000004',false);
+do $smoke$
+declare n integer;
+begin
+  select count(*) into n from public.clinic_patient_medical_history;
+  if n <> 0 then raise exception 'RLS test failed: reception can read medical history'; end if;
+  select count(*) into n from public.clinic_prescription_items;
+  if n <> 0 then raise exception 'RLS test failed: reception can read prescription items'; end if;
 end
 $smoke$;
 reset role;

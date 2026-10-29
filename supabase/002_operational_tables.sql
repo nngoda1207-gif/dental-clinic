@@ -231,6 +231,7 @@ create table if not exists public.clinic_lab_cases (
   created_by uuid not null references auth.users(id) on delete restrict,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  unique (clinic_id, id),
   foreign key (clinic_id, branch_id)
     references public.clinic_branches(clinic_id, id) on delete restrict,
   foreign key (clinic_id, patient_id)

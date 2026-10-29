@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const sql=readFileSync(new URL('../011_invoice_items_and_service_pricing.sql',import.meta.url),'utf8');
+const repo=readFileSync(new URL('../financial-repository.js',import.meta.url),'utf8');
+const svc=readFileSync(new URL('../financial-sync-service.js',import.meta.url),'utf8');
+for(const token of ['create table if not exists public.clinic_invoice_items','create or replace function public.create_invoice_with_items','jsonb_array_elements(p_lines)','v_service.price','for update','revoke insert,update,delete on public.clinic_invoice_items','grant execute on function public.create_invoice_with_items']) assert.ok(sql.includes(token),'Missing invoice line guard: '+token);
+assert.ok(repo.includes('listRemoteInvoiceItems'));
+assert.ok(repo.includes("rpc('create_invoice_with_items'"));
+assert.ok(!repo.includes("from('clinic_invoice_items').insert"));
+assert.ok(svc.includes('listInvoiceItemsForAssignedBranch'));
+assert.ok(svc.includes('createInvoiceWithServiceLines'));
+console.log('Invoice line/service pricing tests passed.');

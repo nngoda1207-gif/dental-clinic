@@ -23,13 +23,18 @@ Other modules are initialized or used later in the app, including services/proce
 | `branches` | `clinic_branches` | Keep stable branch IDs or maintain an explicit ID map |
 | `users` | `auth.users` + `clinic_members` + `clinic_member_branches` | Never migrate local password hashes, session tokens, or recovery tokens as Supabase credentials |
 | `patients` | `clinic_patients` | Map every current patient field; preserve file numbers and branch IDs |
-| appointments | `clinic_appointments` | Map chair/appointment fields; schema may need more columns |
-| visit notes / diagnoses | `clinic_clinical_records` | Clinical data access must be limited by role and branch |
-| planned/completed procedures | `clinic_treatment_items` | Confirm current fields and price/discount semantics |
-| invoices / payments | `clinic_invoices` + `clinic_invoice_payments` | Keep a ledger; do not infer payments from invoice totals |
-| `procs` | `clinic_services` | Map names, categories, prices, active status |
-| `items`, `sups` | `clinic_inventory_items`, `clinic_suppliers`, `clinic_inventory_movements` | Stock quantity should be reconciled against movement history |
-| `labs` | `clinic_lab_cases` | Preserve case status and due/received dates |
+| appointments (`appts`) | `clinic_appointments` | Preserve duration, status history, source, dentist, branch, patient and chair. **Chair/resource table is still missing.** |
+| chairs/rooms (`chairs`) | New `clinic_chairs` table required | Include branch, name, active status and optional resource type; appointment conflict checks must be server-side to avoid simultaneous double-booking |
+| visit notes (`patients[].visits`) | `clinic_clinical_records` | Current visit object also includes medication/material use and completed procedure references; map those to child rows rather than one opaque note |
+| medical history / odontogram / perio (`mh`, `teeth`, `perio`) | New structured clinical tables or a carefully typed clinical extension | These are sensitive clinical records and must inherit the same branch/role rules; do not flatten away tooth-level history |
+| prescriptions / consents (`rx`, `cons`) | `clinic_clinical_records` plus child/detail tables | Preserve signature, signer relationship, issue/void history, and prescription item details |
+| planned/completed procedures (`plan`) | `clinic_treatment_items` | Preserve tooth, quantity, price, discount, status, approval and who completed it |
+| patient account/payments (`pay`) | `clinic_invoices` + `clinic_invoice_payments` plus a refund/void audit model | Current receipts have sequence numbers and may be voided/refunded; do not mutate away financial history |
+| `procs` | `clinic_services` | Map names, categories, units, prices and active status; app currently allows a procedure price to differ from the list price |
+| `items` | `clinic_inventory_items` + `clinic_inventory_movements` | Current quantity is calculated from movement history; avoid independently updating quantity without a transaction that adds a movement |
+| `sups` | `clinic_suppliers` | Current supplier totals are derived from purchase movements; consider supplier invoices/payments if supplier balances must be retained |
+| `labs` (lab organizations) | New `clinic_laboratories` table recommended | Keep the lab directory separate from case snapshots |
+| `lab` (lab cases) | `clinic_lab_cases` + new `clinic_lab_payments` table recommended | Preserve case number, remake links, status history, lab identity, cost and partial payments |
 | `audit` | `clinic_audit_events` | Prefer server-authenticated actor IDs; do not trust client-supplied identity |
 
 ## Important gaps before app integration
@@ -60,3 +65,14 @@ Other modules are initialized or used later in the app, including services/proce
 - Enforce role-specific insert/update/delete separately.
 - Avoid exposing service-role/secret keys in HTML, APK, or GitHub.
 - Test negative cases (unauthorized role, inactive member, other clinic, unassigned branch).
+
+
+## Code-audit findings (current `main/index.html`)
+
+- The app uses `localStorage.dcos1` for the full business dataset and keeps the active user/session in browser storage. The UI is not currently backed by Supabase.
+- Local role permissions are implemented in JavaScript. They are useful for hiding controls but can be bypassed by a modified client; server RLS and carefully scoped database operations must be the actual security layer.
+- The local app has more structured data than the first SQL pass currently models: tooth-level odontogram, periodontal charts, medical history, prescription/consent details, appointment chairs, lab directory, lab partial payments/remakes, receipt sequence/void/refund history, and inventory movement history.
+- A safe migration needs a versioned export/backup, field-level transform, preview counts, validation errors, and an explicit import action. It must never merge entire `D` JSON blobs from different devices.
+- Before allowing staff to create accounts, the owner must invite/create Supabase Auth identities and assign roles/branches in a trusted flow. A user must not be able to self-assign `owner` or add themselves to another clinic.
+- Conflict handling is essential: two devices may update the same patient, inventory item or appointment. Inventory movements and payments should use transactional server operations; appointment overlap must be checked atomically on the server, not only in JavaScript.
+- Preserve the current screens during the migration. Introduce a data-access layer behind existing UI functions and migrate module by module, keeping local export/restore until acceptance tests pass.

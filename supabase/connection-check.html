@@ -64,7 +64,16 @@ form.addEventListener('submit',async event=>{
   log('PASS: Auth and membership read completed. No clinic data was changed.');
  } catch(error) {
   log('FAIL:',error?.message||String(error));
-  log('No clinic data writes are performed by this diagnostic. If failure happened after sign-in, sign out of the test account from Supabase Auth if needed.');
+  log('No clinic data writes are performed by this diagnostic.');
+  if(client) {
+   try {
+    const {error:cleanupError}=await client.auth.signOut();
+    if(cleanupError) log('Cleanup sign-out warning:',cleanupError.message);
+    else log('Cleanup sign-out completed.');
+   } catch(cleanupError) {
+    log('Cleanup sign-out warning:',cleanupError?.message||String(cleanupError));
+   }
+  }
  } finally {
   run.disabled=false;
  }

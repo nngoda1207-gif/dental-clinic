@@ -34,7 +34,9 @@ assert.ok(preview.unmodeledKeys.includes('customFutureModule'));
 assert.ok(!JSON.stringify(preview).includes('Synthetic Patient'), 'preview must not echo patient names');
 assert.ok(!JSON.stringify(preview).includes('must-not-be-exported'), 'preview must not expose local credentials');
 assert.throws(() => previewLocalImport({ localState, clinicId: 'bad', branchMap: {} }), /valid remote clinic UUID/);
-assert.throws(() => previewLocalImport({ localState, clinicId, branchMap: {} }), /explicit remote mapping/);
+const noMappings = previewLocalImport({ localState, clinicId, branchMap: {} });
+assert.equal(noMappings.counts.patientDemographicReady, 0);
+assert.equal(noMappings.counts.patientsBlocked, 2);
 assert.throws(() => previewLocalImport({
   localState, clinicId,
   branchMap: { 'local-branch-1': remoteBranch, 'local-branch-2': remoteBranch }

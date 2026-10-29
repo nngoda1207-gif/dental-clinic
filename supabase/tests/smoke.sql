@@ -10,6 +10,12 @@ begin
   if has_table_privilege('anon','public.clinic_inventory_movements','INSERT') then
     raise exception 'Privilege test failed: anon still has direct inventory movement INSERT';
   end if;
+  if has_function_privilege('anon','public.post_inventory_movement(uuid,text,numeric,numeric,text,text)','EXECUTE') then
+    raise exception 'Privilege test failed: anon can execute inventory posting RPC';
+  end if;
+  if not has_function_privilege('authenticated','public.post_inventory_movement(uuid,text,numeric,numeric,text,text)','EXECUTE') then
+    raise exception 'Privilege test failed: authenticated cannot execute inventory posting RPC';
+  end if;
 end
 $smoke$;
 

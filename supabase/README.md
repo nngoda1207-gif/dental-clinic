@@ -10,13 +10,14 @@
 - `006_atomic_inventory_posting.sql` posts stock movements and updates balances in one transaction.
 - `007_stock_privileges_and_appointment_overlap.sql` limits stock metadata updates and prevents overlapping active appointments for the same dentist.
 - `008_inventory_rpc_only.sql` revokes direct authenticated inserts into the stock ledger so stock changes must use the atomic RPC.
+- `009_patient_profile_fields.sql` adds missing patient-form fields (English name, governorate, source, assigned dentist Auth ID, and tags) without changing existing records.
 - `003_app_mapping.md` maps the existing UI/data to the proposed schema; `TEST_PLAN.md` lists required synthetic-data RLS and migration tests.
 - `.github/workflows/supabase-schema-test.yml` runs migrations `001`–`008` against a disposable PostgreSQL service and executes synthetic smoke tests. This is a compatibility smoke test, not a substitute for testing on Supabase itself.
 - `auth-adapter.js` is an isolated Auth prototype only; it is not imported into the app and does not sync records.
 - `patient-repository.js` is the first branch-scoped data-access slice (read/create/update/archive) for normalized patients. It is not wired into the app and its field mapping is incomplete; do not treat it as production sync.
 - `connection-check.html` is a standalone diagnostic that checks the project Auth endpoint, signs in a synthetic test user, reads that user's active membership under RLS, and signs out. It performs no clinic-data writes and is not part of the production app.
 - The current app in `index.html` still uses local storage for its full `D` state and its custom local login.
-- This migration does **not** turn on app sync and does **not** migrate existing local users.
+- Migration 009 improves patient field coverage, but patient repository still is not wired into the UI. This migration does **not** turn on app sync and does **not** migrate existing local users.
 - Do not put a Supabase secret/service-role key in browser or APK code.
 
 ## Before running the migration

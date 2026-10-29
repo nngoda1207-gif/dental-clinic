@@ -4,7 +4,7 @@
 import { getSupabaseClient } from './auth-adapter.js';
 const INVOICE_FIELDS='id,clinic_id,branch_id,patient_id,invoice_no,status,currency,subtotal,discount,total,notes,issued_at,created_by,created_at';
 const PAYMENT_FIELDS='id,clinic_id,branch_id,invoice_id,amount,method,paid_at,reference,notes,created_by,created_at,entry_type,original_payment_id';
-const ITEM_FIELDS='id,clinic_id,branch_id,invoice_id,service_id,service_name,unit,quantity,unit_price,discount,line_total,created_at';
+const ITEM_FIELDS='id,clinic_id,branch_id,invoice_id,service_id,service_name,unit,quantity,unit_price,discount,line_total,treatment_item_id,created_at';
 function required(value,label){if(typeof value!=='string'||!value.trim())throw new Error(label+' is required.');return value.trim();}
 function positiveMoney(value,label){const n=Number(value);if(!Number.isFinite(n)||n<=0)throw new Error(label+' must be positive.');const r=Math.round((n+Number.EPSILON)*100)/100;if(Math.abs(n-r)>0.000001)throw new Error(label+' supports at most two decimals.');return r;}
 function optionalDate(value,label){if(value===undefined||value===null||value==='')return undefined;const d=new Date(value);if(Number.isNaN(d.getTime()))throw new Error(label+' must be a valid date.');return d.toISOString();}

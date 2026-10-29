@@ -36,15 +36,33 @@ export function normalizePatient(input) {
   const email = String(input.em ?? input.email ?? '').trim();
   const address = String(input.ad ?? input.address ?? '').trim();
   const emergencyContact = String(input.ec ?? input.emergency_contact ?? '').trim();
+  const englishName = String(input.en ?? input.english_name ?? '').trim();
+  const governorate = String(input.gov ?? input.governorate ?? '').trim();
+  const source = String(input.so ?? input.source ?? '').trim();
+  const rawTags = input.tg ?? input.tags ?? [];
+  if (!Array.isArray(rawTags) && typeof rawTags !== 'string') {
+    throw new Error('Patient tags must be a list or comma-separated text.');
+  }
+  const tags = (Array.isArray(rawTags) ? rawTags : rawTags.split(/[,،]/))
+    .map(tag => String(tag).trim()).filter(Boolean);
+  if (tags.some(tag => tag.length > 80) || tags.length > 50) {
+    throw new Error('Patient tags must be at most 50 labels of 80 characters each.');
+  }
   if (phoneAlt.length > 40 || email.length > 254 || address.length > 500 ||
-      emergencyContact.length > 200) {
-    throw new Error('One or more patient contact fields are too long.');
+      emergencyContact.length > 200 || englishName.length > 200 ||
+      governorate.length > 120 || source.length > 120) {
+    throw new Error('One or more patient profile fields are too long.');
   }
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new Error('Patient email address is invalid.');
   }
   return {
     full_name,
+    english_name: englishName,
+    governorate,
+    source,
+    tags,
+    assigned_dentist_user_id: input.assigned_dentist_user_id || null,
     phone,
     phone_alt: phoneAlt,
     email,

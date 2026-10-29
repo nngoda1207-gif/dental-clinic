@@ -101,13 +101,13 @@ update public.clinic_members
    and user_id='00000000-0000-0000-0000-000000000003';
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000003',false);
-do $
+do $smoke$
 declare n integer;
 begin
   select count(*) into n from public.clinic_patients;
   if n <> 0 then raise exception 'RLS test failed: inactive member still sees patients'; end if;
 end
-$;
+$smoke$;
 reset role;
 update public.clinic_members
    set active = true
@@ -133,7 +133,7 @@ begin
   exception when check_violation then null;
   end;
 end
-$;
+$smoke$;
 
 -- Audit history is append-only.
 insert into public.clinic_audit_events(clinic_id,branch_id,actor_user_id,action,entity_type)
@@ -148,6 +148,6 @@ begin
   exception when sqlstate '55000' then null;
   end;
 end
-$;
+$smoke$;
 
 select 'SCHEMA_SMOKE_TESTS_PASSED' as result;

@@ -47,12 +47,15 @@ jobs:
           node --input-type=module --check < supabase/patient-sync-service.js
           node --input-type=module --check < supabase/appointment-repository.js
           node --input-type=module --check < supabase/appointment-sync-service.js
+          node --input-type=module --check < supabase/clinical-record-repository.js
+          node --input-type=module --check < supabase/clinical-record-sync-service.js
           node supabase/tests/patient-validation.test.mjs
           node supabase/tests/patient-repository.test.mjs
           node supabase/tests/import-preview.test.mjs
           node supabase/tests/clinic-context.test.mjs
           node supabase/tests/patient-sync-service.test.mjs
           node supabase/tests/appointment-sync-service.test.mjs
+          node supabase/tests/clinical-record-sync-service.test.mjs
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Bootstrap minimal Supabase Auth compatibility

@@ -185,7 +185,7 @@ create table if not exists public.clinic_inventory_items (
   foreign key (clinic_id, branch_id)
     references public.clinic_branches(clinic_id, id) on delete restrict,
   foreign key (clinic_id, supplier_id)
-    references public.clinic_suppliers(clinic_id, id) on delete set null
+    references public.clinic_suppliers(clinic_id, id) on delete restrict
 );
 
 create table if not exists public.clinic_inventory_movements (

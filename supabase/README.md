@@ -8,6 +8,7 @@
 - `004_integrity_guards.sql` adds branch-to-parent consistency triggers, appointment duration validation, and append-only appointment event protection.
 - `005_ledger_and_parent_guards.sql` adds further parent-branch checks and protects payment, inventory movement, and audit ledgers from edits/deletions.
 - `003_app_mapping.md` maps the existing UI/data to the proposed schema; `TEST_PLAN.md` lists required synthetic-data RLS and migration tests.
+- `.github/workflows/supabase-schema-test.yml` runs all five SQL files against a disposable PostgreSQL service and executes synthetic smoke tests. This is a compatibility smoke test, not a substitute for testing on Supabase itself.
 - `auth-adapter.js` is an isolated Auth prototype only; it is not imported into the app and does not sync records.
 - The current app in `index.html` still uses local storage for its full `D` state and its custom local login.
 - This migration does **not** turn on app sync and does **not** migrate existing local users.
@@ -15,7 +16,7 @@
 
 ## Before running the migration
 
-1. Test in a separate Supabase project first, using synthetic data only.
+1. The GitHub Actions PostgreSQL smoke test should pass, then test in a separate Supabase project using synthetic data only.
 2. Apply SQL in this order: `001_clinic_membership.sql`, `002_operational_tables.sql`, then `003_supplemental_clinical_tables.sql`.
 3. Apply `004_integrity_guards.sql` and `005_ledger_and_parent_guards.sql` after the first three migrations, then follow `TEST_PLAN.md`; do not treat a successful SQL run alone as proof that role/branch security is correct.
 4. Confirm the project has a recent backup.

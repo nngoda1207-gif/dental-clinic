@@ -10,6 +10,7 @@ Run only in a disposable/test Supabase project with synthetic records. Do not us
 5. `005_ledger_and_parent_guards.sql`
 6. `006_atomic_inventory_posting.sql`
 7. `007_stock_privileges_and_appointment_overlap.sql`
+8. `008_inventory_rpc_only.sql`
 
 The SQL files have not been executed against the connected Supabase project as part of this repository change. The CI workflow provides a PostgreSQL compatibility/smoke test, but passing it does not prove Supabase Auth/RLS behavior; still test on a disposable Supabase project. Do not apply migrations to a project containing real patient data until the RLS and role matrix has been reviewed and tested.
 

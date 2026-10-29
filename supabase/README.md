@@ -16,7 +16,8 @@
 - `009_patient_profile_fields.sql` adds missing patient-form fields (English name, governorate, source, assigned dentist Auth ID, and tags) without changing existing records.
 - `003_app_mapping.md` maps the existing UI/data to the proposed schema; `TEST_PLAN.md` lists required synthetic-data RLS and migration tests.
 - `.github/workflows/supabase-schema-test.yml` runs migrations `001`–`012` against a disposable PostgreSQL service and executes synthetic smoke tests. This is a compatibility smoke test, not a substitute for testing on Supabase itself.
-- `auth-adapter.js` is an isolated Auth prototype only; it is not imported into the app and does not sync records.
+- `auth-adapter.js` provides Supabase Auth and membership/branch lookup. `cloud-portal.js` is now loaded by the app as a separate cloud workspace: it accepts a project URL and publishable/anon key on-device, signs in through Supabase Auth, validates active membership and assigned branches, supports first-owner clinic/branch creation, and reads patients from the selected remote branch.
+- The cloud workspace is intentionally separate from the local login and local `D` object. It does not upload local patients or overwrite local records; patient import/write and conflict-safe bidirectional sync are not enabled yet. The current UI integration is a first read-only cloud slice, not completed two-device sync.
 - `clinic-context.js` validates active membership and explicit remote branch assignment for UI gating; PostgreSQL RLS remains authoritative.
 - `import-preview.js` is also not wired into the app; it is a tested safety primitive, not a production import workflow.
 - `import-preview.js` is a read-only legacy-backup preview: it checks patient demographics and explicit branch mappings, reports blocked rows and unmodeled top-level modules, and never writes data.
@@ -38,7 +39,13 @@
 5. Review the SQL and confirm the desired owner/member workflow.
 6. Run the migration only after review; it is not automatically executed by GitHub.
 
-## Why the app is not syncing yet
+## Current in-app cloud workspace
+
+Open the **المزامنة السحابية** button in the app, enter the Supabase project URL and the public publishable/anon key, then sign in with a Supabase Auth email/password. A first-time owner can create a clinic and its primary branch. Existing members can view patient records only from branches assigned to their authenticated account. These settings are stored locally on that device; configure the second device separately. Never use a service-role/secret key in the browser or APK.
+
+The current portal does not copy local users, local patient records, clinical notes, financial records, or the complete `D` object to Supabase. A controlled import preview, explicit branch mapping, duplicate handling, offline queue and conflict strategy are still required before enabling writes or claiming two-way sync.
+
+## Why full sync is not enabled yet
 
 The current app stores patient, visit, finance, inventory, appointment, and other records together in one browser-side JSON object. Sharing that entire object with all signed-in staff would bypass the app's role distinctions. Keep the currently working local-only APK as the fallback until a sync-enabled candidate passes the complete role and two-device test matrix. A safe implementation must either:
 - move the sensitive data into normalized tables with Row Level Security policies for each role and branch, or

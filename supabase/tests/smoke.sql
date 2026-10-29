@@ -279,7 +279,7 @@ $smoke$;
 reset role;
 
 -- Reception cannot read medical history or prescription details.
-insert into public.clinic_patient_medical_history(clinic_id,branch_id,patient_id,created_by)
+insert into public.clinic_patient_medical_history(clinic_id,branch_id,patient_id,updated_by)
 values ('10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001');
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000004',false);

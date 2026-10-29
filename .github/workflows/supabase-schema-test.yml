@@ -46,6 +46,7 @@ jobs:
           node --input-type=module --check < supabase/import-preview.js
           node --input-type=module --check < supabase/clinic-context.js
           node --input-type=module --check < supabase/patient-sync-service.js
+          node --input-type=module --check < supabase/patient-import-service.js
           node --input-type=module --check < supabase/appointment-repository.js
           node --input-type=module --check < supabase/appointment-sync-service.js
           node --input-type=module --check < supabase/clinical-record-repository.js
@@ -62,6 +63,7 @@ jobs:
           node supabase/tests/patient-validation.test.mjs
           node supabase/tests/patient-repository.test.mjs
           node supabase/tests/import-preview.test.mjs
+          node supabase/tests/patient-import-service.test.mjs
           node supabase/tests/clinic-context.test.mjs
           node supabase/tests/patient-sync-service.test.mjs
           node supabase/tests/appointment-sync-service.test.mjs

@@ -66,5 +66,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/007_stock_privileges_and_appointment_overlap.sql
       - name: Apply migration 008
         run: psql -v ON_ERROR_STOP=1 -f supabase/008_inventory_rpc_only.sql
+      - name: Apply migration 009
+        run: psql -v ON_ERROR_STOP=1 -f supabase/009_patient_profile_fields.sql
       - name: Run synthetic RLS and integrity smoke tests
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/smoke.sql

@@ -61,6 +61,16 @@ insert into public.clinic_invoices(id,clinic_id,branch_id,patient_id,invoice_no,
 insert into public.clinic_invoice_payments(id,clinic_id,branch_id,invoice_id,amount,created_by) values
  ('50000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001',50,'00000000-0000-0000-0000-000000000001');
 
+insert into public.clinic_clinical_records(
+ id,clinic_id,branch_id,patient_id,record_type,diagnosis,created_by
+) values (
+ '31000000-0000-0000-0000-000000000001',
+ '10000000-0000-0000-0000-000000000001',
+ '20000000-0000-0000-0000-000000000001',
+ '30000000-0000-0000-0000-000000000001',
+ 'diagnosis','Synthetic-only diagnosis','00000000-0000-0000-0000-000000000001'
+);
+
 -- Dentist sees assigned branch only; read-only user can read but cannot write.
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',false);
@@ -91,6 +101,36 @@ begin
   end;
 end
 $$;
+reset role;
+
+-- Reception and accounting can read invoice totals but must not read clinical notes.
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000004',false);
+do $smoke$
+declare n integer;
+begin
+  select count(*) into n from public.clinic_invoices;
+  if n <> 1 then raise exception 'RLS test failed: reception should read branch invoice'; end if;
+  select count(*) into n from public.clinic_clinical_records;
+  if n <> 0 then raise exception 'RLS test failed: reception can read clinical records'; end if;
+  begin
+    insert into public.clinic_clinical_records(clinic_id,branch_id,patient_id,created_by)
+    values ('10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000004');
+    raise exception 'RLS test failed: reception inserted a clinical record';
+  exception when insufficient_privilege then null;
+  end;
+end
+$smoke$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000005',false);
+do $smoke$
+declare n integer;
+begin
+  select count(*) into n from public.clinic_invoices;
+  if n <> 1 then raise exception 'RLS test failed: accountant should read branch invoice'; end if;
+  select count(*) into n from public.clinic_clinical_records;
+  if n <> 0 then raise exception 'RLS test failed: accountant can read clinical records'; end if;
+end
+$smoke$;
 reset role;
 
 -- Branch guard rejects a mismatched clinical record (executed as DB owner).

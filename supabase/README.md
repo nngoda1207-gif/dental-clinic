@@ -29,7 +29,7 @@
 
 ## Why the app is not syncing yet
 
-The current app stores patient, visit, finance, inventory, appointment, and other records together in one browser-side JSON object. Sharing that entire object with all signed-in staff would bypass the app's role distinctions. A safe implementation must either:
+The current app stores patient, visit, finance, inventory, appointment, and other records together in one browser-side JSON object. Sharing that entire object with all signed-in staff would bypass the app's role distinctions. Keep the currently working local-only APK as the fallback until a sync-enabled candidate passes the complete role and two-device test matrix. A safe implementation must either:
 - move the sensitive data into normalized tables with Row Level Security policies for each role and branch, or
 - use a trusted backend that authorizes each operation.
 
@@ -37,7 +37,7 @@ Supabase Auth must also be integrated with the current local login carefully. Th
 
 ## Planned implementation order
 
-1. Review and test all five SQL migrations in a separate Supabase project.
+1. Review and test all eight SQL migrations in a separate Supabase project.
 2. Audit the policies against the clinic's exact role/branch workflow; these are an initial draft and need security testing.
 3. Integrate and test the Auth prototype through a controlled onboarding/invitation flow; do not migrate local password hashes.
 4. Add a controlled migration path for existing local accounts.

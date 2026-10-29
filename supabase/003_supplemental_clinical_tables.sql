@@ -314,7 +314,11 @@ using (public.has_clinic_role(clinic_id, array['owner','manager','dentist','nurs
     where r.clinic_id = clinic_prescription_items.clinic_id
       and r.id = clinic_prescription_items.clinical_record_id
       and public.can_access_clinic_branch(r.clinic_id, r.branch_id)))
-with check (public.has_clinic_role(clinic_id, array['owner','manager','dentist','nurse']));
+with check (public.has_clinic_role(clinic_id, array['owner','manager','dentist','nurse'])
+  and exists (select 1 from public.clinic_clinical_records r
+    where r.clinic_id = clinic_prescription_items.clinic_id
+      and r.id = clinic_prescription_items.clinical_record_id
+      and public.can_access_clinic_branch(r.clinic_id, r.branch_id)));
 drop policy if exists clinic_prescription_items_delete on public.clinic_prescription_items;
 create policy clinic_prescription_items_delete on public.clinic_prescription_items for delete to authenticated
 using (public.has_clinic_role(clinic_id, array['owner']));
@@ -353,7 +357,8 @@ drop policy if exists clinic_lab_payments_update on public.clinic_lab_payments;
 create policy clinic_lab_payments_update on public.clinic_lab_payments for update to authenticated
 using (public.has_clinic_role(clinic_id, array['owner','manager','accountant'])
   and public.can_access_clinic_branch(clinic_id, branch_id))
-with check (public.has_clinic_role(clinic_id, array['owner','manager','accountant']));
+with check (public.has_clinic_role(clinic_id, array['owner','manager','accountant'])
+  and public.can_access_clinic_branch(clinic_id, branch_id));
 drop policy if exists clinic_lab_payments_delete on public.clinic_lab_payments;
 create policy clinic_lab_payments_delete on public.clinic_lab_payments for delete to authenticated
 using (public.has_clinic_role(clinic_id, array['owner']) and public.can_access_clinic_branch(clinic_id, branch_id));

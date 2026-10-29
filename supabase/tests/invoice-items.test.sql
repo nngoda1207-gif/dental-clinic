@@ -33,7 +33,7 @@ begin
     '20000000-0000-0000-0000-000000000001',
     '30000000-0000-0000-0000-000000000001',
     'INV-LINES-001',
-    '[{"service_id":"60000000-0000-0000-0000-000000000001","quantity":2,"discount":10}]'::jsonb,
+    '[{"service_id":"62000000-0000-0000-0000-000000000001","quantity":2,"discount":10}]'::jsonb,
     5,'synthetic line test',now()
   );
   if v_invoice.subtotal <> 200 or v_invoice.discount <> 15 or v_invoice.total <> 185 then
@@ -49,7 +49,7 @@ begin
       '20000000-0000-0000-0000-000000000001',
       '30000000-0000-0000-0000-000000000001',
       'INV-LINES-OVER',
-      '[{"service_id":"60000000-0000-0000-0000-000000000001","quantity":1,"discount":101}]'::jsonb,
+      '[{"service_id":"62000000-0000-0000-0000-000000000001","quantity":1,"discount":101}]'::jsonb,
       0,'must fail',now()
     );
     raise exception 'Line discount above line value was accepted';
@@ -57,8 +57,8 @@ begin
   end;
   begin
     perform public.create_invoice_with_items(
-      '30000000-0000-0000-0000-000000000001',
       '20000000-0000-0000-0000-000000000001',
+      '30000000-0000-0000-0000-000000000001',
       'INV-LINES-EMPTY',
       '[]'::jsonb,0,'must fail',now()
     );

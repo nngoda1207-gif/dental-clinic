@@ -152,6 +152,31 @@ begin
 end
 $smoke$;
 
+-- Lab payment ledger rejects edits and deletions.
+insert into public.clinic_lab_payments(id,clinic_id,branch_id,lab_case_id,amount,created_by)
+values ('61000000-0000-0000-0000-000000000001',
+        '10000000-0000-0000-0000-000000000001',
+        '20000000-0000-0000-0000-000000000001',
+        '60000000-0000-0000-0000-000000000001',25,
+        '00000000-0000-0000-0000-000000000001');
+do $smoke$
+begin
+  begin
+    update public.clinic_lab_payments set amount=30 where id='61000000-0000-0000-0000-000000000001';
+    raise exception 'Integrity test failed: lab payment edit accepted';
+  exception when sqlstate '55000' then null;
+  end;
+  begin
+    delete from public.clinic_lab_payments where id='61000000-0000-0000-0000-000000000001';
+    raise exception 'Integrity test failed: lab payment deletion accepted';
+  exception when sqlstate '55000' then null;
+  end;
+  if not exists (select 1 from public.clinic_lab_payments where id='61000000-0000-0000-0000-000000000001') then
+    raise exception 'Integrity test failed: lab payment disappeared after rejected mutation';
+  end if;
+end
+$smoke$;
+
 -- Audit history is append-only.
 insert into public.clinic_audit_events(clinic_id,branch_id,actor_user_id,action,entity_type)
 values ('10000000-0000-0000-0000-000000000001',
@@ -161,9 +186,17 @@ do $smoke$
 begin
   begin
     update public.clinic_audit_events set action='rewritten' where action='test' and entity_type='synthetic';
-    raise exception 'Integrity test failed: audit event mutation accepted';
+    raise exception 'Integrity test failed: audit event update accepted';
   exception when sqlstate '55000' then null;
   end;
+  begin
+    delete from public.clinic_audit_events where action='test' and entity_type='synthetic';
+    raise exception 'Integrity test failed: audit event deletion accepted';
+  exception when sqlstate '55000' then null;
+  end;
+  if not exists (select 1 from public.clinic_audit_events where action='test' and entity_type='synthetic') then
+    raise exception 'Integrity test failed: audit event disappeared after rejected mutation';
+  end if;
 end
 $smoke$;
 

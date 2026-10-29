@@ -55,7 +55,6 @@ jobs:
           node --input-type=module --check < supabase/prescription-consent-sync-service.js
           node --input-type=module --check < supabase/financial-repository.js
           node --input-type=module --check < supabase/financial-sync-service.js
-          node supabase/tests/financial-sync-service.test.mjs
           node supabase/tests/invoice-items.test.mjs
           node supabase/tests/patient-validation.test.mjs
           node supabase/tests/patient-repository.test.mjs

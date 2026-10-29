@@ -249,13 +249,12 @@ declare n integer;
 begin
   select count(*) into n from public.clinic_patients;
   if n <> 1 then raise exception 'RLS test failed: manager expected only assigned-branch patient, got %', n; end if;
-  begin
-    update public.clinic_patients
-       set branch_id='20000000-0000-0000-0000-000000000002'
-     where id='30000000-0000-0000-0000-000000000001';
+  update public.clinic_patients
+     set branch_id='20000000-0000-0000-0000-000000000002'
+   where id='30000000-0000-0000-0000-000000000001';
+  if found then
     raise exception 'RLS test failed: manager moved patient into unassigned branch';
-  exception when insufficient_privilege then null;
-  end;
+  end if;
 end
 $smoke$;
 reset role;

@@ -8,6 +8,11 @@ alter table public.clinic_patients
   add column if not exists tags text[] not null default '{}';
 
 alter table public.clinic_patients
+  drop constraint if exists clinic_patients_english_name_length,
+  drop constraint if exists clinic_patients_governorate_length,
+  drop constraint if exists clinic_patients_source_length;
+
+alter table public.clinic_patients
   add constraint clinic_patients_english_name_length
     check (length(english_name) <= 200) not valid,
   add constraint clinic_patients_governorate_length

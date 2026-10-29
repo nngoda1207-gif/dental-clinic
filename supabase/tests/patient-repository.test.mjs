@@ -28,6 +28,10 @@ assert.match(validation, /Patient email address is invalid/, 'malformed email mu
 assert.match(validation, /One or more patient profile fields are too long/, 'oversized patient profile fields must be rejected');
 assert.doesNotMatch(repo, /localStorage|dcos1|\.from\(['"]clinic_state['"]\)/, 'repository must not sync the local D blob');
 assert.match(auth, /storageKey: 'dcos_supabase_auth_v1'/, 'Supabase auth storage must be isolated from the app dataset');
+assert.match(auth, /export async function listAssignedRemoteBranches\\(clinicId\\)/, 'assigned branch listing must be explicit');
+assert.match(auth, /\\.eq\\('user_id', session\\.user\\.id\\)/, 'branch assignments must be scoped to the authenticated user');
+assert.match(auth, /\\.eq\\('active', true\\)/, 'inactive branches must not be returned');
+assert.match(auth, /\\.in\\('id', ids\\)/, 'branch details must be limited to assigned branch IDs');
 
 for (const policy of [
   'clinic_patients_select',

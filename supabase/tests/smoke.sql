@@ -374,6 +374,22 @@ select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000006'
 do $smoke$
 declare n integer; affected integer := 0; stock numeric;
 begin
+  -- Direct movement inserts are forbidden; otherwise a client could forge the ledger
+  -- without updating the derived stock balance.
+  begin
+    insert into public.clinic_inventory_movements(
+      clinic_id,branch_id,item_id,movement_type,quantity_delta,unit_cost,reference,created_by
+    ) values (
+      '10000000-0000-0000-0000-000000000001',
+      '20000000-0000-0000-0000-000000000001',
+      '80000000-0000-0000-0000-000000000001',
+      'purchase',99,1,'DIRECT-INSERT-BLOCKED',
+      '00000000-0000-0000-0000-000000000006'
+    );
+    raise exception 'Inventory test failed: direct movement insert was accepted';
+  exception when insufficient_privilege then null;
+  end;
+
   -- Atomic stock posting updates both the balance and immutable movement ledger.
   perform public.post_inventory_movement(
     '80000000-0000-0000-0000-000000000001','purchase',10,2.50,'TEST-IN','synthetic purchase'

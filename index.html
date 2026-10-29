@@ -1003,5 +1003,6 @@ function tgLang(){setLang(LANG==='en'?'ar':'en')}
 try{const s=sessionStorage.getItem('dcs');if(D&&s)ME=D.users.find(u=>u.id===s&&u.active)||null}catch(e){}
 (async()=>{if(LANG==='en'){document.documentElement.lang='en';document.documentElement.dir='ltr'}if(!ME)await autoLogin();render();if(LANG==='en')trNode(document.body);if(ME&&ME.must)forcePw()})();
 </script>
+<script type="module" src="./supabase/cloud-portal.js"></script>
 </body>
 </html>

@@ -15,9 +15,9 @@
 1. Test in a separate Supabase project first, using synthetic data only.
 2. Apply SQL in this order: `001_clinic_membership.sql`, `002_operational_tables.sql`, then `003_supplemental_clinical_tables.sql`.
 3. Follow `TEST_PLAN.md`; do not treat a successful SQL run alone as proof that role/branch security is correct.
-2. Confirm the project has a recent backup.
-3. Review the SQL and confirm the desired owner/member workflow.
-4. Run the migration only after review; it is not automatically executed by GitHub.
+4. Confirm the project has a recent backup.
+5. Review the SQL and confirm the desired owner/member workflow.
+6. Run the migration only after review; it is not automatically executed by GitHub.
 
 ## Why the app is not syncing yet
 

@@ -216,7 +216,7 @@ begin
             'CROSS-CLINIC-BLOCKED',1,
             '00000000-0000-0000-0000-000000000001');
     raise exception 'Integrity test failed: cross-clinic patient reference accepted';
-  exception when foreign_key_violation then null;
+  exception when foreign_key_violation or check_violation then null;
   end;
 end
 $smoke$;

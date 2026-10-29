@@ -15,6 +15,11 @@ begin
   end if;
 end $$;
 
+insert into public.clinic_services(id,clinic_id,name,category,unit,price,active) values
+ ('62000000-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000001',
+  'Synthetic filling','restorative','tooth',100,true);
+
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000005',false);
 
@@ -25,8 +30,8 @@ declare
   v_line_total numeric(12,2);
 begin
   v_invoice := public.create_invoice_with_items(
-    '30000000-0000-0000-0000-000000000001',
     '20000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000001',
     'INV-LINES-001',
     '[{"service_id":"60000000-0000-0000-0000-000000000001","quantity":2,"discount":10}]'::jsonb,
     5,'synthetic line test',now()
@@ -41,8 +46,8 @@ begin
   end if;
   begin
     perform public.create_invoice_with_items(
-      '30000000-0000-0000-0000-000000000001',
       '20000000-0000-0000-0000-000000000001',
+      '30000000-0000-0000-0000-000000000001',
       'INV-LINES-OVER',
       '[{"service_id":"60000000-0000-0000-0000-000000000001","quantity":1,"discount":101}]'::jsonb,
       0,'must fail',now()

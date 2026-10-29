@@ -3,6 +3,7 @@
 ## Current status
 
 - `001_clinic_membership.sql` is an initial, additive schema for a clinic, staff memberships, branches, and branch assignments.
+- `002_operational_tables.sql` adds separate tables for patients, appointments, clinical records, treatment items, invoices/payments, services, suppliers, inventory, lab cases, and audit events, with initial role/branch RLS policies.
 - The current app in `index.html` still uses local storage for its full `D` state and its custom local login.
 - This migration does **not** turn on app sync and does **not** migrate existing local users.
 - Do not put a Supabase secret/service-role key in browser or APK code.
@@ -24,9 +25,10 @@ Supabase Auth must also be integrated with the current local login carefully. Th
 
 ## Planned implementation order
 
-1. Review and test the clinic/member/branch schema.
-2. Add normalized tables and policies for the app's records, with least-privilege access.
+1. Review and test both SQL migrations in a separate Supabase project.
+2. Audit the policies against the clinic's exact role/branch workflow; these are an initial draft and need security testing.
 3. Add Supabase Auth and a controlled migration path for existing local accounts.
-4. Implement load/save and conflict handling in the app.
-5. Test with two devices and test each role/branch before merging.
-6. Build and install a new APK only after the web app tests pass.
+4. Map the existing `D` object and each current screen/action to normalized records; keep backup/restore available.
+5. Implement load/save, validation, and conflict handling in the app.
+6. Test with two devices and test every role/branch, including attempts to access another branch.
+7. Build and install a new APK only after the web app tests pass.

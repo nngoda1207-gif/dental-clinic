@@ -51,6 +51,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/004_integrity_guards.sql
       - name: Apply migration 005
         run: psql -v ON_ERROR_STOP=1 -f supabase/005_ledger_and_parent_guards.sql
+      - name: Apply migration 006
+        run: psql -v ON_ERROR_STOP=1 -f supabase/006_atomic_inventory_posting.sql
       - name: Grant table privileges for authenticated test role
         run: psql -v ON_ERROR_STOP=1 -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated; GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;"
       - name: Run synthetic RLS and integrity smoke tests

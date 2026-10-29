@@ -37,6 +37,10 @@ jobs:
       PGDATABASE: clinic_test
     steps:
       - uses: actions/checkout@v4
+      - name: Validate Supabase ES module syntax
+        run: |
+          node --input-type=module --check < supabase/auth-adapter.js
+          node --input-type=module --check < supabase/patient-repository.js
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Bootstrap minimal Supabase Auth compatibility

@@ -17,8 +17,8 @@
 ## Before running the migration
 
 1. The GitHub Actions PostgreSQL smoke test should pass, then test in a separate Supabase project using synthetic data only.
-2. Apply SQL in this order: `001_clinic_membership.sql`, `002_operational_tables.sql`, then `003_supplemental_clinical_tables.sql`.
-3. Apply `004_integrity_guards.sql` and `005_ledger_and_parent_guards.sql` after the first three migrations, then follow `TEST_PLAN.md`; do not treat a successful SQL run alone as proof that role/branch security is correct.
+2. Apply all seven SQL files in numerical order (`001` through `007`) in a separate disposable Supabase project.
+3. Follow `TEST_PLAN.md`; do not treat a successful SQL run alone as proof that role/branch security is correct.
 4. Confirm the project has a recent backup.
 5. Review the SQL and confirm the desired owner/member workflow.
 6. Run the migration only after review; it is not automatically executed by GitHub.

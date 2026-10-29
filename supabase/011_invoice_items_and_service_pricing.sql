@@ -26,6 +26,7 @@ create index if not exists clinic_invoice_items_invoice_idx
   on public.clinic_invoice_items(clinic_id,branch_id,invoice_id);
 
 alter table public.clinic_invoice_items enable row level security;
+grant select on public.clinic_invoice_items to authenticated;
 drop policy if exists clinic_invoice_items_select on public.clinic_invoice_items;
 create policy clinic_invoice_items_select on public.clinic_invoice_items
 for select to authenticated

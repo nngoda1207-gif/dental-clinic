@@ -156,6 +156,47 @@ begin
 end
 $smoke$;
 
+-- A dentist cannot bypass overlap prevention with a conflict hidden by branch RLS.
+insert into public.clinic_appointments(
+  id, clinic_id, branch_id, patient_id, dentist_user_id, starts_at, ends_at, created_by
+) values (
+  '70000000-0000-0000-0000-000000000003',
+  '10000000-0000-0000-0000-000000000001',
+  '20000000-0000-0000-0000-000000000002',
+  '30000000-0000-0000-0000-000000000002',
+  '00000000-0000-0000-0000-000000000002',
+  '2030-01-10 11:00:00+00', '2030-01-10 11:30:00+00',
+  '00000000-0000-0000-0000-000000000001'
+);
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',false);
+do $smoke$
+begin
+  begin
+    insert into public.clinic_appointments(
+      id, clinic_id, branch_id, patient_id, dentist_user_id, starts_at, ends_at, created_by
+    ) values (
+      '70000000-0000-0000-0000-000000000004',
+      '10000000-0000-0000-0000-000000000001',
+      '20000000-0000-0000-0000-000000000001',
+      '30000000-0000-0000-0000-000000000001',
+      '00000000-0000-0000-0000-000000000002',
+      '2030-01-10 11:15:00+00', '2030-01-10 11:45:00+00',
+      '00000000-0000-0000-0000-000000000002'
+    );
+    raise exception 'Appointment RLS test failed: hidden cross-branch conflict was accepted';
+  exception when sqlstate '23P01' then null;
+  end;
+  if exists (
+    select 1 from public.clinic_appointments
+    where id='70000000-0000-0000-0000-000000000004'
+  ) then
+    raise exception 'Appointment RLS test failed: hidden conflicting appointment persisted';
+  end if;
+end
+$smoke$;
+reset role;
+
 -- Inactive membership must revoke branch-scoped reads immediately.
 update public.clinic_members
    set active = false

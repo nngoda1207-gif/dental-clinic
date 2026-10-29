@@ -7,7 +7,6 @@ const overlap = readFileSync('supabase/007_stock_privileges_and_appointment_over
 for (const fn of ['listRemoteAppointments','createRemoteAppointment','updateRemoteAppointment']) assert.ok(repo.includes('export async function '+fn));
 assert.ok(repo.includes(".eq('clinic_id', clinicId).eq('branch_id', branchId)"), 'all appointment operations must be clinic and branch scoped');
 assert.ok(repo.includes('created_by: userId'), 'creator must come from authenticated session');
-assert.ok(repo.includes("new Set") === false, 'no arbitrary dynamic status list is accepted');
 assert.ok(repo.includes("new Set(['scheduled','confirmed','arrived','completed','cancelled','no_show'])"), 'status values must be allowlisted');
 assert.ok(repo.includes('Appointment end must be after its start.'), 'end must follow start');
 assert.ok(service.includes('requireActiveClinicContext(await getCurrentClinicMembership())'));

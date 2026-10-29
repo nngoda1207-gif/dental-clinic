@@ -13,6 +13,7 @@
 - `003_app_mapping.md` maps the existing UI/data to the proposed schema; `TEST_PLAN.md` lists required synthetic-data RLS and migration tests.
 - `.github/workflows/supabase-schema-test.yml` runs migrations `001`–`008` against a disposable PostgreSQL service and executes synthetic smoke tests. This is a compatibility smoke test, not a substitute for testing on Supabase itself.
 - `auth-adapter.js` is an isolated Auth prototype only; it is not imported into the app and does not sync records.
+- `connection-check.html` is a standalone diagnostic that checks the project Auth endpoint, signs in a synthetic test user, reads that user's active membership under RLS, and signs out. It performs no clinic-data writes and is not part of the production app.
 - The current app in `index.html` still uses local storage for its full `D` state and its custom local login.
 - This migration does **not** turn on app sync and does **not** migrate existing local users.
 - Do not put a Supabase secret/service-role key in browser or APK code.

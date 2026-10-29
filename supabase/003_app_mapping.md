@@ -28,7 +28,7 @@ Other modules are initialized or used later in the app, including services/proce
 | visit notes (`patients[].visits`) | `clinic_clinical_records` | Current visit object also includes medication/material use and completed procedure references; map those to child rows rather than one opaque note |
 | medical history / odontogram / perio (`mh`, `teeth`, `perio`) | New structured clinical tables or a carefully typed clinical extension | These are sensitive clinical records and must inherit the same branch/role rules; do not flatten away tooth-level history |
 | prescriptions / consents (`rx`, `cons`) | `clinic_clinical_records` plus child/detail tables | Preserve signature, signer relationship, issue/void history, and prescription item details |
-| planned/completed procedures (`plan`) | `clinic_treatment_items` | Preserve tooth, quantity, price, discount, status, approval and who completed it |
+| planned/completed procedures (`plan`) | `clinic_treatment_items` | Preserve tooth, quantity, price, discount, status, approval and who completed it. Link each billable procedure to a clinic service; only `done` items can be invoiced, and each item can appear on one invoice line only. |
 | patient account/payments (`pay`) | `clinic_invoices` + `clinic_invoice_payments` plus a refund/void audit model | Current receipts have sequence numbers and may be voided/refunded; do not mutate away financial history |
 | `procs` | `clinic_services` | Map names, categories, units, prices and active status; app currently allows a procedure price to differ from the list price |
 | `items` | `clinic_inventory_items` + `clinic_inventory_movements` | Current quantity is calculated from movement history; avoid independently updating quantity without a transaction that adds a movement |
@@ -56,7 +56,7 @@ Other modules are initialized or used later in the app, including services/proce
 7. Test concurrent edits, network loss, session expiry, backups, and two Android devices.
 8. Only then build a candidate APK; do not merge into `main` until the candidate passes.
 
-The later integrity migrations also enforce branch consistency for child records and make payment, inventory-movement and audit ledgers append-only. These are database guards, not a replacement for testing transaction-safe posting and formal refund/reversal workflows.
+The later integrity migrations also enforce branch consistency for child records and make payment, inventory-movement and audit ledgers append-only. Migration 012 adds the explicit completed-treatment-to-invoice workflow; it does not automatically bill planned procedures. These are database guards, not a replacement for testing transaction-safe posting and formal refund/reversal workflows.
 
 ## Security checklist for every new table
 

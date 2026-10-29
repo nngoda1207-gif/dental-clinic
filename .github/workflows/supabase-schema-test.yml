@@ -41,6 +41,8 @@ jobs:
         run: |
           node --input-type=module --check < supabase/auth-adapter.js
           node --input-type=module --check < supabase/patient-repository.js
+          node --input-type=module --check < supabase/patient-validation.js
+          node supabase/tests/patient-validation.test.mjs
           node supabase/tests/patient-repository.test.mjs
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client

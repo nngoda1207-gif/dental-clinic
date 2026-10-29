@@ -118,6 +118,44 @@ begin
 end
 $$;
 
+-- Active appointments for the same dentist must not overlap.
+insert into public.clinic_appointments(
+  id, clinic_id, branch_id, patient_id, dentist_user_id, starts_at, ends_at, created_by
+) values (
+  '70000000-0000-0000-0000-000000000001',
+  '10000000-0000-0000-0000-000000000001',
+  '20000000-0000-0000-0000-000000000001',
+  '30000000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000002',
+  '2030-01-10 10:00:00+00', '2030-01-10 10:30:00+00',
+  '00000000-0000-0000-0000-000000000001'
+);
+do $smoke$
+begin
+  begin
+    insert into public.clinic_appointments(
+      id, clinic_id, branch_id, patient_id, dentist_user_id, starts_at, ends_at, created_by
+    ) values (
+      '70000000-0000-0000-0000-000000000002',
+      '10000000-0000-0000-0000-000000000001',
+      '20000000-0000-0000-0000-000000000001',
+      '30000000-0000-0000-0000-000000000001',
+      '00000000-0000-0000-0000-000000000002',
+      '2030-01-10 10:15:00+00', '2030-01-10 10:45:00+00',
+      '00000000-0000-0000-0000-000000000001'
+    );
+    raise exception 'Appointment test failed: overlapping dentist booking accepted';
+  exception when sqlstate '23P01' then null;
+  end;
+  if exists (
+    select 1 from public.clinic_appointments
+    where id='70000000-0000-0000-0000-000000000002'
+  ) then
+    raise exception 'Appointment test failed: conflicting appointment persisted';
+  end if;
+end
+$smoke$;
+
 -- Inactive membership must revoke branch-scoped reads immediately.
 update public.clinic_members
    set active = false
@@ -340,6 +378,19 @@ begin
   select count(*) into n from public.clinic_inventory_movements where reference='TEST-IN';
   if n <> 1 then
     raise exception 'Inventory test failed: original movement was not preserved after delete attempt';
+  end if;
+
+  -- Direct stock quantity edits must be denied; use the atomic posting RPC.
+  begin
+    update public.clinic_inventory_items set quantity=99
+     where id='80000000-0000-0000-0000-000000000001';
+    raise exception 'Inventory test failed: direct quantity update was accepted';
+  exception when insufficient_privilege then null;
+  end;
+  select quantity into stock from public.clinic_inventory_items
+   where id='80000000-0000-0000-0000-000000000001';
+  if stock <> 7 then
+    raise exception 'Inventory test failed: direct update changed quantity to %', stock;
   end if;
 
   select count(*) into n from public.clinic_patients;

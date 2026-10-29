@@ -1,0 +1,17 @@
+{
+  "name": "dental-clinic-os",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dental Clinic OS Android packaging",
+  "scripts": {
+    "build": "node -e \"const fs=require('fs');fs.mkdirSync('www',{recursive:true});fs.copyFileSync('index.html','www/index.html')\"",
+    "cap:sync": "npm run build && cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/core": "^7.4.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.3"
+  }
+}

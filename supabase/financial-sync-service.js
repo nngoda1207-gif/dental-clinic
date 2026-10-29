@@ -8,6 +8,7 @@ function requireId(value,label){if(typeof value!=='string'||!value.trim())throw 
 export async function listInvoicesForAssignedBranch(options={}){return repository.listRemoteInvoices({...options,...await resolveScope(options.branchId)});}
 export async function listInvoiceItemsForAssignedBranch(options={}){return repository.listRemoteInvoiceItems({...options,...await resolveScope(options.branchId)});}
 export async function createInvoiceWithServiceLines(options={}){const scope=await resolveScope(options.branchId,true);return repository.createRemoteInvoiceWithServiceLines({...options,...scope});}
+export async function createInvoiceFromCompletedTreatments(options={}){const scope=await resolveScope(options.branchId,true);return repository.createRemoteInvoiceFromTreatmentItems({...options,...scope});}
 export async function createInvoiceInAssignedBranch(options={}){throw new Error('Use createInvoiceWithServiceLines; manual-total invoices are disabled.');}
 export async function listInvoicePaymentsForAssignedBranch(options={}){return repository.listRemoteInvoicePayments({...options,...await resolveScope(options.branchId)});}
 export async function postPaymentForAssignedInvoice(options={}){await resolveScope(options.branchId,true);requireId(options.invoiceId,'Invoice ID');return repository.postRemoteInvoicePayment(options);}

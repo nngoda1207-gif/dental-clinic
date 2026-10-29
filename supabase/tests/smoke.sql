@@ -94,4 +94,60 @@ begin
 end
 $$;
 
+-- Inactive membership must revoke branch-scoped reads immediately.
+update public.clinic_members
+   set active = false
+ where clinic_id='10000000-0000-0000-0000-000000000001'
+   and user_id='00000000-0000-0000-0000-000000000003';
+set role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000003',false);
+do $
+declare n integer;
+begin
+  select count(*) into n from public.clinic_patients;
+  if n <> 0 then raise exception 'RLS test failed: inactive member still sees patients'; end if;
+end
+$;
+reset role;
+update public.clinic_members
+   set active = true
+ where clinic_id='10000000-0000-0000-0000-000000000001'
+   and user_id='00000000-0000-0000-0000-000000000003';
+
+-- Lab payments cannot claim a different branch from their parent lab case.
+insert into public.clinic_lab_cases(id,clinic_id,branch_id,patient_id,lab_name,created_by)
+values ('60000000-0000-0000-0000-000000000001',
+        '10000000-0000-0000-0000-000000000001',
+        '20000000-0000-0000-0000-000000000001',
+        '30000000-0000-0000-0000-000000000001',
+        'Synthetic Lab','00000000-0000-0000-0000-000000000001');
+do $
+begin
+  begin
+    insert into public.clinic_lab_payments(clinic_id,branch_id,lab_case_id,amount,created_by)
+    values ('10000000-0000-0000-0000-000000000001',
+            '20000000-0000-0000-0000-000000000002',
+            '60000000-0000-0000-0000-000000000001',10,
+            '00000000-0000-0000-0000-000000000001');
+    raise exception 'Integrity test failed: mismatched lab payment branch accepted';
+  exception when check_violation then null;
+  end;
+end
+$;
+
+-- Audit history is append-only.
+insert into public.clinic_audit_events(clinic_id,branch_id,actor_user_id,action,entity_type)
+values ('10000000-0000-0000-0000-000000000001',
+        '20000000-0000-0000-0000-000000000001',
+        '00000000-0000-0000-0000-000000000001','test','synthetic');
+do $
+begin
+  begin
+    update public.clinic_audit_events set action='rewritten' where action='test' and entity_type='synthetic';
+    raise exception 'Integrity test failed: audit event mutation accepted';
+  exception when sqlstate '55000' then null;
+  end;
+end
+$;
+
 select 'SCHEMA_SMOKE_TESTS_PASSED' as result;

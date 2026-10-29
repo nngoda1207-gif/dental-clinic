@@ -56,6 +56,8 @@ Other modules are initialized or used later in the app, including services/proce
 7. Test concurrent edits, network loss, session expiry, backups, and two Android devices.
 8. Only then build a candidate APK; do not merge into `main` until the candidate passes.
 
+The later integrity migrations also enforce branch consistency for child records and make payment, inventory-movement and audit ledgers append-only. These are database guards, not a replacement for testing transaction-safe posting and formal refund/reversal workflows.
+
 ## Security checklist for every new table
 
 - Enable RLS.

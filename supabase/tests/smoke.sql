@@ -81,7 +81,7 @@ end
 $$;
 
 -- Immutable ledger rejects both edits and deletions of payment history.
-do $
+do $$
 begin
   begin
     update public.clinic_invoice_payments set amount=75 where id='50000000-0000-0000-0000-000000000001';
@@ -97,7 +97,7 @@ begin
     raise exception 'Integrity test failed: payment row disappeared after rejected mutation';
   end if;
 end
-$;
+$$;
 
 -- Appointment end must be after start.
 do $$

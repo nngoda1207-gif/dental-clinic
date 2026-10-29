@@ -96,7 +96,7 @@ security definer
 set search_path = ''
 as $$
   select
-    public.has_clinic_role(p_clinic_id, array['owner','manager'])
+    public.has_clinic_role(p_clinic_id, array['owner'])
     or exists (
       select 1
       from public.clinic_member_branches mb
@@ -195,20 +195,20 @@ drop policy if exists clinic_branches_read_member on public.clinic_branches;
 create policy clinic_branches_read_member on public.clinic_branches
 for select to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner','manager'])
+  public.has_clinic_role(clinic_id, array['owner'])
   or public.can_access_clinic_branch(clinic_id, id)
 );
 
 drop policy if exists clinic_branches_insert_owner_manager on public.clinic_branches;
-create policy clinic_branches_insert_owner_manager on public.clinic_branches
+create policy clinic_branches_insert_owner on public.clinic_branches
 for insert to authenticated
-with check (public.has_clinic_role(clinic_id, array['owner','manager']));
+with check (public.has_clinic_role(clinic_id, array['owner']));
 
 drop policy if exists clinic_branches_update_owner_manager on public.clinic_branches;
-create policy clinic_branches_update_owner_manager on public.clinic_branches
+create policy clinic_branches_update_owner on public.clinic_branches
 for update to authenticated
-using (public.has_clinic_role(clinic_id, array['owner','manager']))
-with check (public.has_clinic_role(clinic_id, array['owner','manager']));
+using (public.has_clinic_role(clinic_id, array['owner']))
+with check (public.has_clinic_role(clinic_id, array['owner']));
 
 drop policy if exists clinic_branches_delete_owner on public.clinic_branches;
 create policy clinic_branches_delete_owner on public.clinic_branches

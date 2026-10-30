@@ -12,7 +12,7 @@ const localState = {
   ]
 };
 const remotePatients = [
-  { no: '001', name: 'Same Person', ph: '+201000000000', br: branchId },
+  { no: '001', name: 'Same Person', ph: '+201000000000', br: branchId, sourceLocalId: 'p1' },
   { no: '003', name: 'Different Person', ph: '+201333333333', br: branchId }
 ];
 const preview = preparePatientImport({

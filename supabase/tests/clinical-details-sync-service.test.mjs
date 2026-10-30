@@ -5,7 +5,9 @@ const service=readFileSync(new URL('../clinical-details-sync-service.js',import.
 for(const table of ['clinic_patient_medical_history','clinic_tooth_records','clinic_periodontal_measurements'])assert.ok(repo.includes(table));
 for(const fn of ['getRemoteMedicalHistory','saveRemoteMedicalHistory','listRemoteToothRecords','createRemoteToothRecord','listRemotePeriodontalMeasurements','createRemotePeriodontalMeasurement'])assert.ok(repo.includes('function '+fn)||repo.includes('function '+fn+'('));
 for(const field of ['clinic_id','branch_id','patient_id'])assert.ok(repo.includes(field));
-assert.ok(repo.includes("onConflict:'clinic_id,patient_id'"));
+assert.ok(repo.includes(".eq('updated_at',args.expectedUpdatedAt)"),'medical history updates require the last-seen version');
+assert.ok(repo.includes('Medical history changed on another device'),'stale medical history is surfaced');
+assert.ok(repo.includes('source_local_id:args.sourceLocalId||null'),'odontogram/perio rows retain stable local IDs');
 assert.ok(repo.includes('updated_by:actor'));
 assert.ok(repo.includes('recorded_by:actor'));
 assert.ok(repo.includes('pocket_depth_mm'));

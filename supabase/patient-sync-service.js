@@ -12,9 +12,12 @@ import {
 import { requireActiveClinicContext, requireAssignedRemoteBranch } from './clinic-context.js';
 import {
   listRemotePatients,
+  listAllRemotePatients,
   createRemotePatient,
   updateRemotePatient,
-  archiveRemotePatient
+  archiveRemotePatient,
+  subscribeToRemotePatientChanges,
+  upsertRemotePatientFromLocal
 } from './patient-repository.js';
 
 const WRITE_ROLES = new Set(['owner', 'manager', 'dentist', 'reception']);
@@ -38,25 +41,33 @@ export async function listPatientsForAssignedBranch({ branchId, limit } = {}) {
   return listRemotePatients({ clinicId: scope.clinicId, branchId: scope.branchId, limit });
 }
 
+/** Loads every patient in the assigned branch for duplicate-safe import preview. */
+export async function listAllPatientsForAssignedBranch({ branchId } = {}) {
+  const scope = await resolveScope(branchId);
+  return listAllRemotePatients({ clinicId: scope.clinicId, branchId: scope.branchId });
+}
+
 /** Creates one patient after active membership, branch and role checks. */
-export async function createPatientInAssignedBranch({ branchId, fileNo, patient } = {}) {
+export async function createPatientInAssignedBranch({ branchId, fileNo, patient, localId } = {}) {
   const scope = await resolveScope(branchId, { write: true });
   return createRemotePatient({
     clinicId: scope.clinicId,
     branchId: scope.branchId,
     fileNo,
-    patient
+    patient,
+    localId
   });
 }
 
 /** Updates one patient without allowing clinic/branch/file-number reassignment. */
-export async function updatePatientInAssignedBranch({ branchId, patientId, patient } = {}) {
+export async function updatePatientInAssignedBranch({ branchId, patientId, patient, expectedUpdatedAt } = {}) {
   const scope = await resolveScope(branchId, { write: true });
   return updateRemotePatient({
     clinicId: scope.clinicId,
     branchId: scope.branchId,
     patientId,
-    patient
+    patient,
+    expectedUpdatedAt
   });
 }
 
@@ -67,5 +78,26 @@ export async function archivePatientInAssignedBranch({ branchId, patientId } = {
     clinicId: scope.clinicId,
     branchId: scope.branchId,
     patientId
+  });
+}
+
+
+/** Subscribe only after validating active membership and explicit branch assignment. */
+export async function watchPatientsForAssignedBranch({ branchId, onChange, onStatus } = {}) {
+  const scope = await resolveScope(branchId);
+  return subscribeToRemotePatientChanges({
+    clinicId: scope.clinicId,
+    branchId: scope.branchId,
+    onChange,
+    onStatus
+  });
+}
+
+
+/** Idempotent demographics-only upsert for a local patient with a stable ID. */
+export async function upsertPatientInAssignedBranch({ branchId, localId, fileNo, patient, expectedUpdatedAt } = {}) {
+  const scope = await resolveScope(branchId, { write: true });
+  return upsertRemotePatientFromLocal({
+    clinicId: scope.clinicId, branchId: scope.branchId, localId, fileNo, patient, expectedUpdatedAt
   });
 }

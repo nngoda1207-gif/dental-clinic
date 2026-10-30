@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const sql = readFileSync(new URL('../010_atomic_invoice_payments.sql', import.meta.url), 'utf8');
+const syncSql = readFileSync(new URL('../019_idempotent_financial_ledger.sql', import.meta.url), 'utf8');
 const repo = readFileSync(new URL('../financial-repository.js', import.meta.url), 'utf8');
 const service = readFileSync(new URL('../financial-sync-service.js', import.meta.url), 'utf8');
 for (const required of [
@@ -14,7 +15,13 @@ for (const required of [
   'grant execute on function public.post_invoice_payment',
   'grant execute on function public.refund_invoice_payment'
 ]) assert.ok(sql.includes(required), 'Missing SQL guard: '+required);
-assert.ok(repo.includes('post_invoice_payment'));
+assert.ok(syncSql.includes('post_invoice_payment_idempotent'));
+assert.ok(syncSql.includes('refund_invoice_payment_idempotent'));
+assert.ok(syncSql.includes('source_local_id'));
+assert.ok(repo.includes('post_invoice_payment_idempotent'));
+assert.ok(repo.includes('refund_invoice_payment_idempotent'));
+assert.ok(repo.includes("required(sourceLocalId,'Local payment ID')"));
+assert.ok(repo.includes("required(sourceLocalId,'Local refund ID')"));
 assert.ok(repo.includes('refund_invoice_payment'));
 assert.ok(service.includes('postPaymentForAssignedInvoice'));
 assert.ok(service.includes('refundPaymentForAssignedInvoice'));

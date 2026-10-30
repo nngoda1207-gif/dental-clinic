@@ -1,17 +1,22 @@
 /*
  * Isolated Supabase cloud portal for the existing local-first app.
  * This first integration enables Supabase Auth, clinic/branch context and
- * branch-scoped patient reads. It does not upload or overwrite local D.
+ * branch-scoped patient sync. Demographic changes cross the local/cloud boundary
+ * only after backup, explicit branch mapping and owner opt-in; other D modules stay local.
  */
 import {
-  configureSupabase, getSupabaseClient, signInWithPassword,
+  configureSupabase, getSupabaseClient, signInWithPassword, signUpWithPassword, requestPasswordReset, updatePassword,
   signOutSupabase, getCurrentClinicMembership, listAssignedRemoteBranches
 } from './auth-adapter.js';
-import { listPatientsForAssignedBranch } from './patient-sync-service.js';
+import { listAllPatientsForAssignedBranch, watchPatientsForAssignedBranch, upsertPatientInAssignedBranch, updatePatientInAssignedBranch } from './patient-sync-service.js';
 import { preparePatientImport, importNewPatients } from './patient-import-service.js';
 
 const CONFIG_KEY = 'dcos_supabase_public_config_v1';
-let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null;
+const BRANCH_MAP_KEY = 'dcos_supabase_branch_map_v1';
+const PATIENT_QUEUE_KEY = 'dcos_patient_sync_queue_v1';
+const PATIENT_CONFLICTS_KEY = 'dcos_patient_sync_conflicts_v1';
+let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null, localBackupExported = false, backupExportStarted = false;
+let recoveryListenerClient = null, patientRealtimeUnsubscribe = null, patientRefreshInFlight = false, patientQueueFlushInFlight = false, initialImportComplete = false;
 const el = (tag, attrs = {}, html = '') => {
   const n = document.createElement(tag);
   Object.entries(attrs).forEach(([k, v]) => k === 'class' ? n.className = v : n.setAttribute(k, v));
@@ -24,7 +29,7 @@ style.textContent = `
 #dcos-cloud-panel{position:fixed;inset:0;z-index:100;background:#0008;display:none;align-items:center;justify-content:center;padding:12px;font-family:Cairo, sans-serif}
 #dcos-cloud-panel.open{display:flex}
 #dcos-cloud-card{background:var(--cd,#fff);color:var(--tx,#14262e);width:min(680px,100%);max-height:92vh;overflow:auto;border-radius:14px;padding:18px;border:1px solid var(--bd,#d8e2e0);direction:rtl}
-#dcos-cloud-card input,#dcos-cloud-card select{width:100%;padding:9px;margin:4px 0 10px;border:1px solid var(--bd,#d8e2e0);border-radius:8px;background:var(--bg,#f3f6f5);color:inherit;font:inherit}
+#dcos-cloud-card input,#dcos-cloud-card select,#dcos-cloud-card textarea{width:100%;padding:9px;margin:4px 0 10px;border:1px solid var(--bd,#d8e2e0);border-radius:8px;background:var(--bg,#f3f6f5);color:inherit;font:inherit}
 #dcos-cloud-card button{font:inherit;border-radius:8px;padding:8px 13px;margin:3px;cursor:pointer;border:1px solid var(--ac,#1f8a80)}
 #dcos-cloud-card .primary{background:var(--ac,#1f8a80);color:white}
 #dcos-cloud-card .muted{color:var(--mu,#5b6f77);font-size:13px}
@@ -36,8 +41,8 @@ document.head.append(style);
 const launch = el('button', { id: 'dcos-cloud-launch', type: 'button' }, '☁ المزامنة السحابية');
 const panel = el('div', { id: 'dcos-cloud-panel' });
 panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true" aria-labelledby="dcos-cloud-title">
-  <div style="display:flex;align-items:center;gap:10px;justify-content:space-between"><h2 id="dcos-cloud-title" style="margin:0">اتصال العيادة بـ Supabase</h2><button id="dcos-cloud-close" type="button">إغلاق</button></div>
-  <p class="muted">هذه مساحة سحابية منفصلة عن قاعدة البيانات المحلية الحالية. تسجيل الدخول هنا لا يغيّر حسابات التطبيق المحلية، ولا يتم رفع أي بيانات محلية تلقائيًا.</p>
+  <div style="display:flex;align-items:center;gap:10px;justify-content:space-between"><h2 id="dcos-cloud-title" style="margin:0">حساب العيادة</h2><button id="dcos-cloud-close" type="button">إغلاق</button></div>
+  <div class="cloud-row"><b>حساب مستقل لكل شخص — بدون مشاركة كلمة المرور.</b><p class="muted">صاحب العيادة ينشئ حسابه ويجهّز العيادة. بعد ذلك يرسل دعوة إلى إيميل كل موظف ويحدد وظيفته والفرع. الموظف ينشئ حسابه بإيميله الشخصي ويقبل الدعوة بالكود.</p><p class="muted">كل مستخدم يرى بيانات العيادة المشتركة وفق دوره والفرع المخصص له. لا تستخدم إيميل أو كلمة مرور المالك على أجهزة الموظفين.</p></div>
   <div id="dcos-cloud-config">
     <label>رابط مشروع Supabase<input id="dcos-sb-url" type="url" placeholder="https://xxxx.supabase.co" autocomplete="url"></label>
     <label>Publishable / anon key<input id="dcos-sb-key" type="password" placeholder="المفتاح العام للمشروع فقط" autocomplete="off"></label>
@@ -45,9 +50,15 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
     <p class="muted">لا تضع Service Role أو Secret Key هنا. الإعدادات تحفظ على هذا الجهاز فقط.</p>
   </div>
   <div id="dcos-cloud-auth">
-    <label>البريد الإلكتروني<input id="dcos-sb-email" type="email" autocomplete="username"></label>
-    <label>كلمة مرور Supabase<input id="dcos-sb-password" type="password" autocomplete="current-password"></label>
-    <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">تسجيل الدخول السحابي</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
+    <label>البريد الإلكتروني<input id="dcos-sb-email" type="email" placeholder="البريد الإلكتروني" autocomplete="username"></label>
+    <label>كلمة المرور<input id="dcos-sb-password" type="password" placeholder="كلمة المرور" autocomplete="current-password"></label>
+    <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">تسجيل الدخول</button><button id="dcos-sb-signup" type="button">إنشاء حساب جديد</button><button id="dcos-sb-reset" type="button">نسيت كلمة المرور؟</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
+    <p class="muted">استخدم إيميلك الشخصي. صاحب العيادة ينشئ حسابه أولًا، والموظف ينشئ حسابًا بإيميله الذي استلم عليه الدعوة. لا تنشئ حسابًا ثانيًا إذا كان لديك حساب بالفعل؛ استخدم تسجيل الدخول.</p>
+  </div>
+  <div id="dcos-password-recovery" hidden>
+    <h3>تعيين كلمة مرور جديدة</h3>
+    <label>كلمة المرور الجديدة<input id="dcos-new-password" type="password" minlength="8" autocomplete="new-password"></label>
+    <button class="primary" id="dcos-save-new-password" type="button">حفظ كلمة المرور الجديدة</button>
   </div>
   <div id="dcos-cloud-workspace" hidden></div>
   <p id="dcos-cloud-status" class="muted" role="status" aria-live="polite"></p>
@@ -56,22 +67,76 @@ document.body.append(launch, panel);
 
 const $ = id => document.getElementById(id);
 const status = message => { $('dcos-cloud-status').textContent = message || ''; };
-const open = () => panel.classList.add('open');
+function friendlyCloudError(error, fallback) {
+  const message = String(error?.message || error || '');
+  if (/Supabase URL and publishable key are required/i.test(message)) return 'إعداد الاتصال السحابي غير مكتمل. أدخل رابط المشروع والمفتاح العام أو استخدم نسخة التطبيق المجهزة بالإعدادات.';
+  if (/Invalid login credentials/i.test(message)) return 'الإيميل أو كلمة المرور غير صحيحين. راجع البيانات أو استخدم «نسيت كلمة المرور؟».';
+  if (/Email not confirmed/i.test(message)) return 'أكد بريدك الإلكتروني من الرسالة التي وصلتك، ثم سجّل الدخول مرة أخرى.';
+  if (/User already registered/i.test(message)) return 'هذا البريد لديه حساب بالفعل. استخدم زر تسجيل الدخول بدل إنشاء حساب جديد.';
+  if (/Failed to fetch|NetworkError|Load failed/i.test(message)) return 'تعذر الاتصال بالخادم. تأكد من الإنترنت وحاول مرة أخرى.';
+  if (/does not exist|Could not find the function|schema cache/i.test(message)) return 'إعدادات قاعدة بيانات العيادة غير مكتملة. يلزم تطبيق ملف OWNER_STAFF_SETUP.sql في Supabase SQL Editor بواسطة مسؤول المشروع.';
+  if (/INVALID_INVITE_EMAIL/.test(message)) return 'راجع إيميل الموظف؛ يبدو أنه غير مكتوب بشكل صحيح.';
+  if (/OWNER_REQUIRED/.test(message)) return 'إنشاء دعوات الموظفين متاح لحساب مالك العيادة فقط.';
+  if (/BRANCH_NOT_AVAILABLE/.test(message)) return 'الفرع المحدد غير متاح. حدّث الصفحة واختر فرعًا نشطًا.';
+  if (/USER_ALREADY_MEMBER/.test(message)) return 'هذا البريد عضو بالفعل في العيادة.';
+  if (/INVALID_INVITE_ROLE/.test(message)) return 'الوظيفة المحددة غير صالحة. اختر وظيفة من القائمة.';
+  if (/over_email_send_rate_limit|email rate limit/i.test(message)) return 'تم طلب رسائل كثيرة خلال وقت قصير. انتظر قليلًا ثم حاول مرة أخرى.';
+  if (/Password should be at least|password.*(weak|short)/i.test(message)) return 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.';
+  return message || fallback;
+}
+
+const open = () => { const embedded = window.DCOS_SUPABASE_CONFIG; if (embedded?.url && embedded?.publishableKey) $('dcos-cloud-config').hidden = true; panel.classList.add('open'); };
+window.openCloudPortal = open;
 const close = () => panel.classList.remove('open');
-launch.addEventListener('click', () => { open(); restoreConfig(); });
+function bindPasswordRecovery() {
+  const client = getSupabaseClient();
+  if (recoveryListenerClient === client) return;
+  recoveryListenerClient = client;
+  client.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      $('dcos-password-recovery').hidden = false;
+      $('dcos-cloud-auth').hidden = true;
+      status('تم التحقق من رابط الاستعادة. أدخل كلمة مرور جديدة.');
+      open();
+    }
+  });
+}
+
+launch.addEventListener('click', () => { open(); });
+
+$('dcos-save-new-password').addEventListener('click', async () => {
+  const button = $('dcos-save-new-password');
+  try {
+    button.disabled = true;
+    await updatePassword($('dcos-new-password').value);
+    $('dcos-new-password').value = '';
+    $('dcos-password-recovery').hidden = true;
+    $('dcos-cloud-auth').hidden = false;
+    $('dcos-sb-logout').hidden = false;
+    status('تم تحديث كلمة المرور. يمكنك تسجيل الدخول بها على أجهزتك الأخرى.');
+  } catch (e) { status(e.message || 'تعذر تحديث كلمة المرور.'); }
+  finally { button.disabled = false; }
+});
 $('dcos-cloud-close').addEventListener('click', close);
 panel.addEventListener('click', e => { if (e.target === panel) close(); });
 
 function restoreConfig() {
   try {
-    const c = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
-    if (c) { $('dcos-sb-url').value = c.url || ''; $('dcos-sb-key').value = c.publishableKey || ''; }
+    const embedded = window.DCOS_SUPABASE_CONFIG;
+    const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
+    const c = embedded?.url && embedded?.publishableKey ? embedded : saved;
+    if (c) {
+      $('dcos-sb-url').value = c.url || '';
+      $('dcos-sb-key').value = c.publishableKey || '';
+      if (embedded?.url && embedded?.publishableKey) localStorage.setItem(CONFIG_KEY, JSON.stringify(embedded));
+    }
   } catch {}
 }
 function configure() {
   const url = $('dcos-sb-url').value.trim();
   const publishableKey = $('dcos-sb-key').value.trim();
   configureSupabase({ url, publishableKey });
+  bindPasswordRecovery();
   localStorage.setItem(CONFIG_KEY, JSON.stringify({ url, publishableKey }));
 }
 $('dcos-save-config').addEventListener('click', () => {
@@ -86,11 +151,35 @@ $('dcos-sb-login').addEventListener('click', async () => {
     $('dcos-sb-password').value = '';
     $('dcos-sb-logout').hidden = false;
     await loadWorkspace();
-  } catch (e) { status(e.message || 'فشل تسجيل الدخول.'); }
+    flushPatientSyncQueue();
+  } catch (e) { status(friendlyCloudError(e, 'فشل تسجيل الدخول.')); }
+});
+$('dcos-sb-signup').addEventListener('click', async () => {
+  try {
+    configure();
+    status('جارٍ إنشاء الحساب السحابي…');
+    const data = await signUpWithPassword($('dcos-sb-email').value, $('dcos-sb-password').value);
+    $('dcos-sb-password').value = '';
+    if (data.session) {
+      $('dcos-sb-logout').hidden = false;
+      await loadWorkspace();
+      status('تم إنشاء حسابك. إذا ظهرت رسالة تأكيد، افتح بريدك ثم ارجع وسجّل الدخول. بعد الدخول اختر إعداد العيادة إذا كنت المالك، أو أدخل كود الدعوة إذا كنت موظفًا.');
+    } else {
+      status('تم إرسال رسالة تأكيد إذا كان التحقق بالبريد مفعّلًا. افتح الرسالة، ثم ارجع وسجّل الدخول بإيميلك الشخصي وكلمة المرور التي أنشأتها. بعد الدخول أكمل إعداد المالك أو قبول دعوة الموظف. لم تُرفع بيانات المرضى في هذه الخطوة.');
+    }
+  } catch (e) { status(friendlyCloudError(e, 'تعذر إنشاء الحساب.')); }
+});
+$('dcos-sb-reset').addEventListener('click', async () => {
+  try {
+    configure();
+    await requestPasswordReset($('dcos-sb-email').value);
+    status('إذا كان البريد مسجلًا، ستصلك رسالة لإعادة تعيين كلمة المرور. افحص البريد الوارد والرسائل غير المرغوب فيها.');
+  } catch (e) { status(friendlyCloudError(e, 'تعذر إرسال رسالة استعادة كلمة المرور.')); }
 });
 $('dcos-sb-logout').addEventListener('click', async () => {
   try {
     await signOutSupabase();
+    if (patientRealtimeUnsubscribe) { patientRealtimeUnsubscribe(); patientRealtimeUnsubscribe = null; }
     $('dcos-cloud-workspace').hidden = true;
     $('dcos-cloud-workspace').innerHTML = '';
     $('dcos-sb-logout').hidden = true;
@@ -104,13 +193,18 @@ async function loadWorkspace() {
   host.innerHTML = '<p class="muted">جارٍ تحميل صلاحياتك والفروع المتاحة…</p>';
   const result = await getCurrentClinicMembership();
   if (!result) {
-    host.innerHTML = `<h3>إنشاء عيادة سحابية جديدة</h3>
-      <p class="muted">هذا الخيار ينشئ عيادة ومالكًا وفرعًا رئيسيًا في Supabase. استخدمه فقط إذا لم تكن عضوًا في عيادة موجودة.</p>
+    host.innerHTML = `<section class="cloud-row"><h3>انضمام موظف بدعوة</h3>
+      <p class="muted">لو صاحب العيادة أرسل لك كودًا: سجّل الدخول بإيميلك الشخصي أولًا، ثم الصق الكود هنا. يجب أن يطابق الإيميل الذي أُرسلت إليه الدعوة.</p>
+      <label>كود الدعوة<input id="dcos-staff-invite-code" autocomplete="off" spellcheck="false" placeholder="الصق كود الدعوة هنا"></label>
+      <button class="primary" id="dcos-redeem-staff-invite" type="button">قبول الدعوة والانضمام</button></section>
+      <details class="cloud-row" id="dcos-owner-setup"><summary><b>أنا صاحب العيادة وأجهّزها لأول مرة</b></summary>
+      <p class="muted">استخدم هذا القسم مرة واحدة فقط بحساب المالك. لا تستخدمه لحسابات الموظفين.</p>
       <label>اسم العيادة<input id="dcos-new-clinic" maxlength="160"></label>
       <label>اسم الفرع الرئيسي<input id="dcos-new-branch" maxlength="160" value="الفرع الرئيسي"></label>
-      <button class="primary" id="dcos-create-clinic" type="button">إنشاء العيادة السحابية</button>`;
+      <button class="primary" id="dcos-create-clinic" type="button">إنشاء العيادة والفرع</button></details>`;
     $('dcos-create-clinic').addEventListener('click', createClinic);
-    status('لا توجد عضوية نشطة لهذا الحساب.');
+    $('dcos-redeem-staff-invite').addEventListener('click', redeemStaffInvite);
+    status('الحساب غير مرتبط بعيادة بعد. اختر الانضمام بدعوة أو إعداد العيادة إذا كنت المالك.');
     return;
   }
   const membership = result.membership;
@@ -124,12 +218,70 @@ async function loadWorkspace() {
   }
   host.innerHTML = `<p><b>الدور:</b> ${escapeHtml(membership.role)} <span class="muted">· تم التحقق من العضوية النشطة</span></p>
     <label>الفرع السحابي<select id="dcos-cloud-branch">${branches.map(b => `<option value="${escapeAttr(b.id)}">${escapeHtml(b.name)}</option>`).join('')}</select></label>
-    <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button">تحميل مرضى الفرع</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
+    <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
     <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
+  if (membership.role === 'owner') {
+    const inviteBox = el('section', { class: 'cloud-row' });
+    inviteBox.innerHTML = '<h3>إضافة موظف للعيادة</h3><p class="muted">أنشئ دعوة مرتبطة بإيميل الموظف ووظيفته وفرعه. الكود يستخدم مرة واحدة وصلاحيته 72 ساعة.</p><label>إيميل الموظف<input id="dcos-invite-email" type="email" autocomplete="off" placeholder="staff@example.com"></label><label>الوظيفة<select id="dcos-invite-role"><option value="dentist">طبيب</option><option value="nurse">تمريض</option><option value="reception">استقبال</option><option value="accountant">حسابات</option><option value="manager">مدير</option><option value="invmgr">مسؤول مخزون</option><option value="readonly">قراءة فقط</option></select></label><label>الفرع<select id="dcos-invite-branch">' + branches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('') + '</select></label><button class="primary" id="dcos-create-staff-invite" type="button">إنشاء كود دعوة</button><textarea id="dcos-created-staff-invite" rows="2" readonly placeholder="سيظهر كود الدعوة هنا"></textarea><p class="muted">أرسل الكود للموظف عبر قناة خاصة ولا تشاركه علنًا.</p>';
+    host.prepend(inviteBox);
+    $('dcos-create-staff-invite').addEventListener('click', createStaffInvite);
+  }
   $('dcos-load-patients').addEventListener('click', loadPatients);
+  $('dcos-cloud-branch').addEventListener('change', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
+  flushPatientSyncQueue();
 }
+
+async function createStaffInvite() {
+  const button = $('dcos-create-staff-invite');
+  const output = $('dcos-created-staff-invite');
+  try {
+    const email = $('dcos-invite-email').value.trim().toLowerCase();
+    const role = $('dcos-invite-role').value;
+    const branchId = $('dcos-invite-branch').value;
+    if (!email || !branchId) throw new Error('أدخل إيميل الموظف واختر الفرع.');
+    button.disabled = true;
+    status('جارٍ إنشاء دعوة الموظف…');
+    const { data, error } = await getSupabaseClient().rpc('create_clinic_invitation', {
+      p_email: email, p_role: role, p_branch_id: branchId, p_expires_hours: 72
+    });
+    if (error) throw error;
+    if (typeof data !== 'string' || !/^[0-9a-f]{64}$/i.test(data)) throw new Error('لم يرجع الخادم كود دعوة صالحًا.');
+    output.value = data;
+    status('تم إنشاء كود دعوة لمرة واحدة. أرسله للموظف، ويجب أن يسجل بنفس الإيميل المحدد.');
+  } catch (e) {
+    const msg = String(e?.message || '');
+    status(/does not exist|Could not find the function|schema cache/i.test(msg)
+      ? 'ميزة دعوات الموظفين تحتاج تطبيق تحديث قاعدة البيانات رقم 022 على مشروع Supabase أولًا.'
+      : (msg || 'تعذر إنشاء دعوة الموظف.'));
+  } finally { button.disabled = false; }
+}
+
+async function redeemStaffInvite() {
+  const button = $('dcos-redeem-staff-invite');
+  try {
+    const token = $('dcos-staff-invite-code').value.trim();
+    if (!/^[0-9a-f]{64}$/i.test(token)) throw new Error('كود الدعوة غير مكتمل. الصق الكود كاملًا كما وصلك.');
+    button.disabled = true;
+    status('جارٍ التحقق من الدعوة وربط حسابك بالعيادة…');
+    const { error } = await getSupabaseClient().rpc('redeem_clinic_invitation', { p_token: token });
+    if (error) throw error;
+    $('dcos-staff-invite-code').value = '';
+    status('تم قبول الدعوة وربط حسابك بالعيادة والفرع. جارٍ تحميل الصلاحيات…');
+    await loadWorkspace();
+  } catch (e) {
+    const msg = String(e?.message || '');
+    const friendly = msg.includes('INVITATION_EMAIL_MISMATCH') ? 'هذا الكود مخصص لبريد مختلف. سجّل الدخول بالإيميل الذي أرسل إليه صاحب العيادة الدعوة.'
+      : msg.includes('INVITATION_EXPIRED') ? 'انتهت صلاحية الدعوة. اطلب من صاحب العيادة كودًا جديدًا.'
+      : msg.includes('INVITATION_ALREADY_USED') ? 'تم استخدام هذا الكود من قبل. اطلب دعوة جديدة.'
+      : msg.includes('INVALID_INVITATION_CODE') ? 'كود الدعوة غير صحيح.'
+      : /does not exist|Could not find the function|schema cache/i.test(msg) ? 'قاعدة بيانات العيادة تحتاج تطبيق التحديث رقم 022 أولًا.'
+      : (msg || 'تعذر قبول الدعوة.');
+    status(friendly);
+  } finally { button.disabled = false; }
+}
+
 async function createClinic() {
   try {
     const name = $('dcos-new-clinic').value.trim();
@@ -151,7 +303,7 @@ async function createClinic() {
     if (assignmentError) throw assignmentError;
     status('تم إنشاء العيادة والفرع السحابي. جارٍ تحميل مساحة العمل…');
     await loadWorkspace();
-  } catch (e) { status(e.message || 'تعذر إنشاء العيادة.'); }
+  } catch (e) { status(friendlyCloudError(e, 'تعذر إنشاء العيادة.')); }
 }
 
 function beginPatientImport() {
@@ -162,11 +314,15 @@ function beginPatientImport() {
     localImportSnapshot = JSON.parse(raw);
     if (!Array.isArray(localImportSnapshot.patients) || !Array.isArray(localImportSnapshot.branches)) throw new Error('بيانات المرضى أو الفروع المحلية غير مكتملة.');
     importPreview = null;
+    localBackupExported = false;
+    backupExportStarted = false;
     const options = activeBranches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('');
     host.hidden = false;
-    host.innerHTML = '<h3>ربط الفروع المحلية بالسحابية</h3><p class="muted">اختر فرعًا سحابيًا لكل فرع محلي. لا يتم رفع بيانات في هذه الخطوة.</p>' +
+    host.innerHTML = '<h3>نسخة احتياطية قبل النقل</h3><p class="muted">بيانات العيادة المحلية تشمل معلومات مرضى حساسة. نزّل نسخة JSON كاملة واحفظها في مكان آمن قبل متابعة الاستيراد. التنزيل لا يرفع النسخة إلى السحابة.</p><button class="primary" id="dcos-export-local-backup" type="button">تنزيل النسخة الاحتياطية المحلية</button><p id="dcos-backup-status" class="muted">يجب تنزيل النسخة الاحتياطية قبل معاينة الاستيراد.</p><h3>ربط الفروع المحلية بالسحابية</h3><p class="muted">اختر فرعًا سحابيًا لكل فرع محلي. لا يتم رفع بيانات في هذه الخطوة.</p>' +
       localImportSnapshot.branches.map((b,i) => '<label>' + escapeHtml(b.name || ('فرع ' + (i+1))) + '<select data-local-branch="' + escapeAttr(String(b.id ?? '')) + '"><option value="">اختر الفرع السحابي</option>' + options + '</select></label>').join('') +
       '<button class="primary" id="dcos-preview-patient-import" type="button">معاينة الاستيراد</button><div id="dcos-import-preview-result" class="muted"></div>';
+    $('dcos-preview-patient-import').disabled = true;
+    $('dcos-export-local-backup').addEventListener('click', exportLocalBackup);
     $('dcos-preview-patient-import').addEventListener('click', previewPatientImportNow);
     // A preview is valid only for the exact branch mapping used to create it.
     // Invalidate it immediately if any mapping changes, preventing confirmation
@@ -183,26 +339,64 @@ function beginPatientImport() {
   } catch (e) { status(e.message || 'تعذر تجهيز المعاينة.'); }
 }
 
+function exportLocalBackup() {
+  try {
+    if (!localImportSnapshot || typeof localImportSnapshot !== 'object') throw new Error('لا توجد بيانات محلية جاهزة للنسخ الاحتياطي.');
+    const date = new Date().toISOString().replace(/[:.]/g, '-');
+    const blob = new Blob([JSON.stringify({format:'dental-clinic-os-local-backup',version:1,exportedAt:new Date().toISOString(),data:localImportSnapshot}, null, 2)], {type:'application/json;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'dental-clinic-backup-' + date + '.json';
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    backupExportStarted = true;
+    $('dcos-backup-status').innerHTML = 'بدأ تنزيل الملف. افتح مجلد التنزيلات وتأكد أن ملف النسخة الاحتياطية موجود ويمكن فتحه، ثم أكد ذلك للمتابعة. <button type="button" id="dcos-confirm-backup-saved">تأكدت من حفظ النسخة الاحتياطية</button>';
+    $('dcos-confirm-backup-saved').addEventListener('click', confirmLocalBackupSaved);
+    status('بدأ تنزيل النسخة الاحتياطية. لن تُتاح المعاينة حتى تؤكد بنفسك وجود الملف المحفوظ.');
+  } catch (e) { status(e.message || 'تعذر تنزيل النسخة الاحتياطية.'); }
+}
+
+function confirmLocalBackupSaved() {
+  if (!backupExportStarted) throw new Error('ابدأ تنزيل النسخة الاحتياطية أولًا.');
+  localBackupExported = true;
+  $('dcos-preview-patient-import').disabled = false;
+  $('dcos-backup-status').textContent = 'أكدت وجود النسخة الاحتياطية على هذا الجهاز. احتفظ بها في مكان آمن قبل متابعة النقل.';
+  status('تم تأكيد حفظ النسخة الاحتياطية يدويًا. يمكنك الآن معاينة الاستيراد.');
+}
+
 async function previewPatientImportNow() {
   const result = $('dcos-import-preview-result');
   try {
+    if (!localBackupExported) throw new Error('نزّل النسخة الاحتياطية المحلية أولًا قبل معاينة الاستيراد.');
     const selects = [...$('dcos-patient-import').querySelectorAll('select[data-local-branch]')];
     importBranchMap = {};
     for (const select of selects) {
       if (!select.value) throw new Error('اربط كل الفروع المحلية بفرع سحابي قبل المعاينة.');
       importBranchMap[select.dataset.localBranch] = select.value;
     }
-    const remoteIds = [...new Set(Object.values(importBranchMap))];
-    const lists = await Promise.all(remoteIds.map(branchId => listPatientsForAssignedBranch({branchId, limit:1000})));
+    const mappedBranches = Object.values(importBranchMap);
+    if (new Set(mappedBranches).size !== mappedBranches.length) throw new Error('لا يمكن ربط فرعين محليين بنفس الفرع السحابي؛ اختر فرعًا مستقلًا لكل فرع.');
+    const remoteIds = [...new Set(mappedBranches)];
+    const lists = await Promise.all(remoteIds.map(branchId => listAllPatientsForAssignedBranch({branchId})));
     importPreview = preparePatientImport({localState:localImportSnapshot, clinicId:activeMembership.clinic_id, branchMap:importBranchMap, remotePatients:lists.flat()});
     const n = importPreview.counts;
+    initialImportComplete = n.new === 0 && n.conflict === 0 && n.blocked === 0;
     result.innerHTML = '<p><b>معاينة — بيانات المرضى الأساسية فقط</b></p><p>جديد: ' + n.new + ' · موجود: ' + n.duplicate + ' · تعارض: ' + n.conflict + ' · مستبعد: ' + n.blocked + '</p>' +
       '<p class="muted">لن يتم رفع السجلات العلاجية أو الأشعة أو الوصفات أو المدفوعات، ولن يتم تعديل مريض موجود.</p><ul>' +
       importPreview.rows.filter(x => x.state !== 'new').slice(0,30).map(x => '<li>' + escapeHtml(x.localId) + ' — ' + escapeHtml(x.reason) + '</li>').join('') + '</ul>' +
-      (n.new ? '<button class="primary" id="dcos-confirm-patient-import" type="button">تأكيد رفع المرضى الجدد فقط</button>' : '<p>لا توجد سجلات جديدة جاهزة للرفع.</p>');
+      (n.new ? '<button class="primary" id="dcos-confirm-patient-import" type="button">تأكيد رفع المرضى الجدد فقط</button>' : '<p>لا توجد سجلات جديدة جاهزة للرفع.</p>') + '<button id="dcos-enable-patient-sync" type="button" ' + (initialImportComplete ? '' : 'disabled') + '>اعتماد ربط الفروع وتشغيل المزامنة التلقائية لبيانات المرضى الأساسية</button>' + (initialImportComplete ? '' : '<p class="muted">أكمل رفع السجلات الجديدة وحل التعارضات قبل تفعيل المزامنة التلقائية.</p>');
     if (n.new) $('dcos-confirm-patient-import').addEventListener('click', confirmPatientImport);
+    $('dcos-enable-patient-sync').addEventListener('click', enablePatientSync);
     status('اكتملت المعاينة دون كتابة أي بيانات على Supabase.');
   } catch (e) { result.textContent = e.message || 'تعذر إعداد المعاينة.'; }
+}
+
+function enablePatientSync() {
+  if (!importBranchMap || !Object.keys(importBranchMap).length) return;
+  if (!initialImportComplete) { status('لا يمكن تفعيل المزامنة قبل اكتمال الاستيراد الأولي وحل التعارضات.'); return; }
+  if (!window.confirm('سيتم حفظ ربط الفروع على هذا الجهاز. بعد ذلك ستتم مزامنة بيانات المرضى الأساسية عند حفظها، مع إبقاء السجلات الطبية والمالية محلية. هل توافق؟')) return;
+  localStorage.setItem(BRANCH_MAP_KEY, JSON.stringify({ clinicId: activeMembership.clinic_id, map: importBranchMap }));
+  status('تم اعتماد ربط الفروع. ستتم مزامنة بيانات المرضى الأساسية فقط عند الحفظ أو عودة الاتصال.');
+  flushPatientSyncQueue();
 }
 
 async function confirmPatientImport() {
@@ -213,25 +407,186 @@ async function confirmPatientImport() {
   result.textContent = 'جارٍ رفع السجلات الجديدة واحدًا تلو الآخر…';
   try {
     const outcome = await importNewPatients({localState:localImportSnapshot, branchMap:importBranchMap, preview:importPreview});
-    result.textContent = 'انتهى الاستيراد: تمت إضافة ' + outcome.imported + '، وفشل ' + outcome.failed + '. أعد المعاينة قبل إعادة المحاولة؛ السجلات التي أضيفت ستظهر كموجودة بالفعل.';
-    status('انتهت محاولة استيراد المرضى. لم يتم رفع أي بيانات طبية فرعية.');
+    result.textContent = 'انتهى الاستيراد: تمت إضافة ' + outcome.imported + '، وفشل ' + outcome.failed + '. لم يتم رفع أي بيانات طبية فرعية.';
+    window.dispatchEvent(new CustomEvent('dcos:cloud-patient-links', { detail: {
+      links: outcome.results.filter(x => x.state === 'imported' && x.remoteId).map(x => {
+        const local = localImportSnapshot.patients.find(p => String(p.id || p.no) === x.localId);
+        return { localId: x.localId, remoteId: x.remoteId, remoteBranchId: x.remoteBranchId, remoteUpdatedAt: x.remoteUpdatedAt, localBranchId: String(local?.br ?? '') };
+      })
+    } }));
+    if (outcome.failed === 0 && importPreview.counts.conflict === 0 && importPreview.counts.blocked === 0) {
+      initialImportComplete = true;
+      const enableButton = $('dcos-enable-patient-sync');
+      if (enableButton) enableButton.disabled = false;
+      status('اكتمل الاستيراد الأولي دون تعارض. يمكنك الآن اعتماد ربط الفروع لتشغيل مزامنة بيانات المرضى الأساسية.');
+    } else status('الاستيراد غير مكتمل أو توجد تعارضات؛ لن تُفعّل المزامنة التلقائية حتى تُراجع.');
   } catch (e) { result.textContent = e.message || 'توقف الاستيراد بسبب خطأ.'; button.disabled = false; }
+}
+
+
+function dispatchCloudPatientsToLocal(branchId, patients) {
+  const map = getSavedBranchMap();
+  const localBranchId = Object.keys(map).find(key => map[key] === branchId);
+  if (!localBranchId) return;
+  window.dispatchEvent(new CustomEvent('dcos:cloud-patients', {
+    detail: { localBranchId, patients }
+  }));
 }
 
 async function loadPatients() {
   const branchId = $('dcos-cloud-branch').value;
   const host = $('dcos-cloud-patients');
+  if (!branchId) return;
+  if (patientRealtimeUnsubscribe) { patientRealtimeUnsubscribe(); patientRealtimeUnsubscribe = null; }
   host.textContent = 'جارٍ تحميل سجلات المرضى من Supabase…';
   try {
-    const patients = await listPatientsForAssignedBranch({ branchId, limit: 500 });
-    host.innerHTML = patients.length ? patients.map(p => `<div class="cloud-row"><b>${escapeHtml(p.name)}</b><div>${escapeHtml(p.no)} · ${escapeHtml(p.ph)} · ${escapeHtml(p.st)}</div></div>`).join('') : 'لا توجد سجلات مرضى في هذا الفرع بعد.';
-    status(`تم تحميل ${patients.length} سجلًا من Supabase. لم يتم تعديل البيانات المحلية.`);
+    const patients = await listAllPatientsForAssignedBranch({ branchId });
+    renderCloudPatients(patients, host);
+    dispatchCloudPatientsToLocal(branchId, patients);
+    status(`تم تحميل ${patients.length} سجلًا سحابيًا. جارٍ تفعيل متابعة التغييرات لهذا الفرع.`);
+    patientRealtimeUnsubscribe = await watchPatientsForAssignedBranch({
+      branchId,
+      onChange: () => refreshPatientsAfterRealtime(branchId),
+      onStatus: state => {
+        if (state === 'SUBSCRIBED') status('المتابعة اللحظية لمرضى هذا الفرع متصلة.');
+        else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') status('المتابعة اللحظية غير متاحة حاليًا؛ استخدم زر تحميل المرضى للتحديث اليدوي.');
+      }
+    });
   } catch (e) {
-    host.textContent = 'تعذر تحميل المرضى: ' + (e.message || 'خطأ غير معروف');
-    status('راجع صلاحيات الحساب وسياسات RLS وإعدادات المشروع.');
+    host.textContent = 'تعذر تحميل/متابعة المرضى: ' + (e.message || 'خطأ غير معروف');
+    status('راجع صلاحيات الحساب وسياسات RLS وإعدادات Realtime في Supabase.');
   }
+}
+function renderCloudPatients(patients, host) {
+  host.innerHTML = patients.length ? patients.map(p => `<div class="cloud-row"><b>${escapeHtml(p.name)}</b><div>${escapeHtml(p.no)} · ${escapeHtml(p.ph)} · ${escapeHtml(p.st)}</div></div>`).join('') : 'لا توجد سجلات مرضى في هذا الفرع بعد.';
+}
+async function refreshPatientsAfterRealtime(branchId) {
+  if (patientRefreshInFlight || $('dcos-cloud-workspace').hidden || $('dcos-cloud-branch')?.value !== branchId) return;
+  patientRefreshInFlight = true;
+  try {
+    const patients = await listAllPatientsForAssignedBranch({ branchId });
+    if ($('dcos-cloud-branch')?.value === branchId) {
+      renderCloudPatients(patients, $('dcos-cloud-patients'));
+      dispatchCloudPatientsToLocal(branchId, patients);
+    }
+    status('تم تحديث قائمة المرضى بعد وصول تغيير من السحابة.');
+  } catch (e) {
+    status('وصل إشعار تغيير، لكن تعذر إعادة تحميل القائمة: ' + (e.message || 'خطأ غير معروف'));
+  } finally { patientRefreshInFlight = false; }
 }
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escapeAttr(value) { return escapeHtml(value); }
 
+
+
+// Local patient demographic outbox. Clinical, appointment and financial fields
+// are intentionally excluded. Failed/network-offline writes remain queued.
+function getSavedBranchConfig() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(BRANCH_MAP_KEY) || 'null');
+    if (saved?.clinicId && saved?.map && typeof saved.map === 'object') return saved;
+  } catch {}
+  return null;
+}
+function getSavedBranchMap() {
+  const saved = getSavedBranchConfig();
+  if (saved?.clinicId === activeMembership?.clinic_id) return saved.map;
+  return {};
+}
+
+window.addEventListener('dcos:patient-saved', event => {
+  const patient = event.detail;
+  if (!patient || !patient.id || !patient.localBranchId) return;
+  const saved = getSavedBranchConfig();
+  if (!saved?.map?.[String(patient.localBranchId)]) return; // no outbox until owner opt-in
+  if (activeMembership && saved.clinicId !== activeMembership.clinic_id) return;
+  enqueueLocalPatientForSync({ ...patient, clinicId: saved.clinicId });
+});
+window.addEventListener('online', () => flushPatientSyncQueue());
+function readPatientQueue() {
+  try {
+    const queue = JSON.parse(localStorage.getItem(PATIENT_QUEUE_KEY) || '[]');
+    return Array.isArray(queue) ? queue : [];
+  } catch { return []; }
+}
+function enqueueLocalPatientForSync(patient) {
+  const queue = readPatientQueue();
+  const item = { ...patient, clinicId: patient.clinicId || activeMembership?.clinic_id || '', queuedAt: new Date().toISOString() };
+  const index = queue.findIndex(x => x.id === item.id && x.localBranchId === item.localBranchId);
+  if (index >= 0) queue[index] = item;
+  else queue.push(item);
+  localStorage.setItem(PATIENT_QUEUE_KEY, JSON.stringify(queue));
+  flushPatientSyncQueue();
+}
+async function flushPatientSyncQueue() {
+  if (patientQueueFlushInFlight || !navigator.onLine || !activeMembership) return;
+  patientQueueFlushInFlight = true;
+  const queue = readPatientQueue();
+  const initialQueueByKey = new Map(queue.map(item => [String(item.clinicId)+'::'+String(item.localBranchId)+'::'+String(item.id), item]));
+  const remaining = [];
+  const branchMap = getSavedBranchMap();
+  let synced = 0, blocked = 0;
+  const conflicts = (() => { try { const x = JSON.parse(localStorage.getItem(PATIENT_CONFLICTS_KEY) || '[]'); return Array.isArray(x) ? x : []; } catch { return []; } })();
+  try {
+    for (const item of queue) {
+      if (!item.clinicId || item.clinicId !== activeMembership.clinic_id) { remaining.push(item); continue; }
+      const branchId = branchMap[String(item.localBranchId)];
+      if (!branchId) { remaining.push(item); blocked++; continue; }
+      try {
+        let remote;
+        if (item.remoteId) {
+          if (!item.cloudUpdatedAt) throw new Error('رابط المريض السحابي بلا إصدار معروف؛ يلزم تحديث الربط قبل الكتابة.');
+          remote = await updatePatientInAssignedBranch({ branchId, patientId: item.remoteId, patient: item, expectedUpdatedAt: item.cloudUpdatedAt });
+        } else {
+          remote = await upsertPatientInAssignedBranch({ branchId, localId: item.id, fileNo: item.no, patient: item, expectedUpdatedAt: item.cloudUpdatedAt });
+        }
+        window.dispatchEvent(new CustomEvent('dcos:cloud-patient-links', { detail: { links: [{
+          localId: item.id, remoteId: remote.remoteId, remoteBranchId: branchId,
+          remoteUpdatedAt: remote.remoteUpdatedAt, localBranchId: item.localBranchId
+        }] } }));
+        synced++;
+      } catch (error) {
+        if (/رقم الملف مستخدم بالفعل|تغير سجل المريض على جهاز آخر|بلا إصدار معروف|إصدار المزامنة غير معروف/.test(error?.message || '')) {
+          conflicts.push({ clinicId: item.clinicId, id: item.id, no: item.no, localBranchId: item.localBranchId, reason: error.message, detectedAt: new Date().toISOString() });
+          window.dispatchEvent(new CustomEvent('dcos:patient-sync-conflict', { detail: { localId: item.id, localBranchId: item.localBranchId, reason: error.message } }));
+          blocked++;
+        } else remaining.push(item);
+      }
+    }
+    const finalQueueByKey = new Map(remaining.map(item => [String(item.clinicId)+'::'+String(item.localBranchId)+'::'+String(item.id), item]));
+    // Preserve saves that arrived while an earlier network request was awaiting.
+    for (const latest of readPatientQueue()) {
+      const key = String(latest.clinicId)+'::'+String(latest.localBranchId)+'::'+String(latest.id);
+      const initial = initialQueueByKey.get(key);
+      if (!initial || latest.queuedAt !== initial.queuedAt) finalQueueByKey.set(key, latest);
+    }
+    localStorage.setItem(PATIENT_QUEUE_KEY, JSON.stringify([...finalQueueByKey.values()]));
+    localStorage.setItem(PATIENT_CONFLICTS_KEY, JSON.stringify(conflicts));
+    if (synced || blocked) status((synced ? 'تمت مزامنة ' + synced + ' سجل مريض أساسي. ' : '') + (blocked ? 'تم إيقاف ' + blocked + ' سجلات متعارضة ونقلها لقائمة المراجعة؛ لم يتم استبدال أي مريض موجود.' : ''));
+  } finally {
+    patientQueueFlushInFlight = false;
+  }
+}
+
 restoreConfig();
+try {
+  const savedConfig = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
+  const embeddedConfig = window.DCOS_SUPABASE_CONFIG;
+  const configured = embeddedConfig?.url && embeddedConfig?.publishableKey ? embeddedConfig : savedConfig;
+  if (configured?.url && configured?.publishableKey) {
+    configureSupabase({ url: configured.url, publishableKey: configured.publishableKey });
+    bindPasswordRecovery();
+    (async () => {
+      try {
+        const { data, error } = await getSupabaseClient().auth.getSession();
+        if (error) throw error;
+        if (data?.session) {
+          await loadWorkspace();
+          flushPatientSyncQueue();
+        }
+      } catch (e) {
+        status(e.message || 'تعذر استعادة جلسة المزامنة السحابية.');
+      }
+    })();
+  }
+} catch (e) { status(e.message || 'تعذر تهيئة الاتصال السحابي.'); }

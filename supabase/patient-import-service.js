@@ -49,12 +49,16 @@ export function preparePatientImport({ localState, clinicId, branchMap, remotePa
     seenLocal.add(key);
     const matches = remoteByKey.get(key) || [];
     if (matches.length) {
+      const linked = matches.some(remote => String(remote.sourceLocalId || '') === localId);
+      const same = matches.some(remote => sameIdentity(patient, remote));
       rows.push({
         localId,
-        state: matches.some(remote => sameIdentity(patient, remote)) ? 'duplicate' : 'conflict',
-        reason: matches.some(remote => sameIdentity(patient, remote))
-          ? 'السجل موجود بالفعل بنفس رقم الملف والاسم والهاتف؛ سيتم تخطيه دون تعديل.'
-          : 'رقم الملف مستخدم لسجل مختلف؛ يلزم مراجعة يدوية.'
+        state: linked ? 'duplicate' : 'conflict',
+        reason: linked
+          ? 'السجل مربوط بالفعل بهذا المعرّف المحلي؛ سيتم تخطيه دون تعديل.'
+          : same
+            ? 'السجل متطابق لكنه لا يحمل رابط المعرّف المحلي الثابت؛ يلزم ربط يدوي قبل تشغيل المزامنة التلقائية.'
+            : 'رقم الملف مستخدم لسجل مختلف؛ يلزم مراجعة يدوية.'
       });
       continue;
     }
@@ -86,8 +90,8 @@ export async function importNewPatients({ localState, branchMap, preview } = {})
     try {
       const branchId = branchMap[String(patient.br ?? patient.branch_id ?? '')];
       const fileNo = String(patient.no ?? patient.file_no ?? '').trim();
-      await createPatientInAssignedBranch({ branchId, fileNo, patient });
-      results.push({ localId: row.localId, state: 'imported' });
+      const remote = await createPatientInAssignedBranch({ branchId, fileNo, patient, localId: row.localId });
+      results.push({ localId: row.localId, state: 'imported', remoteId: remote.remoteId, remoteBranchId: branchId, remoteUpdatedAt: remote.remoteUpdatedAt });
     } catch (error) {
       results.push({ localId: row.localId, state: 'failed', reason: error?.message || 'فشل رفع السجل.' });
     }

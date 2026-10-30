@@ -77,6 +77,71 @@ const age=d=>{if(!d)return'';const a=new Date(d),n=new Date();let y=n.getFullYea
 let D=null,ME=null,view='dash',sel=null,tab='ov',q='',st='active',lim=25,br='all';
 try{const r=localStorage.getItem('dcos1');if(r)D=JSON.parse(r)}catch(e){}
 function save(){try{localStorage.setItem('dcos1',JSON.stringify(D))}catch(e){toast('تعذر الحفظ في المتصفح')}}
+
+const CLOUD_PATIENT_FIELDS=['name','en','gov','so','tg','ph','ph2','em','dob','g','ad','ec','st'];
+function cloudPatientSnapshot(p){const x={};for(const k of CLOUD_PATIENT_FIELDS)x[k]=k==='tg'?(Array.isArray(p?.[k])?p[k]:[]):(p?.[k]??'');return x}
+function sameCloudSnapshot(a,b){return JSON.stringify(cloudPatientSnapshot(a))===JSON.stringify(cloudPatientSnapshot(b))}
+function applyCloudPatientFields(local,remote){const s=cloudPatientSnapshot(remote);Object.assign(local,s)}
+function localPatientSyncPayload(p){return {id:p.id,remoteId:p.remoteId||'',cloudUpdatedAt:p.cloudUpdatedAt||'',localBranchId:p.br,no:p.no,...cloudPatientSnapshot(p)}}
+window.addEventListener('dcos:patient-sync-conflict',event=>{
+  if(!D||!ME)return;
+  const {localId,localBranchId,reason}=event.detail||{};
+  const local=D.patients.find(p=>String(p.id)===String(localId)&&p.br===localBranchId);
+  if(!local)return;
+  local.cloudConflict=reason||'sync_conflict';save();
+  if(view==='pat'&&sel===local.id&&!$('#dlg')?.open&&!$('#dlg2')?.open)render();
+});
+window.addEventListener('dcos:cloud-patient-links',event=>{
+  if(!D||!ME)return;
+  let changed=false;
+  for(const link of event.detail?.links||[]){
+    const local=D.patients.find(p=>String(p.id)===String(link.localId)&&p.br===link.localBranchId);
+    if(!local)continue;
+    local.remoteId=link.remoteId;local.remoteBranchId=link.remoteBranchId;local.cloudUpdatedAt=link.remoteUpdatedAt||'';
+    local.cloudSnapshot=cloudPatientSnapshot(local);local.cloudConflict='';
+    changed=true;
+  }
+  if(changed){save();if(!$('#dlg')?.open&&!$('#dlg2')?.open)render()}
+});
+window.addEventListener('dcos:cloud-patients',event=>{
+  if(!D||!ME)return;
+  const {localBranchId,patients=[]}=event.detail||{};
+  if(!localBranchId||!myBr().some(b=>b.id===localBranchId))return;
+  let changed=false,conflicts=0;
+  for(const remote of patients){
+    const incoming=cloudPatientSnapshot(remote);
+    let local=D.patients.find(p=>p.remoteId&&p.remoteId===remote.remoteId);
+    if(!local)local=D.patients.find(p=>p.br===localBranchId&&String(p.no)===String(remote.no));
+    if(!local){
+      const added={id:uid(),no:remote.no,...incoming,br:localBranchId,created:remote.created||now(),by:'مزامنة سحابية',byr:'cloud',notes:[],remoteId:remote.remoteId,remoteBranchId:remote.br,cloudSnapshot:incoming,cloudUpdatedAt:remote.remoteUpdatedAt||''};
+      D.patients.push(added);const seq=/^P-(\d+)$/.exec(String(remote.no||''));if(seq)D.seq=Math.max(Number(D.seq)||0,Number(seq[1]));changed=true;continue;
+    }
+    if(local.remoteId&&local.remoteId!==remote.remoteId){conflicts++;local.cloudConflict='remote_id_mismatch';continue}
+    const baseline=local.cloudSnapshot||null;
+    const current=cloudPatientSnapshot(local);
+    if(!baseline){
+      if(String(remote.sourceLocalId||'')===String(local.id)){
+        local.remoteId=remote.remoteId;local.remoteBranchId=remote.br;local.cloudUpdatedAt=remote.remoteUpdatedAt||'';local.cloudSnapshot=incoming;local.cloudConflict='';
+        window.dispatchEvent(new CustomEvent('dcos:patient-saved',{detail:localPatientSyncPayload(local)}));changed=true;
+      }else if(sameCloudSnapshot(current,incoming)){
+        local.remoteId=remote.remoteId;local.remoteBranchId=remote.br;local.cloudSnapshot=incoming;local.cloudUpdatedAt=remote.remoteUpdatedAt||'';changed=true;
+      }else{local.cloudConflict='needs_manual_link';conflicts++}
+      continue;
+    }
+    const localChanged=!sameCloudSnapshot(current,baseline);
+    const remoteChanged=!sameCloudSnapshot(incoming,baseline);
+    if(localChanged&&remoteChanged&&!sameCloudSnapshot(current,incoming)){
+      local.cloudConflict='concurrent_edit';conflicts++;continue;
+    }
+    if(remoteChanged&&!localChanged){applyCloudPatientFields(local,remote);local.cloudSnapshot=incoming;changed=true}
+    else if(localChanged&&!remoteChanged){
+      window.dispatchEvent(new CustomEvent('dcos:patient-saved',{detail:localPatientSyncPayload(local)}));
+    }else if(sameCloudSnapshot(current,incoming)){local.cloudSnapshot=incoming;local.cloudConflict='';changed=true}
+    local.remoteId=remote.remoteId;local.remoteBranchId=remote.br;local.cloudUpdatedAt=remote.remoteUpdatedAt||'';
+  }
+  if(changed){save();if(!$('#dlg')?.open&&!$('#dlg2')?.open)render()}
+  if(conflicts)toast('هناك '+conflicts+' تعارضات في بيانات المرضى؛ احتفظنا بالنسخة المحلية ولم نستبدلها.');
+});
 function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',2800)}
 function audit(act,ref,det){D.audit.unshift({id:uid(),t:now(),u:ME?ME.name:'—',r:ME?ME.role:'',act,ref:ref||'',det:det||''});D.audit.length=Math.min(D.audit.length,2000)}
 async function hp(p,s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s+':'+p));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
@@ -94,7 +159,7 @@ function closeD(){$('#dlg').close()}
 function ask(msg){return new Promise(res=>{const d=$('#dlg2');d.innerHTML=`<p>${h(msg)}</p><div class="act"><button class="g" id="n_">إلغاء</button><button class="b" id="y_">تأكيد</button></div>`;d.showModal();$('#y_').onclick=()=>{d.close();res(true)};$('#n_').onclick=()=>{d.close();res(false)}})}
 
 function render(){if(!D)return setupV();if(!ME)return loginV();shell()}
-function setupV(){$('#app').innerHTML=`<div class="card auth"><h2>إعداد Dental Clinic OS</h2><p class="m">أول تشغيل: أنشئ حساب مالك العيادة والفرع الرئيسي.</p>${fld('s_c','اسم العيادة','')}${fld('s_b','اسم الفرع الرئيسي','الفرع الرئيسي')}${fld('s_n','اسمك','')}${fld('s_u','اسم المستخدم','')}${fld('s_w','رقم واتساب العيادة (لطلبات استعادة كلمة المرور)','','tel')}${fld('s_p','كلمة المرور (8 أحرف على الأقل)','','password')}<div class="act"><button class="b" onclick="doSetup()">ابدأ</button></div></div>`}
+function setupV(){$('#app').innerHTML=`<div class="card auth"><h2>Dental Clinic OS</h2><div style="padding:12px;border:1px solid var(--ac);border-radius:9px;margin:12px 0"><b>عيادتك موجودة بالفعل على جهاز آخر؟</b><p class="m">حساب المستخدم وكلمة المرور المحليان يعملان على الجهاز الذي أُنشئت عليه العيادة فقط. لن تحتاج إلى إنشاء عيادة محلية جديدة هنا؛ لكن يلزم إعداد حساب سحابي مرة واحدة لربط الأجهزة، ثم نقل بيانات العيادة من الجهاز الأصلي بعد أخذ نسخة احتياطية.</p><button class="b" style="width:100%" onclick="window.openCloudPortal&&window.openCloudPortal()">ربط العيادة الحالية وتسجيل الدخول السحابي</button></div><p class="m">إنشاء عيادة محلية جديدة على هذا الجهاز (لأول استخدام فقط):</p>${fld('s_c','اسم العيادة','')}${fld('s_b','اسم الفرع الرئيسي','الفرع الرئيسي')}${fld('s_n','اسمك','')}${fld('s_u','اسم المستخدم','')}${fld('s_w','رقم واتساب العيادة (لطلبات استعادة كلمة المرور)','','tel')}${fld('s_p','كلمة المرور (8 أحرف على الأقل)','','password')}<div class="act"><button class="b" onclick="doSetup()">ابدأ</button></div></div>`}
 async function doSetup(){const c=v('s_c'),b=v('s_b'),n=v('s_n'),u=v('s_u').toLowerCase(),p=$('#s_p').value;
 if(!c||!b||!n||!u)return toast('كل الحقول مطلوبة');if(p.length<8)return toast('كلمة المرور أقل من 8 أحرف');
 const bid=uid(),salt=uid(),o={id:uid(),name:n,user:u,salt,hash:await hp(p,salt),role:'owner',branches:[bid],active:true};
@@ -102,7 +167,7 @@ D={v:1,seq:0,settings:{clinic:c,ph:nd(v('s_w'))},branches:[{id:bid,name:b,addres
 ME=o;audit('setup','','إنشاء النظام');save();render();newRc()}
 const RK='dcs_rm';let FA=0,FT=0,FORCE=0;
 const gen=n=>{const a='ABCDEFGHJKMNPQRSTUVWXYZ23456789',r=crypto.getRandomValues(new Uint8Array(n));return[...r].map(x=>a[x%a.length]).join('')};
-function loginV(){$('#app').innerHTML=`<div class="card auth"><h2>${h(D.settings.clinic)}</h2><div style="display:flex;justify-content:space-between;align-items:center"><p class="m">تسجيل الدخول</p><button class="g" onclick="tgLang()">${LANG==='en'?'عربي':'EN'}</button></div>${fld('l_u','اسم المستخدم','')}${fld('l_p','كلمة المرور','','password')}<label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input id="l_r" type="checkbox" checked style="width:auto;margin:0"> تذكّرني على هذا الجهاز (30 يومًا)</label><div class="act" style="justify-content:space-between"><a style="cursor:pointer;text-decoration:underline;align-self:center" onclick="forgot()">نسيت كلمة المرور؟</a><button class="b" onclick="doLogin()">دخول</button></div></div>`}
+function loginV(){$('#app').innerHTML=`<div class="card auth"><h2>${h(D.settings.clinic)}</h2><div style="padding:12px;border:1px solid var(--ac);border-radius:9px;margin:12px 0"><b>تسجيل الدخول لحساب العيادة على جهاز آخر</b><p class="m">استخدم البريد الإلكتروني وكلمة مرور الحساب السحابي المشترك.</p><button class="b" style="width:100%" onclick="window.openCloudPortal&&window.openCloudPortal()">تسجيل الدخول السحابي</button></div><div style="display:flex;justify-content:space-between;align-items:center"><p class="m">أو الدخول بالحساب المحلي لهذا الجهاز</p><button class="g" onclick="tgLang()">${LANG==='en'?'عربي':'EN'}</button></div>${fld('l_u','اسم المستخدم','')}${fld('l_p','كلمة المرور','','password')}<label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input id="l_r" type="checkbox" checked style="width:auto;margin:0"> تذكّرني على هذا الجهاز (30 يومًا)</label><div class="act" style="justify-content:space-between"><a style="cursor:pointer;text-decoration:underline;align-self:center" onclick="forgot()">نسيت كلمة المرور؟</a><button class="b" onclick="doLogin()">دخول</button></div></div>`}
 async function doLogin(){if(FA>=5&&Date.now()-FT<3e4)return toast('محاولات كثيرة، انتظر 30 ثانية');const u=v('l_u').toLowerCase(),p=$('#l_p').value,x=D.users.find(z=>z.user===u);
 if(!x||!x.active||x.hash!==await hp(p,x.salt)){FA++;FT=Date.now();audit('login_fail','',u);save();return toast('بيانات الدخول غير صحيحة')}
 FA=0;ME=x;try{sessionStorage.setItem('dcs',x.id)}catch(e){}
@@ -135,7 +200,7 @@ const dup=D.patients.find(p=>p.id!==id&&p.ph===o.ph);
 if(dup){const mine=myBr().some(b=>b.id===dup.br);if(!await ask(mine?`الرقم مسجل للمريض ${dup.name} (${dup.no}). حفظ كملف جديد؟`:'هذا الرقم مسجل بالفعل لمريض آخر. حفظ كملف جديد؟'))return}
 if(id){const p=D.patients.find(x=>x.id===id),ch=Object.keys(o).filter(k=>JSON.stringify(o[k])!==JSON.stringify(p[k]));if(p.st==='archived')o.st='archived';Object.assign(p,o);audit('patient_edit',p.no,'تعديل: '+ch.join('، '))}
 else{const p=Object.assign(o,{id:uid(),no:'P-'+String(++D.seq).padStart(4,'0'),created:now(),by:ME.name,byr:ME.role,notes:[]});D.patients.push(p);audit('patient_add',p.no,p.name);sel=p.id;tab='ov'}
-save();closeD();toast('تم الحفظ');render()}
+save();closeD();toast('تم الحفظ');const savedPatient=id?D.patients.find(x=>x.id===id):D.patients[D.patients.length-1];if(savedPatient)window.dispatchEvent(new CustomEvent('dcos:patient-saved',{detail:{id:savedPatient.id,remoteId:savedPatient.remoteId||'',cloudUpdatedAt:savedPatient.cloudUpdatedAt||'',localBranchId:savedPatient.br,no:savedPatient.no,name:savedPatient.name,en:savedPatient.en,ph:savedPatient.ph,ph2:savedPatient.ph2,em:savedPatient.em,dob:savedPatient.dob,g:savedPatient.g,ad:savedPatient.ad,gov:savedPatient.gov,ec:savedPatient.ec,so:savedPatient.so,dr:savedPatient.dr,tg:savedPatient.tg,st:savedPatient.st}}));render()}
 const wa=(p,t)=>{let n=nd(p.ph).replace(/\D/g,'');if(n.startsWith('00'))n=n.slice(2);else if(n.startsWith('0'))n='20'+n.slice(1);return'https://wa.me/'+n+'?text='+encodeURIComponent(t)};
 function detV(){const p=D.patients.find(x=>x.id===sel);if(!p){sel=null;return patV()}
 const c=D.settings.clinic,row=(l,x)=>`<div class="kv"><span>${l}</span><b>${h(x||'—')}</b></div>`;
@@ -145,7 +210,7 @@ if(tab==='ov')body=`${miss.length?`<div class="card warn">بيانات ناقص�
 if(tab==='nt')body=`${can('pe')?`<div class="card"><textarea id="nt" rows="3" placeholder="اكتب ملاحظة عن المريض"></textarea><div class="act"><button class="b" onclick="addNote('${p.id}')">إضافة ملاحظة</button></div></div>`:''}${(p.notes||[]).length?(p.notes||[]).map(n=>`<div class="card"><div class="m">${h(n.by)} · ${fd(n.t)}</div>${h(n.x)}</div>`).join(''):'<div class="card m">لا توجد ملاحظات بعد.</div>'}`;
 if(tab==='lg'){const L=D.audit.filter(a=>a.ref===p.no);body=L.length?`<div class="card tw"><table><tr><th>الوقت</th><th>المستخدم</th><th>العملية</th><th>التفاصيل</th></tr>${L.map(a=>`<tr><td>${fd(a.t)}</td><td>${h(a.u)}</td><td>${h(a.act)}</td><td>${h(a.det)}</td></tr>`).join('')}</table></div>`:'<div class="card m">لا يوجد سجل.</div>'}
 if(tab==='mh')body=mhV(p);if(tab==='ch')body=chV(p);if(tab==='tp')body=tpV(p);if(tab==='vs')body=vsV(p);if(tab==='rx')body=rxV(p);if(tab==='cn')body=cnV(p);if(tab==='pe')body=peV(p);if(tab==='ap')body=apV(p);if(tab==='ac')body=acV(p);if(tab==='lb')body=lpV(p);
-$('#main').innerHTML=`<button class="g" onclick="sel=null;patV()">رجوع للمرضى</button>${alertB(p)}<h2>${h(p.name)} <span class="tg">${h(p.no)}</span><span class="tg ${p.st==='active'?'':'x'}">${SN[p.st]}</span></h2><div class="bar">${can('pe')?`<button class="g" onclick="pform('${p.id}')">تعديل</button>`:''}${can('pr')?(p.st==='archived'?`<button class="g" onclick="arch('${p.id}',0)">إلغاء الأرشفة</button>`:`<button class="d" onclick="arch('${p.id}',1)">أرشفة</button>`):''}</div><div class="tabs">${[['ov','نظرة عامة'],['nt','الملاحظات'],['ap','المواعيد']].concat(can('fv')?[['ac','الحساب المالي']]:[]).concat(can('lv')?[['lb','المعمل']]:[]).concat(can('mv')?[['mh','التاريخ الطبي'],['ch','مخطط الأسنان'],['tp','خطة العلاج'],['vs','الزيارات'],['rx','الوصفات'],['cn','الموافقات'],['pe','مخطط اللثة']]:[],[['lg','سجل التغييرات']]).map(t=>`<button class="${tab===t[0]?'b':'g'}" onclick="tab='${t[0]}';detV()">${t[1]}</button>`).join('')}</div>${body}<p class="m">الفواتير والمدفوعات والمواعيد ستُضاف في المراحل التالية.</p>`}
+$('#main').innerHTML=`<button class="g" onclick="sel=null;patV()">رجوع للمرضى</button>${p.cloudConflict?'<div class="card warn">تعارض في مزامنة بيانات هذا المريض. احتفظ التطبيق بالبيانات المحلية ولم يستبدلها تلقائيًا؛ يلزم مراجعة السجل قبل متابعة المزامنة.</div>':''}${alertB(p)}<h2>${h(p.name)} <span class="tg">${h(p.no)}</span><span class="tg ${p.st==='active'?'':'x'}">${SN[p.st]}</span></h2><div class="bar">${can('pe')?`<button class="g" onclick="pform('${p.id}')">تعديل</button>`:''}${can('pr')?(p.st==='archived'?`<button class="g" onclick="arch('${p.id}',0)">إلغاء الأرشفة</button>`:`<button class="d" onclick="arch('${p.id}',1)">أرشفة</button>`):''}</div><div class="tabs">${[['ov','نظرة عامة'],['nt','الملاحظات'],['ap','المواعيد']].concat(can('fv')?[['ac','الحساب المالي']]:[]).concat(can('lv')?[['lb','المعمل']]:[]).concat(can('mv')?[['mh','التاريخ الطبي'],['ch','مخطط الأسنان'],['tp','خطة العلاج'],['vs','الزيارات'],['rx','الوصفات'],['cn','الموافقات'],['pe','مخطط اللثة']]:[],[['lg','سجل التغييرات']]).map(t=>`<button class="${tab===t[0]?'b':'g'}" onclick="tab='${t[0]}';detV()">${t[1]}</button>`).join('')}</div>${body}<p class="m">الفواتير والمدفوعات والمواعيد ستُضاف في المراحل التالية.</p>`}
 function addNote(id){const x=v('nt');if(!x)return;const p=D.patients.find(z=>z.id===id);p.notes.unshift({t:now(),by:ME.name,x});audit('patient_note',p.no);save();detV()}
 async function arch(id,on){const p=D.patients.find(z=>z.id===id);if(!await ask(on?'أرشفة الملف؟ السجل يبقى محفوظًا.':'إلغاء الأرشفة؟'))return;p.st=on?'archived':'active';audit(on?'patient_archive':'patient_restore',p.no);save();detV()}
 function showText(title,txt){openD(`<h2>${title}</h2><textarea id="tx" rows="10" readonly dir="ltr">${h(txt)}</textarea><div class="act"><button class="g" onclick="closeD()">إغلاق</button><button class="b" onclick="cp()">نسخ</button></div>`)}

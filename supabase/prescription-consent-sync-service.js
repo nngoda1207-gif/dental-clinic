@@ -11,7 +11,7 @@ async function context(branchId){const active=requireActiveClinicContext(await g
  const branch=requireAssignedRemoteBranch(active,branchId,branches.map(x=>x.id));
  return {clinicId:active.clinicId,branchId:branch.branchId};}
 export async function listPrescriptionItems(args={}){const c=await context(args.branchId);return repository.listRemotePrescriptionItems({...c,clinicalRecordId:args.clinicalRecordId});}
-export async function createPrescriptionItem(args={}){const c=await context(args.branchId);return repository.createRemotePrescriptionItem({...c,clinicalRecordId:args.clinicalRecordId,item:args.item});}
+export async function createPrescriptionItem(args={}){const c=await context(args.branchId);return repository.createRemotePrescriptionItem({...c,clinicalRecordId:args.clinicalRecordId,sourceLocalId:args.sourceLocalId,item:args.item});}
 export async function listConsents(args={}){const c=await context(args.branchId);return repository.listRemoteConsents({...c,patientId:args.patientId});}
-export async function createConsent(args={}){const c=await context(args.branchId);return repository.createRemoteConsent({...c,patientId:args.patientId,consent:args.consent});}
-export async function updateConsentStatus(args={}){const c=await context(args.branchId);return repository.updateRemoteConsentStatus({...c,consentId:args.consentId,status:args.status,signerName:args.signerName,signedAt:args.signedAt,notes:args.notes});}
+export async function createConsent(args={}){const c=await context(args.branchId);return repository.createRemoteConsent({...c,patientId:args.patientId,sourceLocalId:args.sourceLocalId,consent:args.consent});}
+export async function updateConsentStatus(args={}){const c=await context(args.branchId);return repository.updateRemoteConsentStatus({...c,consentId:args.consentId,expectedUpdatedAt:args.expectedUpdatedAt,status:args.status,signerName:args.signerName,signedAt:args.signedAt,notes:args.notes});}

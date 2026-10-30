@@ -12,6 +12,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 let client = null;
+let clientConfig = null;
 
 export function configureSupabase({ url, publishableKey }) {
   if (!url || !publishableKey) {
@@ -20,6 +21,8 @@ export function configureSupabase({ url, publishableKey }) {
   if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) {
     throw new Error('Unexpected Supabase project URL.');
   }
+  if (client && clientConfig?.url === url && clientConfig?.publishableKey === publishableKey) return client;
+  clientConfig = { url, publishableKey };
   client = createClient(url, publishableKey, {
     auth: {
       persistSession: true,
@@ -47,6 +50,45 @@ export async function signInWithPassword(email, password) {
   });
   if (error) throw error;
   return data;
+}
+
+/**
+ * Create a durable Supabase Auth identity. Clinic ownership is deliberately
+ * provisioned separately, after email confirmation/session establishment.
+ */
+export async function signUpWithPassword(email, password) {
+  const cleanEmail = String(email || '').trim();
+  const cleanPassword = String(password || '');
+  if (!cleanEmail) throw new Error('أدخل البريد الإلكتروني.');
+  if (cleanPassword.length < 8) throw new Error('كلمة المرور يجب أن تكون 8 أحرف على الأقل.');
+  const { data, error } = await getSupabaseClient().auth.signUp({
+    email: cleanEmail,
+    password: cleanPassword,
+    options: { emailRedirectTo: window.location.origin + window.location.pathname }
+  });
+  if (error) throw error;
+  return data;
+}
+
+/** Send a password-reset email without exposing whether an account exists. */
+export async function requestPasswordReset(email) {
+  const cleanEmail = String(email || '').trim();
+  if (!cleanEmail) throw new Error('أدخل البريد الإلكتروني أولًا.');
+  const { error } = await getSupabaseClient().auth.resetPasswordForEmail(cleanEmail, {
+    redirectTo: window.location.origin + window.location.pathname
+  });
+  if (error) throw error;
+}
+
+/** Complete a password reset after Supabase redirects back with a recovery session. */
+export async function updatePassword(newPassword) {
+  const password = String(newPassword || '');
+  if (password.length < 8) throw new Error('كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل.');
+  const { data: sessionData, error: sessionError } = await getSupabaseClient().auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!sessionData.session) throw new Error('افتح رابط استعادة كلمة المرور من نفس الجهاز أولًا.');
+  const { error } = await getSupabaseClient().auth.updateUser({ password });
+  if (error) throw error;
 }
 
 export async function signOutSupabase() {

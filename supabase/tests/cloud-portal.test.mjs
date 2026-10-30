@@ -5,7 +5,7 @@ const index = readFileSync(new URL('../../index.html', import.meta.url), 'utf8')
 assert.ok(index.includes('./supabase/cloud-portal.js'), 'App must load the isolated cloud portal');
 assert.ok(portal.includes('signInWithPassword'), 'Cloud portal must use Supabase Auth');
 assert.ok(portal.includes('listAssignedRemoteBranches'), 'Cloud portal must resolve assigned branches');
-assert.ok(portal.includes('listPatientsForAssignedBranch'), 'Patient reads must use the guarded sync service');
+assert.ok(portal.includes('listAllPatientsForAssignedBranch'), 'Patient reads must use the guarded sync service');
 assert.ok(portal.includes('preparePatientImport'), 'Patient import must require a preview');
 assert.ok(portal.includes('window.confirm'), 'Patient import must require explicit confirmation');
 assert.ok(portal.includes("select.addEventListener('change'"), 'Changing a branch mapping must invalidate the previous import preview');
@@ -13,6 +13,38 @@ assert.ok(portal.includes('importPreview = null;'), 'A stale import preview must
 assert.ok(portal.includes('localStorage.getItem(\'dcos1\')'), 'Local database may only be read inside the explicit import workflow');
 assert.ok(portal.includes('create_clinic_for_current_user'), 'First owner setup must use the server-side clinic RPC');
 assert.ok(portal.includes('function beginPatientImport()'), 'Local patient data is only read inside the explicit import workflow');
+assert.ok(portal.includes('function exportLocalBackup()'), 'The local database backup must be downloadable before cloud import');
+assert.ok(portal.includes('if (!localBackupExported)'), 'Patient import preview must be blocked until a local backup is verified');
+assert.ok(portal.includes('function confirmLocalBackupSaved()'), 'User must explicitly confirm the backup file exists before preview');
+assert.ok(portal.includes('backupExportStarted = true;'), 'Starting a download must not itself count as a verified backup');
+assert.ok(portal.includes('تأكدت من حفظ النسخة الاحتياطية'), 'Backup confirmation must be explicit and visible');
+assert.ok(portal.includes('dental-clinic-backup-'), 'Backup filename must be recognizable for safekeeping');
+assert.ok(portal.includes("event === 'PASSWORD_RECOVERY'"), 'Password recovery callback must be handled');
+assert.ok(portal.includes('function bindPasswordRecovery()'), 'Recovery listener must have a dedicated initializer');
+assert.ok(portal.indexOf('function bindPasswordRecovery()') < portal.indexOf("launch.addEventListener('click'"), 'Recovery listener initializer must be available before opening the portal');
+assert.ok(portal.includes('bindPasswordRecovery();'), 'Recovery listener must be bound during startup/configuration, not only after opening the portal');
+assert.ok(portal.includes('dcos-save-new-password'), 'Recovery session must expose a new-password action');
 assert.ok(portal.includes("localStorage.getItem('dcos1')"), 'Local data read must be user-triggered, not automatic');
 assert.ok(!portal.includes('service_role') && !portal.includes('secret key'), 'Browser integration must not use privileged server keys');
 console.log('Cloud portal integration safety checks passed.');
+
+assert.ok(portal.includes('حساب مستقل لكل شخص'), 'Portal must explain that every staff member has a separate identity');
+assert.ok(portal.includes('انضمام موظف بدعوة'), 'Unlinked users must see a dedicated staff invitation flow');
+assert.ok(portal.includes('أنا صاحب العيادة وأجهّزها لأول مرة'), 'Owner clinic creation must be explicitly separated from staff onboarding');
+assert.ok(!portal.includes('استخدم نفس البريد الإلكتروني وكلمة المرور على كل أجهزة العيادة'), 'Portal must never instruct all devices to share one login');
+
+assert.ok(portal.includes("rpc('create_clinic_invitation'"), 'Only the authenticated owner portal can request a staff invitation');
+assert.ok(portal.includes("rpc('redeem_clinic_invitation'"), 'Staff must redeem their own one-time invitation after signing in');
+assert.ok(portal.includes('dcos-staff-invite-code'), 'New staff must have a dedicated invitation redemption field');
+assert.ok(portal.includes('dcos-invite-email'), 'Owner invitation must be bound to a staff email');
+assert.ok(portal.includes('dcos-invite-role'), 'Owner must select the staff role rather than letting staff self-assign it');
+assert.ok(portal.includes('dcos-invite-branch'), 'Owner must assign the invitation to a specific branch');
+
+assert.ok(portal.includes('function friendlyCloudError'), 'Cloud auth failures must be translated into clear user-facing Arabic messages');
+assert.ok(portal.includes('Invalid login credentials'), 'Invalid credentials must have a specific recovery hint');
+assert.ok(portal.includes('قاعدة بيانات Supabase تحتاج تطبيق تحديثات العيادة'), 'Missing database migrations must be distinguished from invalid credentials');
+
+assert.ok(portal.includes('id="dcos-owner-setup"'), 'Owner setup must be opt-in and visually separated');
+assert.ok(portal.includes('كل مستخدم يرى بيانات العيادة المشتركة وفق دوره'), 'Portal must explain role-scoped shared clinic access');
+assert.ok(portal.includes('استخدم إيميلك الشخصي'), 'Each person must use their own email identity');
+assert.ok(portal.includes('INVALID_INVITE_EMAIL'), 'Invitation validation errors must have a clear Arabic message');

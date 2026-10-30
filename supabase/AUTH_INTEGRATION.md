@@ -31,3 +31,12 @@ The current app's `D.users` entries contain local password hashes and recovery/s
 - The main UI remains local-only.
 - The adapter expects a Supabase URL and publishable key supplied at runtime.
 - The adapter does not query clinical records and must not be considered proof of authorization; database RLS remains the enforcement boundary.
+
+
+## Staff invitations (migration 022)
+- The owner issues an invitation for one exact email, role, and active branch.
+- The invitation returns a random one-time code; only its SHA-256 hash is stored in the database.
+- The staff member creates or signs into their own Supabase Auth account, then redeems the code. The JWT email must match the invited email exactly (case-insensitive).
+- Redemption creates the clinic membership and branch assignment atomically, then marks the invitation used. Expired, mismatched, and reused codes are rejected.
+- The app must never create staff Auth users directly, expose a service-role key, or allow self-selected roles.
+- Apply migration 022 to the target Supabase project before enabling invitation UI. CI passing is not evidence that the live project has the migration.

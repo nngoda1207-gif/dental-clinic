@@ -47,8 +47,13 @@ jobs:
           node --input-type=module --check < supabase/clinic-context.js
           node --input-type=module --check < supabase/patient-sync-service.js
           node --input-type=module --check < supabase/patient-import-service.js
+          node supabase/tests/realtime-publication.test.mjs
+          node supabase/tests/patient-local-identity.test.mjs
           node --input-type=module --check < supabase/appointment-repository.js
           node --input-type=module --check < supabase/appointment-sync-service.js
+          node --input-type=module --check < supabase/appointment-mapping.js
+          node --input-type=module --check < supabase/inventory-repository.js
+          node --input-type=module --check < supabase/inventory-sync-service.js
           node --input-type=module --check < supabase/clinical-record-repository.js
           node --input-type=module --check < supabase/clinical-record-sync-service.js
           node --input-type=module --check < supabase/clinical-details-repository.js
@@ -67,6 +72,8 @@ jobs:
           node supabase/tests/clinic-context.test.mjs
           node supabase/tests/patient-sync-service.test.mjs
           node supabase/tests/appointment-sync-service.test.mjs
+          node supabase/tests/appointment-mapping.test.mjs
+          node supabase/tests/inventory-sync-service.test.mjs
           node supabase/tests/clinical-record-sync-service.test.mjs
           node supabase/tests/clinical-details-sync-service.test.mjs
           node supabase/tests/prescription-consent-sync-service.test.mjs
@@ -113,3 +120,52 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/012_treatment_to_invoice.sql
       - name: Test completed treatment invoicing
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/treatment-invoice.test.sql
+
+      - name: Apply migration 013
+        run: psql -v ON_ERROR_STOP=1 -f supabase/013_patient_realtime_publication.sql
+
+      - name: Apply migration 014
+        run: psql -v ON_ERROR_STOP=1 -f supabase/014_patient_local_identity.sql
+
+      - name: Verify patient local identity schema
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/patient-local-identity.test.sql
+
+      - name: Apply migration 015
+        run: psql -v ON_ERROR_STOP=1 -f supabase/015_patient_updated_at_trigger.sql
+      - name: Verify patient optimistic version trigger
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/patient-updated-at-trigger.test.sql
+
+      - name: Apply migration 016
+        run: psql -v ON_ERROR_STOP=1 -f supabase/016_appointment_local_identity.sql
+      - name: Verify appointment sync identity and chair guards
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/appointment-local-identity.test.sql
+
+      - name: Apply migration 017
+        run: psql -v ON_ERROR_STOP=1 -f supabase/017_inventory_idempotent_posting.sql
+      - name: Verify idempotent inventory movement posting
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/inventory-idempotent-posting.test.sql
+
+      - name: Apply migration 018
+        run: psql -v ON_ERROR_STOP=1 -f supabase/018_clinical_local_identity.sql
+      - name: Verify clinical local identities and versioning
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/clinical-local-identity.test.sql
+
+      - name: Apply migration 019
+        run: psql -v ON_ERROR_STOP=1 -f supabase/019_idempotent_financial_ledger.sql
+      - name: Verify retry-safe payment and refund ledger
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/financial-idempotent-ledger.test.sql
+
+      - name: Apply migration 020
+        run: psql -v ON_ERROR_STOP=1 -f supabase/020_lab_sync_identity.sql
+      - name: Verify retry-safe lab payments
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/lab-idempotent-payment.test.sql
+
+      - name: Apply migration 021
+        run: psql -v ON_ERROR_STOP=1 -f supabase/021_lab_payment_retry_timestamp.sql
+      - name: Verify lab payment retry without explicit timestamp
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/lab-payment-retry-timestamp.test.sql
+
+      - name: Apply migration 022 staff invitations
+        run: psql -v ON_ERROR_STOP=1 -f supabase/022_staff_invitations.sql
+      - name: Verify owner-issued single-use staff invitations
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/staff-invitations.test.sql

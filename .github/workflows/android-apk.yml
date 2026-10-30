@@ -52,7 +52,58 @@ jobs:
           java-version: '21'
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug
+        env:
+          ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
+          ANDROID_DEBUG_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_DEBUG_KEYSTORE_PASSWORD }}
+          ANDROID_DEBUG_KEY_PASSWORD: ${{ secrets.ANDROID_DEBUG_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_DEBUG_KEYSTORE_BASE64" ] && [ -n "$ANDROID_DEBUG_KEYSTORE_PASSWORD" ]; then
+            printf '%s' "$ANDROID_DEBUG_KEYSTORE_BASE64" | base64 --decode > app/dental-clinic-debug.keystore
+            KEY_ALIAS="$(keytool -list -v -keystore app/dental-clinic-debug.keystore -storepass "$ANDROID_DEBUG_KEYSTORE_PASSWORD" 2>/dev/null | awk -F': ' '/Alias name:/{print $2; exit}')"
+            if [ -z "$KEY_ALIAS" ]; then
+              echo "Unable to read signing alias. Check ANDROID_DEBUG_KEYSTORE_PASSWORD."
+              exit 1
+            fi
+            export ANDROID_DEBUG_KEY_ALIAS="$KEY_ALIAS"
+            export ANDROID_DEBUG_KEY_PASSWORD="${ANDROID_DEBUG_KEY_PASSWORD:-$ANDROID_DEBUG_KEYSTORE_PASSWORD}"
+            python3 - <<'PY'
+          from pathlib import Path
+          path = Path("app/build.gradle")
+          source = path.read_text()
+          if "stableDebug" not in source:
+              if "android {" not in source or "buildTypes {" not in source:
+                  raise SystemExit("Unexpected generated Android Gradle file; stable signing was not configured.")
+              source = source.replace(
+                  "android {",
+                  """android {
+              signingConfigs {
+                  stableDebug {
+                      storeFile file("dental-clinic-debug.keystore")
+                      storePassword System.getenv("ANDROID_DEBUG_KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("ANDROID_DEBUG_KEY_ALIAS")
+                      keyPassword System.getenv("ANDROID_DEBUG_KEY_PASSWORD")
+                  }
+              }
+          """,
+                  1,
+              )
+              source = source.replace(
+                  "buildTypes {",
+                  """buildTypes {
+                  debug {
+                      signingConfig signingConfigs.stableDebug
+                  }
+          """,
+                  1,
+              )
+              path.write_text(source)
+          PY
+            echo "Using persistent Dental Clinic signing certificate:"
+            keytool -list -v -keystore app/dental-clinic-debug.keystore -storepass "$ANDROID_DEBUG_KEYSTORE_PASSWORD" 2>/dev/null | grep -E 'Alias name:|SHA256:'
+          else
+            echo "WARNING: persistent signing secrets are missing; this APK uses a temporary runner debug key and is not guaranteed to update an installed copy."
+          fi
+          ./gradlew assembleDebug
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

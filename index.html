@@ -89,7 +89,7 @@ window.addEventListener('dcos:cloud-patient-links',event=>{
   for(const link of event.detail?.links||[]){
     const local=D.patients.find(p=>String(p.id)===String(link.localId)&&p.br===link.localBranchId);
     if(!local)continue;
-    local.remoteId=link.remoteId;local.remoteBranchId=link.remoteBranchId;
+    local.remoteId=link.remoteId;local.remoteBranchId=link.remoteBranchId;local.cloudUpdatedAt=link.remoteUpdatedAt||'';
     local.cloudSnapshot=cloudPatientSnapshot(local);local.cloudConflict='';
     changed=true;
   }
@@ -113,7 +113,7 @@ window.addEventListener('dcos:cloud-patients',event=>{
     const current=cloudPatientSnapshot(local);
     if(!baseline){
       if(String(remote.sourceLocalId||'')===String(local.id)){
-        local.remoteId=remote.remoteId;local.remoteBranchId=remote.br;local.cloudUpdatedAt=remote.remoteUpdatedAt||'';
+        local.remoteId=remote.remoteId;local.remoteBranchId=remote.br;local.cloudUpdatedAt=remote.remoteUpdatedAt||'';local.cloudSnapshot=incoming;
         window.dispatchEvent(new CustomEvent('dcos:patient-saved',{detail:localPatientSyncPayload(local)}));changed=true;
       }else if(sameCloudSnapshot(current,incoming)){
         local.remoteId=remote.remoteId;local.remoteBranchId=remote.br;local.cloudSnapshot=incoming;local.cloudUpdatedAt=remote.remoteUpdatedAt||'';changed=true;

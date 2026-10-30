@@ -106,7 +106,7 @@ window.addEventListener('dcos:cloud-patients',event=>{
     if(!local)local=D.patients.find(p=>p.br===localBranchId&&String(p.no)===String(remote.no));
     if(!local){
       const added={id:uid(),no:remote.no,...incoming,br:localBranchId,created:remote.created||now(),by:'مزامنة سحابية',byr:'cloud',notes:[],remoteId:remote.remoteId,remoteBranchId:remote.br,cloudSnapshot:incoming,cloudUpdatedAt:remote.remoteUpdatedAt||''};
-      D.patients.push(added);const seq=/^P-(\\d+)$/.exec(String(remote.no||''));if(seq)D.seq=Math.max(Number(D.seq)||0,Number(seq[1]));changed=true;continue;
+      D.patients.push(added);const seq=/^P-(\d+)$/.exec(String(remote.no||''));if(seq)D.seq=Math.max(Number(D.seq)||0,Number(seq[1]));changed=true;continue;
     }
     if(local.remoteId&&local.remoteId!==remote.remoteId){conflicts++;local.cloudConflict='remote_id_mismatch';continue}
     const baseline=local.cloudSnapshot||null;

@@ -435,15 +435,20 @@ async function flushPatientSyncQueue() {
       const branchId = branchMap[String(item.localBranchId)];
       if (!branchId) { remaining.push(item); blocked++; continue; }
       try {
+        let remote;
         if (item.remoteId) {
           if (!item.cloudUpdatedAt) throw new Error('رابط المريض السحابي بلا إصدار معروف؛ يلزم تحديث الربط قبل الكتابة.');
-          await updatePatientInAssignedBranch({ branchId, patientId: item.remoteId, patient: item, expectedUpdatedAt: item.cloudUpdatedAt });
+          remote = await updatePatientInAssignedBranch({ branchId, patientId: item.remoteId, patient: item, expectedUpdatedAt: item.cloudUpdatedAt });
         } else {
-          await upsertPatientInAssignedBranch({ branchId, localId: item.id, fileNo: item.no, patient: item });
+          remote = await upsertPatientInAssignedBranch({ branchId, localId: item.id, fileNo: item.no, patient: item, expectedUpdatedAt: item.cloudUpdatedAt });
         }
+        window.dispatchEvent(new CustomEvent('dcos:cloud-patient-links', { detail: { links: [{
+          localId: item.id, remoteId: remote.remoteId, remoteBranchId: branchId,
+          remoteUpdatedAt: remote.remoteUpdatedAt, localBranchId: item.localBranchId
+        }] } }));
         synced++;
       } catch (error) {
-        if (/رقم الملف مستخدم بالفعل|تغير سجل المريض على جهاز آخر|بلا إصدار معروف/.test(error?.message || '')) {
+        if (/رقم الملف مستخدم بالفعل|تغير سجل المريض على جهاز آخر|بلا إصدار معروف|إصدار المزامنة غير معروف/.test(error?.message || '')) {
           conflicts.push({ id: item.id, no: item.no, localBranchId: item.localBranchId, reason: error.message, detectedAt: new Date().toISOString() });
           blocked++;
         } else remaining.push(item);

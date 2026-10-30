@@ -7,12 +7,14 @@ import {
   configureSupabase, getSupabaseClient, signInWithPassword, signUpWithPassword, requestPasswordReset, updatePassword,
   signOutSupabase, getCurrentClinicMembership, listAssignedRemoteBranches
 } from './auth-adapter.js';
-import { listPatientsForAssignedBranch, listAllPatientsForAssignedBranch, watchPatientsForAssignedBranch } from './patient-sync-service.js';
+import { listPatientsForAssignedBranch, listAllPatientsForAssignedBranch, watchPatientsForAssignedBranch, upsertPatientInAssignedBranch } from './patient-sync-service.js';
 import { preparePatientImport, importNewPatients } from './patient-import-service.js';
 
 const CONFIG_KEY = 'dcos_supabase_public_config_v1';
+const BRANCH_MAP_KEY = 'dcos_supabase_branch_map_v1';
+const PATIENT_QUEUE_KEY = 'dcos_patient_sync_queue_v1';
 let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null, localBackupExported = false, backupExportStarted = false;
-let recoveryListenerClient = null, patientRealtimeUnsubscribe = null, patientRefreshInFlight = false;
+let recoveryListenerClient = null, patientRealtimeUnsubscribe = null, patientRefreshInFlight = false, patientQueueFlushInFlight = false;
 const el = (tag, attrs = {}, html = '') => {
   const n = document.createElement(tag);
   Object.entries(attrs).forEach(([k, v]) => k === 'class' ? n.className = v : n.setAttribute(k, v));
@@ -122,6 +124,7 @@ $('dcos-sb-login').addEventListener('click', async () => {
     $('dcos-sb-password').value = '';
     $('dcos-sb-logout').hidden = false;
     await loadWorkspace();
+    flushPatientSyncQueue();
   } catch (e) { status(e.message || 'فشل تسجيل الدخول.'); }
 });
 $('dcos-sb-signup').addEventListener('click', async () => {
@@ -189,6 +192,7 @@ async function loadWorkspace() {
   $('dcos-cloud-branch').addEventListener('change', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
+  flushPatientSyncQueue();
 }
 async function createClinic() {
   try {
@@ -281,6 +285,7 @@ async function previewPatientImportNow() {
       if (!select.value) throw new Error('اربط كل الفروع المحلية بفرع سحابي قبل المعاينة.');
       importBranchMap[select.dataset.localBranch] = select.value;
     }
+    localStorage.setItem(BRANCH_MAP_KEY, JSON.stringify(importBranchMap));
     const remoteIds = [...new Set(Object.values(importBranchMap))];
     const lists = await Promise.all(remoteIds.map(branchId => listAllPatientsForAssignedBranch({branchId})));
     importPreview = preparePatientImport({localState:localImportSnapshot, clinicId:activeMembership.clinic_id, branchMap:importBranchMap, remotePatients:lists.flat()});
@@ -302,7 +307,7 @@ async function confirmPatientImport() {
   result.textContent = 'جارٍ رفع السجلات الجديدة واحدًا تلو الآخر…';
   try {
     const outcome = await importNewPatients({localState:localImportSnapshot, branchMap:importBranchMap, preview:importPreview});
-    result.textContent = 'انتهى الاستيراد: تمت إضافة ' + outcome.imported + '، وفشل ' + outcome.failed + '. أعد المعاينة قبل إعادة المحاولة؛ السجلات التي أضيفت ستظهر كموجودة بالفعل.';
+    result.textContent = 'انتهى الاستيراد: تمت إضافة ' + outcome.imported + '، وفشل ' + outcome.failed + '. تم حفظ ربط الفروع ومعرّفات السجلات الجديدة للمزامنة التالية.';
     status('انتهت محاولة استيراد المرضى. لم يتم رفع أي بيانات طبية فرعية.');
   } catch (e) { result.textContent = e.message || 'توقف الاستيراد بسبب خطأ.'; button.disabled = false; }
 }
@@ -346,6 +351,66 @@ async function refreshPatientsAfterRealtime(branchId) {
 }
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escapeAttr(value) { return escapeHtml(value); }
+
+
+
+// Local patient demographic outbox. Clinical, appointment and financial fields
+// are intentionally excluded. Failed/network-offline writes remain queued.
+window.addEventListener('dcos:patient-saved', event => {
+  const patient = event.detail;
+  if (!patient || !patient.id || !patient.localBranchId) return;
+  enqueueLocalPatientForSync(patient);
+});
+window.addEventListener('online', () => flushPatientSyncQueue());
+function readPatientQueue() {
+  try {
+    const queue = JSON.parse(localStorage.getItem(PATIENT_QUEUE_KEY) || '[]');
+    return Array.isArray(queue) ? queue : [];
+  } catch { return []; }
+}
+function enqueueLocalPatientForSync(patient) {
+  const queue = readPatientQueue();
+  const item = { ...patient, queuedAt: new Date().toISOString() };
+  const index = queue.findIndex(x => x.id === item.id && x.localBranchId === item.localBranchId);
+  if (index >= 0) queue[index] = item;
+  else queue.push(item);
+  localStorage.setItem(PATIENT_QUEUE_KEY, JSON.stringify(queue.slice(-1000)));
+  flushPatientSyncQueue();
+}
+async function flushPatientSyncQueue() {
+  if (patientQueueFlushInFlight || !navigator.onLine || !activeMembership) return;
+  patientQueueFlushInFlight = true;
+  let queue = readPatientQueue();
+  const remaining = [];
+  const branchMap = (() => {
+    try { return JSON.parse(localStorage.getItem(BRANCH_MAP_KEY) || '{}'); }
+    catch { return {}; }
+  })();
+  let synced = 0, blocked = 0;
+  try {
+    for (const item of queue) {
+      const branchId = branchMap[String(item.localBranchId)];
+      if (!branchId) { remaining.push(item); blocked++; continue; }
+      try {
+        await upsertPatientInAssignedBranch({
+          branchId,
+          localId: item.id,
+          fileNo: item.no,
+          patient: item
+        });
+        synced++;
+      } catch (error) {
+        remaining.push(item);
+        if (/رقم الملف مستخدم بالفعل/.test(error?.message || '')) blocked++;
+      }
+    }
+    localStorage.setItem(PATIENT_QUEUE_KEY, JSON.stringify(remaining));
+    if (synced) status('تمت مزامنة ' + synced + ' سجل مريض أساسي إلى السحابة.');
+    else if (blocked) status('توجد ' + blocked + ' سجلات تحتاج ربط فرع أو مراجعة تعارض قبل المزامنة.');
+  } finally {
+    patientQueueFlushInFlight = false;
+  }
+}
 
 restoreConfig();
 try {

@@ -135,7 +135,7 @@ const dup=D.patients.find(p=>p.id!==id&&p.ph===o.ph);
 if(dup){const mine=myBr().some(b=>b.id===dup.br);if(!await ask(mine?`الرقم مسجل للمريض ${dup.name} (${dup.no}). حفظ كملف جديد؟`:'هذا الرقم مسجل بالفعل لمريض آخر. حفظ كملف جديد؟'))return}
 if(id){const p=D.patients.find(x=>x.id===id),ch=Object.keys(o).filter(k=>JSON.stringify(o[k])!==JSON.stringify(p[k]));if(p.st==='archived')o.st='archived';Object.assign(p,o);audit('patient_edit',p.no,'تعديل: '+ch.join('، '))}
 else{const p=Object.assign(o,{id:uid(),no:'P-'+String(++D.seq).padStart(4,'0'),created:now(),by:ME.name,byr:ME.role,notes:[]});D.patients.push(p);audit('patient_add',p.no,p.name);sel=p.id;tab='ov'}
-save();closeD();toast('تم الحفظ');render()}
+save();closeD();toast('تم الحفظ');const savedPatient=id?D.patients.find(x=>x.id===id):D.patients[D.patients.length-1];if(savedPatient)window.dispatchEvent(new CustomEvent('dcos:patient-saved',{detail:{id:savedPatient.id,localBranchId:savedPatient.br,no:savedPatient.no,name:savedPatient.name,en:savedPatient.en,ph:savedPatient.ph,ph2:savedPatient.ph2,em:savedPatient.em,dob:savedPatient.dob,g:savedPatient.g,ad:savedPatient.ad,gov:savedPatient.gov,ec:savedPatient.ec,so:savedPatient.so,dr:savedPatient.dr,tg:savedPatient.tg,st:savedPatient.st}}));render()}
 const wa=(p,t)=>{let n=nd(p.ph).replace(/\D/g,'');if(n.startsWith('00'))n=n.slice(2);else if(n.startsWith('0'))n='20'+n.slice(1);return'https://wa.me/'+n+'?text='+encodeURIComponent(t)};
 function detV(){const p=D.patients.find(x=>x.id===sel);if(!p){sel=null;return patV()}
 const c=D.settings.clinic,row=(l,x)=>`<div class="kv"><span>${l}</span><b>${h(x||'—')}</b></div>`;

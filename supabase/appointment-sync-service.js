@@ -6,7 +6,7 @@
 import { getCurrentClinicMembership, listAssignedRemoteBranches } from './auth-adapter.js';
 import { requireActiveClinicContext, requireAssignedRemoteBranch } from './clinic-context.js';
 import {
-  listRemoteAppointments, createRemoteAppointment,
+  listRemoteAppointments, listRemoteAppointmentEvents, createRemoteAppointment,
   updateRemoteAppointment, upsertRemoteAppointmentFromLocal
 } from './appointment-repository.js';
 
@@ -20,6 +20,12 @@ async function resolveScope(branchId, write = false) {
 export async function listAppointmentsForAssignedBranch(options = {}) {
   const scope = await resolveScope(options.branchId);
   return listRemoteAppointments({ ...options, clinicId: scope.clinicId, branchId: scope.branchId });
+}
+export async function listAppointmentEventsForAssignedBranch(options = {}) {
+  const scope = await resolveScope(options.branchId);
+  return listRemoteAppointmentEvents({
+    ...options, clinicId: scope.clinicId, branchId: scope.branchId
+  });
 }
 export async function createAppointmentInAssignedBranch(options = {}) {
   const scope = await resolveScope(options.branchId, true);

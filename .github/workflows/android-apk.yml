@@ -1,0 +1,135 @@
+name: Android APK build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.json'
+      - 'supabase/**'
+      - '.github/workflows/android-apk.yml'
+  push:
+    branches: [feature/supabase-shared-clinic]
+    paths:
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.json'
+      - 'supabase/**'
+      - '.github/workflows/android-apk.yml'
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
+      - name: Build web assets
+        run: npm run build
+      - name: Verify Supabase modules are included in Android assets
+        run: |
+          test -s www/supabase/cloud-portal.js
+          for file in auth-adapter.js patient-sync-service.js patient-import-service.js clinic-context.js patient-repository.js patient-validation.js import-preview.js; do
+            test -s "www/supabase/$file"
+          done
+          node --input-type=module --check < www/supabase/cloud-portal.js
+      - name: Add Android platform
+        run: npx cap add android
+      - name: Sync Android project
+        run: npx cap sync android
+      - name: Set increasing Android version code
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          path = Path("android/app/build.gradle")
+          source = path.read_text()
+          version_code = int(os.environ["VERSION_CODE"])
+          updated, count = re.subn(r"versionCode\s+\d+", f"versionCode {version_code}", source, count=1)
+          if count != 1:
+              raise SystemExit("Could not update Android versionCode.")
+          updated, count = re.subn(r'versionName\s+"[^"]+"', f'versionName "1.0.{version_code}"', updated, count=1)
+          if count != 1:
+              raise SystemExit("Could not update Android versionName.")
+          path.write_text(updated)
+          print(f"Android versionCode set to {version_code}")
+          PY
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build debug APK
+        working-directory: android
+        env:
+          ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
+          ANDROID_DEBUG_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_DEBUG_KEYSTORE_PASSWORD }}
+          ANDROID_DEBUG_KEY_PASSWORD: ${{ secrets.ANDROID_DEBUG_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_DEBUG_KEYSTORE_BASE64" ] && [ -n "$ANDROID_DEBUG_KEYSTORE_PASSWORD" ]; then
+            printf '%s' "$ANDROID_DEBUG_KEYSTORE_BASE64" | base64 --decode > app/dental-clinic-debug.keystore
+            KEY_ALIAS="$(keytool -list -v -keystore app/dental-clinic-debug.keystore -storepass "$ANDROID_DEBUG_KEYSTORE_PASSWORD" 2>/dev/null | awk -F': ' '/Alias name:/{print $2; exit}')"
+            if [ -z "$KEY_ALIAS" ]; then
+              echo "Unable to read signing alias. Check ANDROID_DEBUG_KEYSTORE_PASSWORD."
+              exit 1
+            fi
+            export ANDROID_DEBUG_KEY_ALIAS="$KEY_ALIAS"
+            export ANDROID_DEBUG_KEY_PASSWORD="${ANDROID_DEBUG_KEY_PASSWORD:-$ANDROID_DEBUG_KEYSTORE_PASSWORD}"
+            python3 - <<'PY'
+          from pathlib import Path
+          path = Path("app/build.gradle")
+          source = path.read_text()
+          if "stableDebug" not in source:
+              if "android {" not in source or "buildTypes {" not in source:
+                  raise SystemExit("Unexpected generated Android Gradle file; stable signing was not configured.")
+              source = source.replace(
+                  "android {",
+                  """android {
+              signingConfigs {
+                  stableDebug {
+                      storeFile file("dental-clinic-debug.keystore")
+                      storePassword System.getenv("ANDROID_DEBUG_KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("ANDROID_DEBUG_KEY_ALIAS")
+                      keyPassword System.getenv("ANDROID_DEBUG_KEY_PASSWORD")
+                  }
+              }
+          """,
+                  1,
+              )
+              source = source.replace(
+                  "buildTypes {",
+                  """buildTypes {
+                  debug {
+                      signingConfig signingConfigs.stableDebug
+                  }
+          """,
+                  1,
+              )
+              path.write_text(source)
+          PY
+            echo "Using persistent Dental Clinic signing certificate:"
+            keytool -list -v -keystore app/dental-clinic-debug.keystore -storepass "$ANDROID_DEBUG_KEYSTORE_PASSWORD" 2>/dev/null | grep -E 'Alias name:|SHA256:'
+          else
+            echo "WARNING: persistent signing secrets are missing; this APK uses a temporary runner debug key and is not guaranteed to update an installed copy."
+          fi
+          ./gradlew assembleDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: dental-clinic-os-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+# Fresh build trigger: 2026-10-30

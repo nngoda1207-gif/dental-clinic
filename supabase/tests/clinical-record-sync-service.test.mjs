@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const repo=readFileSync('supabase/clinical-record-repository.js','utf8');
+const service=readFileSync('supabase/clinical-record-sync-service.js','utf8');
+const schema=readFileSync('supabase/002_operational_tables.sql','utf8');
+for(const fn of ['listRemoteClinicalRecords','createRemoteClinicalRecord','updateRemoteClinicalRecord'])assert.ok(repo.includes('export async function '+fn));
+assert.ok(repo.includes(".eq('clinic_id',clinicId).eq('branch_id',branchId).eq('patient_id',patientId)"));
+assert.ok(repo.includes('created_by:actor'),'actor must come from Supabase Auth session');
+assert.ok(repo.includes("new Set(['visit','diagnosis','prescription','consent','note'])"));
+assert.ok(service.includes("new Set(['owner','manager','dentist','nurse'])"),'clinical records must exclude reception and accountant');
+assert.ok(service.includes('requireAssignedRemoteBranch(context,branchId,branches.map(b=>b.id))'));
+assert.ok(schema.includes("array['owner','manager','dentist','nurse']"),'database RLS must enforce clinical roles');
+assert.doesNotMatch(repo+service,/localStorage|dcos1|service_role|secret key/i);
+console.log('Clinical-record sync safety checks passed.');

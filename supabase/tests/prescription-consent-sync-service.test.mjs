@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const repo=readFileSync(new URL('../prescription-consent-repository.js',import.meta.url),'utf8');
+const service=readFileSync(new URL('../prescription-consent-sync-service.js',import.meta.url),'utf8');
+for(const t of ['clinic_prescription_items','clinic_clinical_records','clinic_consents'])assert.ok(repo.includes(t));
+for(const f of ['listRemotePrescriptionItems','createRemotePrescriptionItem','listRemoteConsents','createRemoteConsent','updateRemoteConsentStatus'])assert.ok(repo.includes('function '+f));
+assert.ok(repo.includes("parent.record_type!=='prescription'"));
+assert.ok(repo.includes("['draft','signed','withdrawn','void']"));
+assert.ok(repo.includes('created_by'));
+assert.ok(service.includes("new Set(['owner','manager','dentist','nurse'])"));
+assert.ok(service.includes('requireAssignedRemoteBranch'));
+assert.ok(!repo.includes('localStorage')&&!service.includes('localStorage'));
+assert.ok(!repo.includes('service_role')&&!service.includes('service_role'));
+console.log('Prescription and consent repository/service tests passed.');

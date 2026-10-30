@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const repo=readFileSync(new URL('../clinical-details-repository.js',import.meta.url),'utf8');
+const service=readFileSync(new URL('../clinical-details-sync-service.js',import.meta.url),'utf8');
+for(const table of ['clinic_patient_medical_history','clinic_tooth_records','clinic_periodontal_measurements'])assert.ok(repo.includes(table));
+for(const fn of ['getRemoteMedicalHistory','saveRemoteMedicalHistory','listRemoteToothRecords','createRemoteToothRecord','listRemotePeriodontalMeasurements','createRemotePeriodontalMeasurement'])assert.ok(repo.includes('function '+fn)||repo.includes('function '+fn+'('));
+for(const field of ['clinic_id','branch_id','patient_id'])assert.ok(repo.includes(field));
+assert.ok(repo.includes("onConflict:'clinic_id,patient_id'"));
+assert.ok(repo.includes('updated_by:actor'));
+assert.ok(repo.includes('recorded_by:actor'));
+assert.ok(repo.includes('pocket_depth_mm'));
+assert.ok(service.includes("new Set(['owner','manager','dentist','nurse'])"));
+assert.ok(service.includes('requireAssignedRemoteBranch'));
+assert.ok(service.includes('getCurrentClinicMembership'));
+assert.ok(!repo.includes('localStorage')&&!service.includes('localStorage'));
+assert.ok(!repo.includes('service_role')&&!service.includes('service_role'));
+console.log('Clinical details repository/service safety tests passed.');

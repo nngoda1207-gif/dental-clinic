@@ -1,0 +1,11 @@
+{
+  "appId": "com.dentalclinic.os",
+  "appName": "Dental Clinic OS",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

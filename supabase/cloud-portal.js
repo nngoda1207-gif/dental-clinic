@@ -367,6 +367,8 @@ function escapeAttr(value) { return escapeHtml(value); }
 window.addEventListener('dcos:patient-saved', event => {
   const patient = event.detail;
   if (!patient || !patient.id || !patient.localBranchId) return;
+  const branchMap = (() => { try { return JSON.parse(localStorage.getItem(BRANCH_MAP_KEY) || '{}'); } catch { return {}; } })();
+  if (!branchMap[String(patient.localBranchId)]) return; // no outbox until owner opt-in
   enqueueLocalPatientForSync(patient);
 });
 window.addEventListener('online', () => flushPatientSyncQueue());

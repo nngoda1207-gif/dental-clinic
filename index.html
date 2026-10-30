@@ -83,6 +83,14 @@ function cloudPatientSnapshot(p){const x={};for(const k of CLOUD_PATIENT_FIELDS)
 function sameCloudSnapshot(a,b){return JSON.stringify(cloudPatientSnapshot(a))===JSON.stringify(cloudPatientSnapshot(b))}
 function applyCloudPatientFields(local,remote){const s=cloudPatientSnapshot(remote);Object.assign(local,s)}
 function localPatientSyncPayload(p){return {id:p.id,remoteId:p.remoteId||'',cloudUpdatedAt:p.cloudUpdatedAt||'',localBranchId:p.br,no:p.no,...cloudPatientSnapshot(p)}}
+window.addEventListener('dcos:patient-sync-conflict',event=>{
+  if(!D||!ME)return;
+  const {localId,localBranchId,reason}=event.detail||{};
+  const local=D.patients.find(p=>String(p.id)===String(localId)&&p.br===localBranchId);
+  if(!local)return;
+  local.cloudConflict=reason||'sync_conflict';save();
+  if(view==='pat'&&sel===local.id&&!$('#dlg')?.open&&!$('#dlg2')?.open)render();
+});
 window.addEventListener('dcos:cloud-patient-links',event=>{
   if(!D||!ME)return;
   let changed=false;

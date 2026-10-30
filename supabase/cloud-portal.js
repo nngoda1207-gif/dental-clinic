@@ -42,7 +42,7 @@ const launch = el('button', { id: 'dcos-cloud-launch', type: 'button' }, '☁ ا
 const panel = el('div', { id: 'dcos-cloud-panel' });
 panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true" aria-labelledby="dcos-cloud-title">
   <div style="display:flex;align-items:center;gap:10px;justify-content:space-between"><h2 id="dcos-cloud-title" style="margin:0">حساب العيادة</h2><button id="dcos-cloud-close" type="button">إغلاق</button></div>
-  <p class="muted">استخدم نفس البريد الإلكتروني وكلمة المرور على كل أجهزة العيادة. لا تنشئ حسابًا جديدًا على هاتف الممرضة.</p>
+  <div class="cloud-row"><b>كل شخص له حساب مستقل.</b><p class="muted">صاحب العيادة يسجل بحسابه الخاص. حسابات الطبيب والاستقبال والتمريض تكون بإيميلات وكلمات مرور منفصلة، وترتبط بالعيادة نفسها بصلاحيات محددة.</p><p class="muted">تنبيه: دعوات الموظفين وإضافة حساباتهم بأمان لم تُفعّل بعد. لا تستخدم حساب المالك على أجهزة الموظفين، ولا تنشئ حسابًا للموظف من زر إنشاء حساب المالك.</p></div>
   <div id="dcos-cloud-config">
     <label>رابط مشروع Supabase<input id="dcos-sb-url" type="url" placeholder="https://xxxx.supabase.co" autocomplete="url"></label>
     <label>Publishable / anon key<input id="dcos-sb-key" type="password" placeholder="المفتاح العام للمشروع فقط" autocomplete="off"></label>
@@ -52,8 +52,8 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
   <div id="dcos-cloud-auth">
     <label>البريد الإلكتروني<input id="dcos-sb-email" type="email" placeholder="البريد الإلكتروني" autocomplete="username"></label>
     <label>كلمة المرور<input id="dcos-sb-password" type="password" placeholder="كلمة المرور" autocomplete="current-password"></label>
-    <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">دخول إلى حساب العيادة</button><button id="dcos-sb-signup" type="button">إنشاء حساب العيادة لأول مرة</button><button id="dcos-sb-reset" type="button">نسيت كلمة المرور؟</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
-    <p class="muted">أول مرة فقط: أنشئ حساب العيادة على جهازك الأساسي. بعد ذلك استخدم نفس البريد وكلمة المرور على الجهاز الآخر. لا تضغط «إنشاء حساب» مرة ثانية.</p>
+    <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">تسجيل الدخول بحسابي</button><button id="dcos-sb-signup" type="button">إنشاء حساب مالك العيادة (أول مرة فقط)</button><button id="dcos-sb-reset" type="button">نسيت كلمة المرور؟</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
+    <p class="muted">إنشاء الحساب هنا مخصص لمالك العيادة فقط. بعد اكتمال نظام دعوات الموظفين، سيدخل كل موظف بحسابه الشخصي دون مشاركة كلمة مرور المالك.</p>
   </div>
   <div id="dcos-password-recovery" hidden>
     <h3>تعيين كلمة مرور جديدة</h3>
@@ -176,7 +176,7 @@ async function loadWorkspace() {
   const result = await getCurrentClinicMembership();
   if (!result) {
     host.innerHTML = `<h3>إعداد حساب العيادة لأول مرة</h3>
-      <p class="muted">أنت مسجل الدخول، لكن هذا الحساب لم يتم ربطه بعيادة بعد. أكمل الإعداد مرة واحدة على جهاز صاحب العيادة فقط. لا تستخدم هذه الخطوة على هاتف الممرضة.</p>
+      <p class="muted">هذا الحساب غير مرتبط بعيادة حتى الآن. أكمل الخطوة التالية بحساب مالك العيادة فقط. حسابات الموظفين ستُضاف بدعوة منفصلة من المالك بعد تفعيل إدارة المستخدمين.</p>
       <label>اسم العيادة<input id="dcos-new-clinic" maxlength="160"></label>
       <label>اسم الفرع الرئيسي<input id="dcos-new-branch" maxlength="160" value="الفرع الرئيسي"></label>
       <button class="primary" id="dcos-create-clinic" type="button">إنشاء العيادة السحابية</button>`;

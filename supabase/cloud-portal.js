@@ -229,9 +229,11 @@ async function loadWorkspace() {
     <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
   if (membership.role === 'owner') {
     const inviteBox = el('section', { class: 'cloud-row' });
-    inviteBox.innerHTML = '<h3>إضافة موظف للعيادة</h3><p class="muted">أنشئ رابطًا فريدًا مرتبطًا بإيميل الموظف ووظيفته وفرعه. الرابط يستخدم مرة واحدة وصلاحيته 72 ساعة، ويمكن فتحه مباشرة من الهاتف.</p><label>إيميل الموظف<input id="dcos-invite-email" type="email" autocomplete="off" placeholder="staff@example.com"></label><label>الوظيفة<select id="dcos-invite-role"><option value="dentist">طبيب</option><option value="nurse">تمريض</option><option value="reception">استقبال</option><option value="accountant">حسابات</option><option value="manager">مدير</option><option value="invmgr">مسؤول مخزون</option><option value="readonly">قراءة فقط</option></select></label><label>الفرع<select id="dcos-invite-branch">' + branches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('') + '</select></label><button class="primary" id="dcos-create-staff-invite" type="button">إنشاء كود دعوة</button><textarea id="dcos-created-staff-invite" rows="2" readonly placeholder="سيظهر كود الدعوة هنا"></textarea><p class="muted">انسخ رابط الدعوة وأرسله للموظف عبر قناة خاصة. الرابط يحتوي على رمز سري أحادي الاستخدام.</p>';
+    inviteBox.innerHTML = '<h3>دعوة موظف أو ممرضة لاختبار المزامنة</h3><p class="muted">أدخل إيميل الشخص الذي سيستلم الدعوة، واختر وظيفته والفرع. الرابط صالح 72 ساعة ولمرة واحدة فقط.</p><label>إيميل الموظف<input id="dcos-invite-email" type="email" autocomplete="off" placeholder="staff@example.com"></label><label>الوظيفة<select id="dcos-invite-role"><option value="nurse">تمريض</option><option value="dentist">طبيب</option><option value="reception">استقبال</option><option value="accountant">حسابات</option><option value="manager">مدير</option><option value="invmgr">مسؤول مخزون</option><option value="readonly">قراءة فقط</option></select></label><label>الفرع<select id="dcos-invite-branch">' + branches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('') + '</select></label><button class="primary" id="dcos-create-staff-invite" type="button">إنشاء رابط الدعوة</button><textarea id="dcos-created-staff-invite" rows="2" readonly placeholder="رابط الدعوة سيظهر هنا بعد الإنشاء"></textarea><div class="cloud-actions"><button id="dcos-copy-staff-invite" type="button" disabled>نسخ الرابط</button><button id="dcos-share-staff-invite" type="button" disabled>مشاركة الرابط</button></div><p class="muted">أرسل الرابط للممرضة أو الموظف. يجب التسجيل بنفس الإيميل الذي أدخلته هنا.</p>';
     host.prepend(inviteBox);
     $('dcos-create-staff-invite').addEventListener('click', createStaffInvite);
+    $('dcos-copy-staff-invite').addEventListener('click', copyStaffInvite);
+    $('dcos-share-staff-invite').addEventListener('click', shareStaffInvite);
   }
   $('dcos-load-patients').addEventListener('click', loadPatients);
   $('dcos-cloud-branch').addEventListener('change', loadPatients);
@@ -257,7 +259,8 @@ async function createStaffInvite() {
     if (typeof data !== 'string' || !/^[0-9a-f]{64}$/i.test(data)) throw new Error('لم يرجع الخادم كود دعوة صالحًا.');
     const inviteUrl = new URL(location.href); inviteUrl.searchParams.set('invite', data); inviteUrl.hash = '';
     output.value = inviteUrl.toString();
-    status('تم إنشاء رابط دعوة خاص لمرة واحدة وصلاحيته 72 ساعة. أرسله للموظف المحدد، وسيفتح التطبيق على شاشة الانضمام.');
+    $('dcos-copy-staff-invite').disabled = false; $('dcos-share-staff-invite').disabled = false;
+    status('تم إنشاء رابط الدعوة. استخدم نسخ الرابط أو مشاركته، ويجب أن يسجل الموظف بنفس الإيميل المحدد.');
   } catch (e) {
     const msg = String(e?.message || '');
     status(/does not exist|Could not find the function|schema cache/i.test(msg)
@@ -266,7 +269,7 @@ async function createStaffInvite() {
   } finally { button.disabled = false; }
 }
 
-async function redeemStaffInvite() {
+async function copyStaffInvite() { const value = $('dcos-created-staff-invite')?.value || ''; if (!value) return; try { await navigator.clipboard.writeText(value); status('تم نسخ رابط الدعوة. أرسله للممرضة عبر واتساب أو الرسائل.'); } catch (e) { $('dcos-created-staff-invite').focus(); $('dcos-created-staff-invite').select(); status('حدد الرابط وانسخه يدويًا.'); } }\n\nasync function shareStaffInvite() { const url = $('dcos-created-staff-invite')?.value || ''; if (!url) return; if (navigator.share) { try { await navigator.share({ title: 'دعوة للانضمام إلى العيادة', text: 'افتح الرابط وسجّل باستخدام الإيميل الذي استلم الدعوة عليه.', url }); } catch (e) { if (e?.name !== 'AbortError') status('تعذرت المشاركة؛ استخدم زر نسخ الرابط.'); } } else { await copyStaffInvite(); } }\n\nasync function redeemStaffInvite() {
   const button = $('dcos-redeem-staff-invite');
   try {
     const token = ($('dcos-staff-invite-code').value.trim() || new URLSearchParams(location.search).get('invite') || '').trim();

@@ -395,20 +395,26 @@ function escapeAttr(value) { return escapeHtml(value); }
 
 // Local patient demographic outbox. Clinical, appointment and financial fields
 // are intentionally excluded. Failed/network-offline writes remain queued.
-function getSavedBranchMap() {
+function getSavedBranchConfig() {
   try {
     const saved = JSON.parse(localStorage.getItem(BRANCH_MAP_KEY) || 'null');
-    if (saved?.clinicId === activeMembership?.clinic_id && saved?.map && typeof saved.map === 'object') return saved.map;
+    if (saved?.clinicId && saved?.map && typeof saved.map === 'object') return saved;
   } catch {}
+  return null;
+}
+function getSavedBranchMap() {
+  const saved = getSavedBranchConfig();
+  if (saved?.clinicId === activeMembership?.clinic_id) return saved.map;
   return {};
 }
 
 window.addEventListener('dcos:patient-saved', event => {
   const patient = event.detail;
   if (!patient || !patient.id || !patient.localBranchId) return;
-  const branchMap = getSavedBranchMap();
-  if (!branchMap[String(patient.localBranchId)]) return; // no outbox until owner opt-in
-  enqueueLocalPatientForSync(patient);
+  const saved = getSavedBranchConfig();
+  if (!saved?.map?.[String(patient.localBranchId)]) return; // no outbox until owner opt-in
+  if (activeMembership && saved.clinicId !== activeMembership.clinic_id) return;
+  enqueueLocalPatientForSync({ ...patient, clinicId: saved.clinicId });
 });
 window.addEventListener('online', () => flushPatientSyncQueue());
 function readPatientQueue() {
@@ -419,7 +425,7 @@ function readPatientQueue() {
 }
 function enqueueLocalPatientForSync(patient) {
   const queue = readPatientQueue();
-  const item = { ...patient, clinicId: activeMembership?.clinic_id || '', queuedAt: new Date().toISOString() };
+  const item = { ...patient, clinicId: patient.clinicId || activeMembership?.clinic_id || '', queuedAt: new Date().toISOString() };
   const index = queue.findIndex(x => x.id === item.id && x.localBranchId === item.localBranchId);
   if (index >= 0) queue[index] = item;
   else queue.push(item);

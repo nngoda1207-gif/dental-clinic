@@ -73,3 +73,11 @@ Use two branches in Clinic A and a second clinic with synthetic patients.
 - The patient `updated_at` trigger advances the version on every row update, including updates from other clients, so stale writes fail their optimistic concurrency check.
 - Two-device concurrent edits, offline/network failure, expired sessions, and backup/restore are tested.
 - Main UI and existing local-only workflow still work before the remote adapter is enabled.
+
+
+## Staff invitation tests
+- Owner can issue a single-use invitation only for an active branch in their clinic.
+- Invitation email is bound to the authenticated JWT email at redemption.
+- Role is allowlisted and cannot be owner; branch assignment is created atomically.
+- Expired, invalid, email-mismatched, and already-redeemed codes are rejected.
+- A staff account cannot create invitations or assign itself a role.

@@ -45,6 +45,26 @@ jobs:
         run: npx cap add android
       - name: Sync Android project
         run: npx cap sync android
+      - name: Set increasing Android version code
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          path = Path("android/app/build.gradle")
+          source = path.read_text()
+          version_code = int(os.environ["VERSION_CODE"])
+          updated, count = re.subn(r"versionCode\\s+\\d+", f"versionCode {version_code}", source, count=1)
+          if count != 1:
+              raise SystemExit("Could not update Android versionCode.")
+          updated, count = re.subn(r'versionName\\s+"[^"]+"', f'versionName "1.0.{version_code}"', updated, count=1)
+          if count != 1:
+              raise SystemExit("Could not update Android versionName.")
+          path.write_text(updated)
+          print(f"Android versionCode set to {version_code}")
+          PY
       - name: Setup Java
         uses: actions/setup-java@v4
         with:

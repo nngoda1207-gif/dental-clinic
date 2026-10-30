@@ -15,8 +15,9 @@ Run only in a disposable/test Supabase project with synthetic records. Do not us
 10. `010_atomic_invoice_payments.sql`
 11. `011_invoice_items_and_service_pricing.sql`
 12. `012_treatment_to_invoice.sql`
+13. `013_patient_realtime_publication.sql`
 
-The SQL files have not been executed against the connected Supabase project as part of this repository change. The CI workflow applies all twelve migrations and runs synthetic PostgreSQL compatibility/smoke tests, including atomic payment/refund, service-line and completed-treatment invoicing checks, but passing it does not prove Supabase Auth/RLS behavior; still test on a disposable Supabase project. Do not apply migrations to a project containing real patient data until the RLS and role matrix has been reviewed and tested.
+The SQL files have not been executed against the connected Supabase project as part of this repository change. The CI workflow applies all thirteen migrations and runs synthetic PostgreSQL compatibility/smoke tests, including atomic payment/refund, service-line and completed-treatment invoicing checks, but passing it does not prove Supabase Auth/RLS behavior; still test on a disposable Supabase project. Do not apply migrations to a project containing real patient data until the RLS and role matrix has been reviewed and tested.
 
 ## Required test identities
 Create synthetic Auth users for:
@@ -64,5 +65,6 @@ Use two branches in Clinic A and a second clinic with synthetic patients.
 - RLS tests pass for every role, branch, inactive user, and cross-clinic case.
 - The existing app's fields have an explicit migration mapping; no field silently dropped.
 - Import preview reports counts and validation failures, and a backup can be restored.
+- Realtime patient updates are delivered only for an assigned branch; test on a real Supabase project with `clinic_patients` enabled in Realtime and confirm an update on device A refreshes the cloud patient list on device B.
 - Two-device concurrent edits, offline/network failure, expired sessions, and backup/restore are tested.
 - Main UI and existing local-only workflow still work before the remote adapter is enabled.

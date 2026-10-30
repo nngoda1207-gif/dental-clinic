@@ -49,12 +49,16 @@ export function preparePatientImport({ localState, clinicId, branchMap, remotePa
     seenLocal.add(key);
     const matches = remoteByKey.get(key) || [];
     if (matches.length) {
+      const linked = matches.some(remote => String(remote.sourceLocalId || '') === localId);
+      const same = matches.some(remote => sameIdentity(patient, remote));
       rows.push({
         localId,
-        state: matches.some(remote => sameIdentity(patient, remote)) ? 'duplicate' : 'conflict',
-        reason: matches.some(remote => sameIdentity(patient, remote))
-          ? 'السجل موجود بالفعل بنفس رقم الملف والاسم والهاتف؛ سيتم تخطيه دون تعديل.'
-          : 'رقم الملف مستخدم لسجل مختلف؛ يلزم مراجعة يدوية.'
+        state: linked ? 'duplicate' : 'conflict',
+        reason: linked
+          ? 'السجل مربوط بالفعل بهذا المعرّف المحلي؛ سيتم تخطيه دون تعديل.'
+          : same
+            ? 'السجل متطابق لكنه لا يحمل رابط المعرّف المحلي الثابت؛ يلزم ربط يدوي قبل تشغيل المزامنة التلقائية.'
+            : 'رقم الملف مستخدم لسجل مختلف؛ يلزم مراجعة يدوية.'
       });
       continue;
     }

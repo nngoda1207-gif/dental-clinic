@@ -15,6 +15,7 @@ on:
     branches: [feature/supabase-shared-clinic, fix/persistent-cloud-account]
     paths:
       - 'index.html'
+      - 'supabase/**'
       - 'package.json'
       - 'package-lock.json'
       - 'capacitor.config.json'

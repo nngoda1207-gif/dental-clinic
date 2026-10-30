@@ -27,6 +27,8 @@ assert.match(portal, /clinicId: activeMembership\?\.clinic_id/);
 assert.match(portal, /dcos_patient_sync_conflicts_v1/);
 assert.match(portal, /conflicts\.push\(/);
 assert.match(portal, /flushPatientSyncQueue/);
+assert.match(portal, /Preserve saves that arrived while an earlier network request was awaiting/);
+assert.match(portal, /latest\.queuedAt !== initial\.queuedAt/);
 assert.match(portal, /updatePatientInAssignedBranch/);
 assert.match(portal, /expectedUpdatedAt: item\.cloudUpdatedAt/);
 assert.match(portal, /dcos:cloud-patients/);

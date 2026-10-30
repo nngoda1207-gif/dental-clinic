@@ -7,7 +7,7 @@ import {
   configureSupabase, getSupabaseClient, signInWithPassword, signUpWithPassword, requestPasswordReset,
   signOutSupabase, getCurrentClinicMembership, listAssignedRemoteBranches
 } from './auth-adapter.js';
-import { listPatientsForAssignedBranch } from './patient-sync-service.js';
+import { listPatientsForAssignedBranch, listAllPatientsForAssignedBranch } from './patient-sync-service.js';
 import { preparePatientImport, importNewPatients } from './patient-import-service.js';
 
 const CONFIG_KEY = 'dcos_supabase_public_config_v1';
@@ -216,7 +216,7 @@ async function previewPatientImportNow() {
       importBranchMap[select.dataset.localBranch] = select.value;
     }
     const remoteIds = [...new Set(Object.values(importBranchMap))];
-    const lists = await Promise.all(remoteIds.map(branchId => listPatientsForAssignedBranch({branchId, limit:1000})));
+    const lists = await Promise.all(remoteIds.map(branchId => listAllPatientsForAssignedBranch({branchId})));
     importPreview = preparePatientImport({localState:localImportSnapshot, clinicId:activeMembership.clinic_id, branchMap:importBranchMap, remotePatients:lists.flat()});
     const n = importPreview.counts;
     result.innerHTML = '<p><b>معاينة — بيانات المرضى الأساسية فقط</b></p><p>جديد: ' + n.new + ' · موجود: ' + n.duplicate + ' · تعارض: ' + n.conflict + ' · مستبعد: ' + n.blocked + '</p>' +

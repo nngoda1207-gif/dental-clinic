@@ -42,7 +42,7 @@ const launch = el('button', { id: 'dcos-cloud-launch', type: 'button' }, '☁ ا
 const panel = el('div', { id: 'dcos-cloud-panel' });
 panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true" aria-labelledby="dcos-cloud-title">
   <div style="display:flex;align-items:center;gap:10px;justify-content:space-between"><h2 id="dcos-cloud-title" style="margin:0">حساب العيادة</h2><button id="dcos-cloud-close" type="button">إغلاق</button></div>
-  <div class="cloud-row"><b>كل شخص له حساب مستقل.</b><p class="muted">صاحب العيادة يسجل بحسابه الخاص. حسابات الطبيب والاستقبال والتمريض تكون بإيميلات وكلمات مرور منفصلة، وترتبط بالعيادة نفسها بصلاحيات محددة.</p><p class="muted">تنبيه: دعوات الموظفين وإضافة حساباتهم بأمان لم تُفعّل بعد. لا تستخدم حساب المالك على أجهزة الموظفين، ولا تنشئ حسابًا للموظف من زر إنشاء حساب المالك.</p></div>
+  <div class="cloud-row"><b>حساب مستقل لكل شخص — بدون مشاركة كلمة المرور.</b><p class="muted">صاحب العيادة ينشئ حسابه ويجهّز العيادة. بعد ذلك يرسل دعوة إلى إيميل كل موظف ويحدد وظيفته والفرع. الموظف ينشئ حسابه بإيميله الشخصي ويقبل الدعوة بالكود.</p><p class="muted">كل مستخدم يرى بيانات العيادة المشتركة وفق دوره والفرع المخصص له. لا تستخدم إيميل أو كلمة مرور المالك على أجهزة الموظفين.</p></div>
   <div id="dcos-cloud-config">
     <label>رابط مشروع Supabase<input id="dcos-sb-url" type="url" placeholder="https://xxxx.supabase.co" autocomplete="url"></label>
     <label>Publishable / anon key<input id="dcos-sb-key" type="password" placeholder="المفتاح العام للمشروع فقط" autocomplete="off"></label>
@@ -52,8 +52,8 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
   <div id="dcos-cloud-auth">
     <label>البريد الإلكتروني<input id="dcos-sb-email" type="email" placeholder="البريد الإلكتروني" autocomplete="username"></label>
     <label>كلمة المرور<input id="dcos-sb-password" type="password" placeholder="كلمة المرور" autocomplete="current-password"></label>
-    <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">تسجيل الدخول بحسابي</button><button id="dcos-sb-signup" type="button">إنشاء حساب مالك العيادة (أول مرة فقط)</button><button id="dcos-sb-reset" type="button">نسيت كلمة المرور؟</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
-    <p class="muted">إنشاء الحساب هنا مخصص لمالك العيادة فقط. بعد اكتمال نظام دعوات الموظفين، سيدخل كل موظف بحسابه الشخصي دون مشاركة كلمة مرور المالك.</p>
+    <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">تسجيل الدخول</button><button id="dcos-sb-signup" type="button">إنشاء حساب جديد</button><button id="dcos-sb-reset" type="button">نسيت كلمة المرور؟</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
+    <p class="muted">استخدم إيميلك الشخصي. صاحب العيادة ينشئ حسابه أولًا، والموظف ينشئ حسابًا بإيميله الذي استلم عليه الدعوة. لا تنشئ حسابًا ثانيًا إذا كان لديك حساب بالفعل؛ استخدم تسجيل الدخول.</p>
   </div>
   <div id="dcos-password-recovery" hidden>
     <h3>تعيين كلمة مرور جديدة</h3>
@@ -74,7 +74,14 @@ function friendlyCloudError(error, fallback) {
   if (/Email not confirmed/i.test(message)) return 'أكد بريدك الإلكتروني من الرسالة التي وصلتك، ثم سجّل الدخول مرة أخرى.';
   if (/User already registered/i.test(message)) return 'هذا البريد لديه حساب بالفعل. استخدم زر تسجيل الدخول بدل إنشاء حساب جديد.';
   if (/Failed to fetch|NetworkError|Load failed/i.test(message)) return 'تعذر الاتصال بالخادم. تأكد من الإنترنت وحاول مرة أخرى.';
-  if (/does not exist|Could not find the function|schema cache/i.test(message)) return 'قاعدة بيانات Supabase تحتاج تطبيق تحديثات العيادة. افتح ملف OWNER_STAFF_SETUP.sql في مستودع المشروع وطبّقه من SQL Editor.';
+  if (/does not exist|Could not find the function|schema cache/i.test(message)) return 'إعدادات قاعدة بيانات العيادة غير مكتملة. يلزم تطبيق ملف OWNER_STAFF_SETUP.sql في Supabase SQL Editor بواسطة مسؤول المشروع.';
+  if (/INVALID_INVITE_EMAIL/.test(message)) return 'راجع إيميل الموظف؛ يبدو أنه غير مكتوب بشكل صحيح.';
+  if (/OWNER_REQUIRED/.test(message)) return 'إنشاء دعوات الموظفين متاح لحساب مالك العيادة فقط.';
+  if (/BRANCH_NOT_AVAILABLE/.test(message)) return 'الفرع المحدد غير متاح. حدّث الصفحة واختر فرعًا نشطًا.';
+  if (/USER_ALREADY_MEMBER/.test(message)) return 'هذا البريد عضو بالفعل في العيادة.';
+  if (/INVALID_INVITE_ROLE/.test(message)) return 'الوظيفة المحددة غير صالحة. اختر وظيفة من القائمة.';
+  if (/over_email_send_rate_limit|email rate limit/i.test(message)) return 'تم طلب رسائل كثيرة خلال وقت قصير. انتظر قليلًا ثم حاول مرة أخرى.';
+  if (/Password should be at least|password.*(weak|short)/i.test(message)) return 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.';
   return message || fallback;
 }
 
@@ -156,9 +163,9 @@ $('dcos-sb-signup').addEventListener('click', async () => {
     if (data.session) {
       $('dcos-sb-logout').hidden = false;
       await loadWorkspace();
-      status('تم إنشاء الحساب. أكمل إعداد العيادة على جهازك الأساسي فقط.');
+      status('تم إنشاء حسابك. إذا ظهرت رسالة تأكيد، افتح بريدك ثم ارجع وسجّل الدخول. بعد الدخول اختر إعداد العيادة إذا كنت المالك، أو أدخل كود الدعوة إذا كنت موظفًا.');
     } else {
-      status('تم إرسال رسالة تأكيد إلى البريد إن كان التأكيد مطلوبًا. افتح الرسالة، ثم ارجع وسجّل الدخول بنفس البيانات. لم تُرفع بيانات المرضى بعد.');
+      status('تم إرسال رسالة تأكيد إذا كان التحقق بالبريد مفعّلًا. افتح الرسالة، ثم ارجع وسجّل الدخول بإيميلك الشخصي وكلمة المرور التي أنشأتها. بعد الدخول أكمل إعداد المالك أو قبول دعوة الموظف. لم تُرفع بيانات المرضى في هذه الخطوة.');
     }
   } catch (e) { status(friendlyCloudError(e, 'تعذر إنشاء الحساب.')); }
 });
@@ -186,17 +193,18 @@ async function loadWorkspace() {
   host.innerHTML = '<p class="muted">جارٍ تحميل صلاحياتك والفروع المتاحة…</p>';
   const result = await getCurrentClinicMembership();
   if (!result) {
-    host.innerHTML = `<h3>إعداد حساب العيادة لأول مرة</h3>
-      <p class="muted">هذا الحساب غير مرتبط بعيادة حتى الآن. أكمل الخطوة التالية بحساب مالك العيادة فقط. حسابات الموظفين ستُضاف بدعوة منفصلة من المالك بعد تفعيل إدارة المستخدمين.</p>
+    host.innerHTML = `<section class="cloud-row"><h3>انضمام موظف بدعوة</h3>
+      <p class="muted">لو صاحب العيادة أرسل لك كودًا: سجّل الدخول بإيميلك الشخصي أولًا، ثم الصق الكود هنا. يجب أن يطابق الإيميل الذي أُرسلت إليه الدعوة.</p>
+      <label>كود الدعوة<input id="dcos-staff-invite-code" autocomplete="off" spellcheck="false" placeholder="الصق كود الدعوة هنا"></label>
+      <button class="primary" id="dcos-redeem-staff-invite" type="button">قبول الدعوة والانضمام</button></section>
+      <details class="cloud-row" id="dcos-owner-setup"><summary><b>أنا صاحب العيادة وأجهّزها لأول مرة</b></summary>
+      <p class="muted">استخدم هذا القسم مرة واحدة فقط بحساب المالك. لا تستخدمه لحسابات الموظفين.</p>
       <label>اسم العيادة<input id="dcos-new-clinic" maxlength="160"></label>
       <label>اسم الفرع الرئيسي<input id="dcos-new-branch" maxlength="160" value="الفرع الرئيسي"></label>
-      <button class="primary" id="dcos-create-clinic" type="button">إنشاء العيادة السحابية</button>`;
+      <button class="primary" id="dcos-create-clinic" type="button">إنشاء العيادة والفرع</button></details>`;
     $('dcos-create-clinic').addEventListener('click', createClinic);
-    const joinBox = el('div', { class: 'cloud-row' });
-    joinBox.innerHTML = '<h3>لديك دعوة من صاحب العيادة؟</h3><p class="muted">أنشئ حسابك الشخصي أو سجّل الدخول به أولًا، ثم أدخل كود الدعوة الذي وصلك من صاحب العيادة.</p><label>كود الدعوة<input id="dcos-staff-invite-code" autocomplete="off" spellcheck="false" placeholder="الصق كود الدعوة هنا"></label><button id="dcos-redeem-staff-invite" type="button">قبول الدعوة والانضمام للعيادة</button>';
-    host.append(joinBox);
     $('dcos-redeem-staff-invite').addEventListener('click', redeemStaffInvite);
-    status('الحساب جديد ولم يتم ربطه بعيادة بعد.');
+    status('الحساب غير مرتبط بعيادة بعد. اختر الانضمام بدعوة أو إعداد العيادة إذا كنت المالك.');
     return;
   }
   const membership = result.membership;

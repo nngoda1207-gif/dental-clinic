@@ -159,3 +159,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/020_lab_sync_identity.sql
       - name: Verify retry-safe lab payments
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/lab-idempotent-payment.test.sql
+
+      - name: Apply migration 021
+        run: psql -v ON_ERROR_STOP=1 -f supabase/021_lab_payment_retry_timestamp.sql
+      - name: Verify lab payment retry without explicit timestamp
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/lab-payment-retry-timestamp.test.sql

@@ -32,6 +32,8 @@ jobs:
         run: npm install
       - name: Build web assets
         run: npm run build
+      - name: Verify cloud sync modules are packaged
+        run: test -f www/supabase/cloud-portal.js && test -f www/supabase/auth-adapter.js && test -f www/supabase/patient-sync-service.js
       - name: Add Android platform
         run: npx cap add android
       - name: Sync Android project

@@ -49,6 +49,34 @@ export async function signInWithPassword(email, password) {
   return data;
 }
 
+/**
+ * Create a durable Supabase Auth identity. Clinic ownership is deliberately
+ * provisioned separately, after email confirmation/session establishment.
+ */
+export async function signUpWithPassword(email, password) {
+  const cleanEmail = String(email || '').trim();
+  const cleanPassword = String(password || '');
+  if (!cleanEmail) throw new Error('أدخل البريد الإلكتروني.');
+  if (cleanPassword.length < 8) throw new Error('كلمة المرور يجب أن تكون 8 أحرف على الأقل.');
+  const { data, error } = await getSupabaseClient().auth.signUp({
+    email: cleanEmail,
+    password: cleanPassword,
+    options: { emailRedirectTo: window.location.origin + window.location.pathname }
+  });
+  if (error) throw error;
+  return data;
+}
+
+/** Send a password-reset email without exposing whether an account exists. */
+export async function requestPasswordReset(email) {
+  const cleanEmail = String(email || '').trim();
+  if (!cleanEmail) throw new Error('أدخل البريد الإلكتروني أولًا.');
+  const { error } = await getSupabaseClient().auth.resetPasswordForEmail(cleanEmail, {
+    redirectTo: window.location.origin + window.location.pathname
+  });
+  if (error) throw error;
+}
+
 export async function signOutSupabase() {
   const { error } = await getSupabaseClient().auth.signOut();
   if (error) throw error;

@@ -7,8 +7,13 @@ for(const f of ['listRemotePrescriptionItems','createRemotePrescriptionItem','li
 assert.ok(repo.includes("parent.record_type!=='prescription'"));
 assert.ok(repo.includes("['draft','signed','withdrawn','void']"));
 assert.ok(repo.includes('created_by'));
+assert.ok(repo.includes('source_local_id:sourceLocalId||null'),'prescription and consent rows keep local identity');
+assert.ok(repo.includes(".eq('updated_at',args.expectedUpdatedAt)"),'consent status changes require a version token');
+assert.ok(repo.includes('Consent changed on another device'),'stale consent updates are rejected');
 assert.ok(service.includes("new Set(['owner','manager','dentist','nurse'])"));
 assert.ok(service.includes('requireAssignedRemoteBranch'));
+assert.ok(service.includes('expectedUpdatedAt:args.expectedUpdatedAt'));
+assert.ok(service.includes('sourceLocalId:args.sourceLocalId'));
 assert.ok(!repo.includes('localStorage')&&!service.includes('localStorage'));
 assert.ok(!repo.includes('service_role')&&!service.includes('service_role'));
 console.log('Prescription and consent repository/service tests passed.');

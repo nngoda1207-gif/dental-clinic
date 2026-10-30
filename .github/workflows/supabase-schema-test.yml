@@ -154,3 +154,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/019_idempotent_financial_ledger.sql
       - name: Verify retry-safe payment and refund ledger
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/financial-idempotent-ledger.test.sql
+
+      - name: Apply migration 020
+        run: psql -v ON_ERROR_STOP=1 -f supabase/020_lab_sync_identity.sql
+      - name: Verify retry-safe lab payments
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/lab-idempotent-payment.test.sql

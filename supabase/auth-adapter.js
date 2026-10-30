@@ -77,6 +77,17 @@ export async function requestPasswordReset(email) {
   if (error) throw error;
 }
 
+/** Complete a password reset after Supabase redirects back with a recovery session. */
+export async function updatePassword(newPassword) {
+  const password = String(newPassword || '');
+  if (password.length < 8) throw new Error('كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل.');
+  const { data: sessionData, error: sessionError } = await getSupabaseClient().auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!sessionData.session) throw new Error('افتح رابط استعادة كلمة المرور من نفس الجهاز أولًا.');
+  const { error } = await getSupabaseClient().auth.updateUser({ password });
+  if (error) throw error;
+}
+
 export async function signOutSupabase() {
   const { error } = await getSupabaseClient().auth.signOut();
   if (error) throw error;

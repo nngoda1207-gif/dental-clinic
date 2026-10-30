@@ -200,19 +200,43 @@ export async function upsertRemotePatientFromLocal({ clinicId, branchId, localId
   const file_no = requireId(fileNo, 'Patient file number');
   if (file_no.length > 80) throw new Error('Patient file number is too long.');
   const userId = await currentUserId();
-  const payload = {
-    clinic_id: clinicId, branch_id: branchId, file_no,
-    source_local_id: stableLocalId,
-    ...normalizePatient(patient),
-    created_by: userId, updated_at: new Date().toISOString()
-  };
-  const { data, error } = await getSupabaseClient()
-    .from('clinic_patients')
-    .upsert(payload, { onConflict: 'clinic_id,branch_id,source_local_id' })
-    .select(PATIENT_FIELDS).single();
-  if (error) {
-    if (error.code === '23505') throw new Error('رقم الملف مستخدم بالفعل في السحابة لسجل غير مربوط بهذا الجهاز. يلزم ربط السجل يدويًا قبل المزامنة لتجنب تكرار المرضى أو استبدال بيانات خاطئة.');
-    throw error;
+  const client = getSupabaseClient();
+  const fields = { file_no, ...normalizePatient(patient), updated_at: new Date().toISOString() };
+
+  // Update only a row carrying this exact stable local identity. Never claim a
+  // legacy row by matching phone/name/file number alone.
+  const existing = await client.from('clinic_patients')
+    .select('id')
+    .eq('clinic_id', clinicId)
+    .eq('branch_id', branchId)
+    .eq('source_local_id', stableLocalId)
+    .maybeSingle();
+  if (existing.error) throw existing.error;
+
+  let result;
+  if (existing.data?.id) {
+    result = await client.from('clinic_patients')
+      .update(fields)
+      .eq('id', existing.data.id)
+      .eq('clinic_id', clinicId)
+      .eq('branch_id', branchId)
+      .select(PATIENT_FIELDS)
+      .single();
+  } else {
+    result = await client.from('clinic_patients')
+      .insert({
+        clinic_id: clinicId,
+        branch_id: branchId,
+        source_local_id: stableLocalId,
+        created_by: userId,
+        ...fields
+      })
+      .select(PATIENT_FIELDS)
+      .single();
   }
-  return toLocalPatient(data);
+  if (result.error) {
+    if (result.error.code === '23505') throw new Error('رقم الملف مستخدم بالفعل في السحابة لسجل غير مربوط بهذا الجهاز. يلزم ربط السجل يدويًا قبل المزامنة لتجنب تكرار المرضى أو استبدال بيانات خاطئة.');
+    throw result.error;
+  }
+  return toLocalPatient(result.data);
 }

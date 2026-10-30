@@ -51,7 +51,7 @@ jobs:
           fs.writeFileSync(path, gradle);
           console.log('Android versionCode=' + code);
           NODE
-      - name: Restore persistent debug signing key (optional until configured)
+      - name: Restore persistent debug signing key
         env:
           ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
         run: |

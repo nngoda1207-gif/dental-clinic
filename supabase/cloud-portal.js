@@ -269,7 +269,11 @@ async function createStaffInvite() {
   } finally { button.disabled = false; }
 }
 
-async function copyStaffInvite() { const value = $('dcos-created-staff-invite')?.value || ''; if (!value) return; try { await navigator.clipboard.writeText(value); status('تم نسخ رابط الدعوة. أرسله للممرضة عبر واتساب أو الرسائل.'); } catch (e) { $('dcos-created-staff-invite').focus(); $('dcos-created-staff-invite').select(); status('حدد الرابط وانسخه يدويًا.'); } }\n\nasync function shareStaffInvite() { const url = $('dcos-created-staff-invite')?.value || ''; if (!url) return; if (navigator.share) { try { await navigator.share({ title: 'دعوة للانضمام إلى العيادة', text: 'افتح الرابط وسجّل باستخدام الإيميل الذي استلم الدعوة عليه.', url }); } catch (e) { if (e?.name !== 'AbortError') status('تعذرت المشاركة؛ استخدم زر نسخ الرابط.'); } } else { await copyStaffInvite(); } }\n\nasync function redeemStaffInvite() {
+async function copyStaffInvite() { const value = $('dcos-created-staff-invite')?.value || ''; if (!value) return; try { await navigator.clipboard.writeText(value); status('تم نسخ رابط الدعوة. أرسله للممرضة عبر واتساب أو الرسائل.'); } catch (e) { $('dcos-created-staff-invite').focus(); $('dcos-created-staff-invite').select(); status('حدد الرابط وانسخه يدويًا.'); } }
+
+async function shareStaffInvite() { const url = $('dcos-created-staff-invite')?.value || ''; if (!url) return; if (navigator.share) { try { await navigator.share({ title: 'دعوة للانضمام إلى العيادة', text: 'افتح الرابط وسجّل باستخدام الإيميل الذي استلم الدعوة عليه.', url }); } catch (e) { if (e?.name !== 'AbortError') status('تعذرت المشاركة؛ استخدم زر نسخ الرابط.'); } } else { await copyStaffInvite(); } }
+
+async function redeemStaffInvite() {
   const button = $('dcos-redeem-staff-invite');
   try {
     const token = ($('dcos-staff-invite-code').value.trim() || new URLSearchParams(location.search).get('invite') || '').trim();

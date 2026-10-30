@@ -481,5 +481,17 @@ try {
   if (configured?.url && configured?.publishableKey) {
     configureSupabase({ url: configured.url, publishableKey: configured.publishableKey });
     bindPasswordRecovery();
+    (async () => {
+      try {
+        const { data, error } = await getSupabaseClient().auth.getSession();
+        if (error) throw error;
+        if (data?.session) {
+          await loadWorkspace();
+          flushPatientSyncQueue();
+        }
+      } catch (e) {
+        status(e.message || 'تعذر استعادة جلسة المزامنة السحابية.');
+      }
+    })();
   }
 } catch (e) { status(e.message || 'تعذر تهيئة الاتصال السحابي.'); }

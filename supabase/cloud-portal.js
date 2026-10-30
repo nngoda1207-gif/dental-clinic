@@ -286,7 +286,9 @@ async function previewPatientImportNow() {
       if (!select.value) throw new Error('اربط كل الفروع المحلية بفرع سحابي قبل المعاينة.');
       importBranchMap[select.dataset.localBranch] = select.value;
     }
-    const remoteIds = [...new Set(Object.values(importBranchMap))];
+    const mappedBranches = Object.values(importBranchMap);
+    if (new Set(mappedBranches).size !== mappedBranches.length) throw new Error('لا يمكن ربط فرعين محليين بنفس الفرع السحابي؛ اختر فرعًا مستقلًا لكل فرع.');
+    const remoteIds = [...new Set(mappedBranches)];
     const lists = await Promise.all(remoteIds.map(branchId => listAllPatientsForAssignedBranch({branchId})));
     importPreview = preparePatientImport({localState:localImportSnapshot, clinicId:activeMembership.clinic_id, branchMap:importBranchMap, remotePatients:lists.flat()});
     const n = importPreview.counts;

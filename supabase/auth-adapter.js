@@ -10,6 +10,8 @@
  * Never place a service_role/secret key here.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { App } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
 
 let client = null;
 let clientConfig = null;
@@ -17,10 +19,6 @@ let oauthListenerInstalled = false;
 
 async function installOAuthReturnHandler() {
   if (oauthListenerInstalled || !window.Capacitor?.isNativePlatform?.()) return;
-  const [{ App }, { Browser }] = await Promise.all([
-    import('https://esm.sh/@capacitor/app@7'),
-    import('https://esm.sh/@capacitor/browser@7')
-  ]);
   oauthListenerInstalled = true;
   await App.addListener('appUrlOpen', async ({ url }) => {
     if (!url || !url.startsWith('com.dentalclinic.os://auth-callback')) return;
@@ -92,7 +90,6 @@ export async function signInWithGitHub() {
   if (native) {
     if (!data?.url) throw new Error('اتصل التطبيق بـ Supabase لكن لم يرجع رابط GitHub. راجع تفعيل GitHub داخل Supabase Auth → Providers.');
     try {
-      const { Browser } = await import('https://esm.sh/@capacitor/browser@7');
       await Browser.open({ url: data.url });
     } catch (error) {
       throw new Error('تم الاتصال بـ Supabase وتجهيز رابط GitHub، لكن تعذر فتح نافذة المتصفح داخل التطبيق. أعد المحاولة وتأكد من تحديث مكونات Android.');

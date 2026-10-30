@@ -4,7 +4,7 @@
  * branch-scoped patient reads. It does not upload or overwrite local D.
  */
 import {
-  configureSupabase, getSupabaseClient, signInWithPassword,
+  configureSupabase, getSupabaseClient, signInWithPassword, signUpWithPassword, requestPasswordReset,
   signOutSupabase, getCurrentClinicMembership, listAssignedRemoteBranches
 } from './auth-adapter.js';
 import { listPatientsForAssignedBranch } from './patient-sync-service.js';
@@ -47,7 +47,8 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
   <div id="dcos-cloud-auth">
     <label>البريد الإلكتروني<input id="dcos-sb-email" type="email" autocomplete="username"></label>
     <label>كلمة مرور Supabase<input id="dcos-sb-password" type="password" autocomplete="current-password"></label>
-    <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">تسجيل الدخول السحابي</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
+    <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">تسجيل الدخول السحابي</button><button id="dcos-sb-signup" type="button">إنشاء حساب دائم</button><button id="dcos-sb-reset" type="button">نسيت كلمة المرور؟</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
+    <p class="muted">استخدم نفس البريد وكلمة المرور بعد إعادة تثبيت التطبيق. إذا كان تأكيد البريد مفعّلًا، افتح رسالة التأكيد أولًا. الحساب السحابي وحده لا ينقل بيانات المرضى المحلية تلقائيًا.</p>
   </div>
   <div id="dcos-cloud-workspace" hidden></div>
   <p id="dcos-cloud-status" class="muted" role="status" aria-live="polite"></p>
@@ -87,6 +88,28 @@ $('dcos-sb-login').addEventListener('click', async () => {
     $('dcos-sb-logout').hidden = false;
     await loadWorkspace();
   } catch (e) { status(e.message || 'فشل تسجيل الدخول.'); }
+});
+$('dcos-sb-signup').addEventListener('click', async () => {
+  try {
+    configure();
+    status('جارٍ إنشاء الحساب السحابي…');
+    const data = await signUpWithPassword($('dcos-sb-email').value, $('dcos-sb-password').value);
+    $('dcos-sb-password').value = '';
+    if (data.session) {
+      $('dcos-sb-logout').hidden = false;
+      await loadWorkspace();
+      status('تم إنشاء الحساب وتسجيل الدخول. أنشئ العيادة السحابية إذا كان هذا حساب المالك الأول.');
+    } else {
+      status('تم إرسال رسالة تأكيد إلى البريد إن كان التأكيد مطلوبًا. افتح الرسالة، ثم ارجع وسجّل الدخول بنفس البيانات. لم تُرفع بيانات المرضى بعد.');
+    }
+  } catch (e) { status(e.message || 'تعذر إنشاء الحساب.'); }
+});
+$('dcos-sb-reset').addEventListener('click', async () => {
+  try {
+    configure();
+    await requestPasswordReset($('dcos-sb-email').value);
+    status('إذا كان البريد مسجلًا، ستصلك رسالة لإعادة تعيين كلمة المرور. افحص البريد الوارد والرسائل غير المرغوب فيها.');
+  } catch (e) { status(e.message || 'تعذر إرسال رسالة استعادة كلمة المرور.'); }
 });
 $('dcos-sb-logout').addEventListener('click', async () => {
   try {

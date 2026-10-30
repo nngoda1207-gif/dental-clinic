@@ -7,7 +7,7 @@ import {
   configureSupabase, getSupabaseClient, signInWithPassword, signUpWithPassword, requestPasswordReset, updatePassword,
   signOutSupabase, getCurrentClinicMembership, listAssignedRemoteBranches
 } from './auth-adapter.js';
-import { listPatientsForAssignedBranch, listAllPatientsForAssignedBranch, watchPatientsForAssignedBranch, upsertPatientInAssignedBranch, updatePatientInAssignedBranch } from './patient-sync-service.js';
+import { listAllPatientsForAssignedBranch, watchPatientsForAssignedBranch, upsertPatientInAssignedBranch, updatePatientInAssignedBranch } from './patient-sync-service.js';
 import { preparePatientImport, importNewPatients } from './patient-import-service.js';
 
 const CONFIG_KEY = 'dcos_supabase_public_config_v1';
@@ -352,7 +352,7 @@ async function loadPatients() {
   if (patientRealtimeUnsubscribe) { patientRealtimeUnsubscribe(); patientRealtimeUnsubscribe = null; }
   host.textContent = 'جارٍ تحميل سجلات المرضى من Supabase…';
   try {
-    const patients = await listPatientsForAssignedBranch({ branchId, limit: 500 });
+    const patients = await listAllPatientsForAssignedBranch({ branchId });
     renderCloudPatients(patients, host);
     dispatchCloudPatientsToLocal(branchId, patients);
     status(`تم تحميل ${patients.length} سجلًا سحابيًا. جارٍ تفعيل متابعة التغييرات لهذا الفرع.`);

@@ -51,6 +51,7 @@ jobs:
           node supabase/tests/patient-local-identity.test.mjs
           node --input-type=module --check < supabase/appointment-repository.js
           node --input-type=module --check < supabase/appointment-sync-service.js
+          node --input-type=module --check < supabase/appointment-mapping.js
           node --input-type=module --check < supabase/clinical-record-repository.js
           node --input-type=module --check < supabase/clinical-record-sync-service.js
           node --input-type=module --check < supabase/clinical-details-repository.js
@@ -69,6 +70,7 @@ jobs:
           node supabase/tests/clinic-context.test.mjs
           node supabase/tests/patient-sync-service.test.mjs
           node supabase/tests/appointment-sync-service.test.mjs
+          node supabase/tests/appointment-mapping.test.mjs
           node supabase/tests/clinical-record-sync-service.test.mjs
           node supabase/tests/clinical-details-sync-service.test.mjs
           node supabase/tests/prescription-consent-sync-service.test.mjs

@@ -13,7 +13,8 @@ for (const method of [
   'listAllRemotePatients',
   'createRemotePatient',
   'updateRemotePatient',
-  'archiveRemotePatient'
+  'archiveRemotePatient',
+  'subscribeToRemotePatientChanges'
 ]) {
   assert.match(repo, new RegExp('export async function ' + method + '\\b'), method + ' must be exported');
 }
@@ -52,3 +53,7 @@ for (const field of ['english_name', 'governorate', 'source', 'assigned_dentist_
 assert.match(mapping, /Do not automatically merge local `dcos1` blobs/, 'migration plan must prohibit blind local blob merging');
 
 console.log('Patient repository static safety checks passed.');
+
+assert.match(repo, /postgres_changes/, 'live updates must subscribe to Supabase Postgres changes');
+assert.match(repo, /filter: 'branch_id=eq\.' \+ branchId/, 'live updates must be restricted to the selected branch');
+assert.match(repo, /removeChannel\(channel\)/, 'live update subscriptions must be removable');

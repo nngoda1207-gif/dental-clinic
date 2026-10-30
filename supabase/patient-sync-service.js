@@ -16,7 +16,8 @@ import {
   createRemotePatient,
   updateRemotePatient,
   archiveRemotePatient,
-  subscribeToRemotePatientChanges
+  subscribeToRemotePatientChanges,
+  upsertRemotePatientFromLocal
 } from './patient-repository.js';
 
 const WRITE_ROLES = new Set(['owner', 'manager', 'dentist', 'reception']);
@@ -87,5 +88,14 @@ export async function watchPatientsForAssignedBranch({ branchId, onChange, onSta
     branchId: scope.branchId,
     onChange,
     onStatus
+  });
+}
+
+
+/** Idempotent demographics-only upsert for a local patient with a stable ID. */
+export async function upsertPatientInAssignedBranch({ branchId, localId, fileNo, patient } = {}) {
+  const scope = await resolveScope(branchId, { write: true });
+  return upsertRemotePatientFromLocal({
+    clinicId: scope.clinicId, branchId: scope.branchId, localId, fileNo, patient
   });
 }

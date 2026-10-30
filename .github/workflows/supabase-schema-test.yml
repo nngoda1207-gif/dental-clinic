@@ -144,3 +144,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/017_inventory_idempotent_posting.sql
       - name: Verify idempotent inventory movement posting
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/inventory-idempotent-posting.test.sql
+
+      - name: Apply migration 018
+        run: psql -v ON_ERROR_STOP=1 -f supabase/018_clinical_local_identity.sql
+      - name: Verify clinical local identities and versioning
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/clinical-local-identity.test.sql

@@ -15,7 +15,7 @@ const BRANCH_MAP_KEY = 'dcos_supabase_branch_map_v1';
 const PATIENT_QUEUE_KEY = 'dcos_patient_sync_queue_v1';
 const PATIENT_CONFLICTS_KEY = 'dcos_patient_sync_conflicts_v1';
 let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null, localBackupExported = false, backupExportStarted = false;
-let recoveryListenerClient = null, patientRealtimeUnsubscribe = null, patientRefreshInFlight = false, patientQueueFlushInFlight = false;
+let recoveryListenerClient = null, patientRealtimeUnsubscribe = null, patientRefreshInFlight = false, patientQueueFlushInFlight = false, initialImportComplete = false;
 const el = (tag, attrs = {}, html = '') => {
   const n = document.createElement(tag);
   Object.entries(attrs).forEach(([k, v]) => k === 'class' ? n.className = v : n.setAttribute(k, v));
@@ -290,10 +290,11 @@ async function previewPatientImportNow() {
     const lists = await Promise.all(remoteIds.map(branchId => listAllPatientsForAssignedBranch({branchId})));
     importPreview = preparePatientImport({localState:localImportSnapshot, clinicId:activeMembership.clinic_id, branchMap:importBranchMap, remotePatients:lists.flat()});
     const n = importPreview.counts;
+    initialImportComplete = n.new === 0 && n.conflict === 0 && n.blocked === 0;
     result.innerHTML = '<p><b>معاينة — بيانات المرضى الأساسية فقط</b></p><p>جديد: ' + n.new + ' · موجود: ' + n.duplicate + ' · تعارض: ' + n.conflict + ' · مستبعد: ' + n.blocked + '</p>' +
       '<p class="muted">لن يتم رفع السجلات العلاجية أو الأشعة أو الوصفات أو المدفوعات، ولن يتم تعديل مريض موجود.</p><ul>' +
       importPreview.rows.filter(x => x.state !== 'new').slice(0,30).map(x => '<li>' + escapeHtml(x.localId) + ' — ' + escapeHtml(x.reason) + '</li>').join('') + '</ul>' +
-      (n.new ? '<button class="primary" id="dcos-confirm-patient-import" type="button">تأكيد رفع المرضى الجدد فقط</button>' : '<p>لا توجد سجلات جديدة جاهزة للرفع.</p>') + '<button id="dcos-enable-patient-sync" type="button">اعتماد ربط الفروع وتشغيل المزامنة التلقائية لبيانات المرضى الأساسية</button>';
+      (n.new ? '<button class="primary" id="dcos-confirm-patient-import" type="button">تأكيد رفع المرضى الجدد فقط</button>' : '<p>لا توجد سجلات جديدة جاهزة للرفع.</p>') + '<button id="dcos-enable-patient-sync" type="button" ' + (initialImportComplete ? '' : 'disabled') + '>اعتماد ربط الفروع وتشغيل المزامنة التلقائية لبيانات المرضى الأساسية</button>' + (initialImportComplete ? '' : '<p class="muted">أكمل رفع السجلات الجديدة وحل التعارضات قبل تفعيل المزامنة التلقائية.</p>');
     if (n.new) $('dcos-confirm-patient-import').addEventListener('click', confirmPatientImport);
     $('dcos-enable-patient-sync').addEventListener('click', enablePatientSync);
     status('اكتملت المعاينة دون كتابة أي بيانات على Supabase.');
@@ -302,6 +303,7 @@ async function previewPatientImportNow() {
 
 function enablePatientSync() {
   if (!importBranchMap || !Object.keys(importBranchMap).length) return;
+  if (!initialImportComplete) { status('لا يمكن تفعيل المزامنة قبل اكتمال الاستيراد الأولي وحل التعارضات.'); return; }
   if (!window.confirm('سيتم حفظ ربط الفروع على هذا الجهاز. بعد ذلك ستتم مزامنة بيانات المرضى الأساسية عند حفظها، مع إبقاء السجلات الطبية والمالية محلية. هل توافق؟')) return;
   localStorage.setItem(BRANCH_MAP_KEY, JSON.stringify(importBranchMap));
   status('تم اعتماد ربط الفروع. ستتم مزامنة بيانات المرضى الأساسية فقط عند الحفظ أو عودة الاتصال.');
@@ -316,8 +318,13 @@ async function confirmPatientImport() {
   result.textContent = 'جارٍ رفع السجلات الجديدة واحدًا تلو الآخر…';
   try {
     const outcome = await importNewPatients({localState:localImportSnapshot, branchMap:importBranchMap, preview:importPreview});
-    result.textContent = 'انتهى الاستيراد: تمت إضافة ' + outcome.imported + '، وفشل ' + outcome.failed + '. تم حفظ ربط الفروع ومعرّفات السجلات الجديدة للمزامنة التالية.';
-    status('انتهت محاولة استيراد المرضى. لم يتم رفع أي بيانات طبية فرعية.');
+    result.textContent = 'انتهى الاستيراد: تمت إضافة ' + outcome.imported + '، وفشل ' + outcome.failed + '. لم يتم رفع أي بيانات طبية فرعية.';
+    if (outcome.failed === 0 && importPreview.counts.conflict === 0 && importPreview.counts.blocked === 0) {
+      initialImportComplete = true;
+      const enableButton = $('dcos-enable-patient-sync');
+      if (enableButton) enableButton.disabled = false;
+      status('اكتمل الاستيراد الأولي دون تعارض. يمكنك الآن اعتماد ربط الفروع لتشغيل مزامنة بيانات المرضى الأساسية.');
+    } else status('الاستيراد غير مكتمل أو توجد تعارضات؛ لن تُفعّل المزامنة التلقائية حتى تُراجع.');
   } catch (e) { result.textContent = e.message || 'توقف الاستيراد بسبب خطأ.'; button.disabled = false; }
 }
 

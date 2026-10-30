@@ -17,6 +17,9 @@ assert.ok(portal.includes('function exportLocalBackup()'), 'The local database b
 assert.ok(portal.includes('if (!localBackupExported)'), 'Patient import preview must be blocked until a local backup is exported');
 assert.ok(portal.includes('dental-clinic-backup-'), 'Backup filename must be recognizable for safekeeping');
 assert.ok(portal.includes("event === 'PASSWORD_RECOVERY'"), 'Password recovery callback must be handled');
+assert.ok(portal.includes('function bindPasswordRecovery()'), 'Recovery listener must have a dedicated initializer');
+assert.ok(portal.indexOf('function bindPasswordRecovery()') < portal.indexOf("launch.addEventListener('click'"), 'Recovery listener initializer must be available before opening the portal');
+assert.ok(portal.includes('bindPasswordRecovery();'), 'Recovery listener must be bound during startup/configuration, not only after opening the portal');
 assert.ok(portal.includes('dcos-save-new-password'), 'Recovery session must expose a new-password action');
 assert.ok(portal.includes("localStorage.getItem('dcos1')"), 'Local data read must be user-triggered, not automatic');
 assert.ok(!portal.includes('service_role') && !portal.includes('secret key'), 'Browser integration must not use privileged server keys');

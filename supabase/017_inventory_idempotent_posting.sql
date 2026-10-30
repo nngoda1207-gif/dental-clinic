@@ -1,5 +1,28 @@
 -- Retry-safe inventory posting for local-first synchronization.
--- The original stock RPC remains available; sync clients use this idempotent RPC.
+-- Item metadata has a stable local identity; quantities remain ledger-derived.
+alter table public.clinic_inventory_items
+  add column if not exists source_local_id text;
+
+create unique index if not exists clinic_inventory_items_local_identity_uidx
+  on public.clinic_inventory_items(clinic_id, branch_id, source_local_id)
+  where source_local_id is not null;
+
+create or replace function public.touch_inventory_item_updated_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $inventory_item_version$
+begin
+  new.updated_at := pg_catalog.clock_timestamp();
+  return new;
+end;
+$inventory_item_version$;
+
+drop trigger if exists clinic_inventory_items_touch_updated_at on public.clinic_inventory_items;
+create trigger clinic_inventory_items_touch_updated_at
+before update on public.clinic_inventory_items
+for each row execute function public.touch_inventory_item_updated_at();
+
 alter table public.clinic_inventory_movements
   add column if not exists source_local_id text;
 

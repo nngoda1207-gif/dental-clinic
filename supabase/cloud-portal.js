@@ -308,7 +308,7 @@ function enablePatientSync() {
   if (!importBranchMap || !Object.keys(importBranchMap).length) return;
   if (!initialImportComplete) { status('لا يمكن تفعيل المزامنة قبل اكتمال الاستيراد الأولي وحل التعارضات.'); return; }
   if (!window.confirm('سيتم حفظ ربط الفروع على هذا الجهاز. بعد ذلك ستتم مزامنة بيانات المرضى الأساسية عند حفظها، مع إبقاء السجلات الطبية والمالية محلية. هل توافق؟')) return;
-  localStorage.setItem(BRANCH_MAP_KEY, JSON.stringify(importBranchMap));
+  localStorage.setItem(BRANCH_MAP_KEY, JSON.stringify({ clinicId: activeMembership.clinic_id, map: importBranchMap }));
   status('تم اعتماد ربط الفروع. ستتم مزامنة بيانات المرضى الأساسية فقط عند الحفظ أو عودة الاتصال.');
   flushPatientSyncQueue();
 }
@@ -396,10 +396,18 @@ function escapeAttr(value) { return escapeHtml(value); }
 
 // Local patient demographic outbox. Clinical, appointment and financial fields
 // are intentionally excluded. Failed/network-offline writes remain queued.
+function getSavedBranchMap() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(BRANCH_MAP_KEY) || 'null');
+    if (saved?.clinicId === activeMembership?.clinic_id && saved?.map && typeof saved.map === 'object') return saved.map;
+  } catch {}
+  return {};
+}
+
 window.addEventListener('dcos:patient-saved', event => {
   const patient = event.detail;
   if (!patient || !patient.id || !patient.localBranchId) return;
-  const branchMap = (() => { try { return JSON.parse(localStorage.getItem(BRANCH_MAP_KEY) || '{}'); } catch { return {}; } })();
+  const branchMap = getSavedBranchMap();
   if (!branchMap[String(patient.localBranchId)]) return; // no outbox until owner opt-in
   enqueueLocalPatientForSync(patient);
 });
@@ -424,10 +432,7 @@ async function flushPatientSyncQueue() {
   patientQueueFlushInFlight = true;
   let queue = readPatientQueue();
   const remaining = [];
-  const branchMap = (() => {
-    try { return JSON.parse(localStorage.getItem(BRANCH_MAP_KEY) || '{}'); }
-    catch { return {}; }
-  })();
+  const branchMap = getSavedBranchMap();
   let synced = 0, blocked = 0;
   const conflicts = (() => { try { const x = JSON.parse(localStorage.getItem(PATIENT_CONFLICTS_KEY) || '[]'); return Array.isArray(x) ? x : []; } catch { return []; } })();
   try {

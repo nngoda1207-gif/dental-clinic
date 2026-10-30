@@ -8,6 +8,8 @@ assert.ok(portal.includes('listAssignedRemoteBranches'), 'Cloud portal must reso
 assert.ok(portal.includes('listPatientsForAssignedBranch'), 'Patient reads must use the guarded sync service');
 assert.ok(portal.includes('preparePatientImport'), 'Patient import must require a preview');
 assert.ok(portal.includes('window.confirm'), 'Patient import must require explicit confirmation');
+assert.ok(portal.includes("select.addEventListener('change'"), 'Changing a branch mapping must invalidate the previous import preview');
+assert.ok(portal.includes('importPreview = null;'), 'A stale import preview must be cleared before another confirmation');
 assert.ok(portal.includes('localStorage.getItem(\'dcos1\')'), 'Local database may only be read inside the explicit import workflow');
 assert.ok(portal.includes('create_clinic_for_current_user'), 'First owner setup must use the server-side clinic RPC');
 assert.ok(portal.includes('function beginPatientImport()'), 'Local patient data is only read inside the explicit import workflow');

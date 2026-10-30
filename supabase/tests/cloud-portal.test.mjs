@@ -31,3 +31,10 @@ console.log('Cloud portal integration safety checks passed.');
 assert.ok(portal.includes('كل شخص له حساب مستقل'), 'Portal must explain that every staff member has a separate identity');
 assert.ok(portal.includes('دعوات الموظفين وإضافة حساباتهم بأمان لم تُفعّل بعد'), 'Portal must not imply staff invitations are already available');
 assert.ok(!portal.includes('استخدم نفس البريد الإلكتروني وكلمة المرور على كل أجهزة العيادة'), 'Portal must never instruct all devices to share one login');
+
+assert.ok(portal.includes("rpc('create_clinic_invitation'"), 'Only the authenticated owner portal can request a staff invitation');
+assert.ok(portal.includes("rpc('redeem_clinic_invitation'"), 'Staff must redeem their own one-time invitation after signing in');
+assert.ok(portal.includes('dcos-staff-invite-code'), 'New staff must have a dedicated invitation redemption field');
+assert.ok(portal.includes('dcos-invite-email'), 'Owner invitation must be bound to a staff email');
+assert.ok(portal.includes('dcos-invite-role'), 'Owner must select the staff role rather than letting staff self-assign it');
+assert.ok(portal.includes('dcos-invite-branch'), 'Owner must assign the invitation to a specific branch');

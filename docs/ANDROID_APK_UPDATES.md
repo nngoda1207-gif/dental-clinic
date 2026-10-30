@@ -32,3 +32,11 @@ The workflow expects this keystore to use alias `androiddebugkey`, store passwor
 An APK already installed from an earlier temporary GitHub runner may have a different signing certificate. Android cannot update that installation with the new key. Back up/export local clinic data first and verify the backup before any transition. If Android reports a signature mismatch, a one-time uninstall/reinstall may be unavoidable; uninstalling can erase local-only data, so do not proceed until that data is safely backed up. Once the stable key is used for the installed app, future APKs from this workflow should install as updates as long as the application ID stays the same and versionCode increases.
 
 This is a debug APK workflow, not a Play Store production-signing setup. Keep the signing key private.
+
+## Optional: keep the Supabase connection preconfigured after reinstall
+
+If the clinic's Supabase project is ready, add these repository Actions secrets as well:
+- `SUPABASE_URL`: the project's URL, such as `https://<project-ref>.supabase.co`
+- `SUPABASE_PUBLISHABLE_KEY`: the project's publishable/anon key (never a service-role or secret key).
+
+The APK build embeds these public connection settings so a freshly installed app can reconnect without asking for the project URL/key again. Supabase Auth accounts remain server-side; users sign in with the same email/password. This does not replace applying/reviewing migrations or testing RLS, and it does not make unsynced local-only records appear in the cloud.

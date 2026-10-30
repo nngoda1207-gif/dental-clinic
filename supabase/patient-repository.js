@@ -132,21 +132,24 @@ export async function createRemotePatient({ clinicId, branchId, fileNo, patient,
  * Update only editable patient fields. Clinic, branch, file number and actor
  * cannot be reassigned through this method; database RLS and grants still apply.
  */
-export async function updateRemotePatient({ clinicId, branchId, patientId, patient } = {}) {
+export async function updateRemotePatient({ clinicId, branchId, patientId, patient, expectedUpdatedAt } = {}) {
   requireId(clinicId, 'Remote clinic ID');
   requireId(branchId, 'Remote branch ID');
   requireId(patientId, 'Remote patient ID');
   await currentUserId();
   const payload = { ...normalizePatient(patient), updated_at: new Date().toISOString() };
-  const { data, error } = await getSupabaseClient()
+  let query = getSupabaseClient()
     .from('clinic_patients')
     .update(payload)
     .eq('id', patientId)
     .eq('clinic_id', clinicId)
-    .eq('branch_id', branchId)
-    .select(PATIENT_FIELDS)
-    .single();
-  if (error) throw error;
+    .eq('branch_id', branchId);
+  if (expectedUpdatedAt) query = query.eq('updated_at', expectedUpdatedAt);
+  const { data, error } = await query.select(PATIENT_FIELDS).single();
+  if (error) {
+    if (expectedUpdatedAt && error.code === 'PGRST116') throw new Error('تغير سجل المريض على جهاز آخر منذ آخر مزامنة. تم إيقاف التعديل للمراجعة بدل استبدال بيانات أحدث.');
+    throw error;
+  }
   return toLocalPatient(data);
 }
 

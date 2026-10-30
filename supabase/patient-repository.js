@@ -198,7 +198,7 @@ export function subscribeToRemotePatientChanges({ clinicId, branchId, onChange, 
 
 
 /** Idempotent demographics-only upsert using the stable local patient ID. */
-export async function upsertRemotePatientFromLocal({ clinicId, branchId, localId, fileNo, patient } = {}) {
+export async function upsertRemotePatientFromLocal({ clinicId, branchId, localId, fileNo, patient, expectedUpdatedAt } = {}) {
   requireId(clinicId, 'Remote clinic ID');
   requireId(branchId, 'Remote branch ID');
   const stableLocalId = requireId(localId, 'Local patient ID');
@@ -220,11 +220,13 @@ export async function upsertRemotePatientFromLocal({ clinicId, branchId, localId
 
   let result;
   if (existing.data?.id) {
+    if (!expectedUpdatedAt) throw new Error('يوجد سجل سحابي مربوط بالفعل لكن إصدار المزامنة غير معروف؛ حدّث بيانات السحابة أولًا قبل الكتابة.');
     result = await client.from('clinic_patients')
       .update(fields)
       .eq('id', existing.data.id)
       .eq('clinic_id', clinicId)
       .eq('branch_id', branchId)
+      .eq('updated_at', expectedUpdatedAt)
       .select(PATIENT_FIELDS)
       .single();
   } else {
@@ -241,6 +243,7 @@ export async function upsertRemotePatientFromLocal({ clinicId, branchId, localId
   }
   if (result.error) {
     if (result.error.code === '23505') throw new Error('رقم الملف مستخدم بالفعل في السحابة لسجل غير مربوط بهذا الجهاز. يلزم ربط السجل يدويًا قبل المزامنة لتجنب تكرار المرضى أو استبدال بيانات خاطئة.');
+    if (expectedUpdatedAt && result.error.code === 'PGRST116') throw new Error('تغير سجل المريض على جهاز آخر منذ آخر مزامنة. تم إيقاف التعديل للمراجعة بدل استبدال بيانات أحدث.');
     throw result.error;
   }
   return toLocalPatient(result.data);

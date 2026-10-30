@@ -435,13 +435,14 @@ async function flushPatientSyncQueue() {
       if (!branchId) { remaining.push(item); blocked++; continue; }
       try {
         if (item.remoteId) {
+          if (!item.cloudUpdatedAt) throw new Error('رابط المريض السحابي بلا إصدار معروف؛ يلزم تحديث الربط قبل الكتابة.');
           await updatePatientInAssignedBranch({ branchId, patientId: item.remoteId, patient: item, expectedUpdatedAt: item.cloudUpdatedAt });
         } else {
           await upsertPatientInAssignedBranch({ branchId, localId: item.id, fileNo: item.no, patient: item });
         }
         synced++;
       } catch (error) {
-        if (/رقم الملف مستخدم بالفعل|تغير سجل المريض على جهاز آخر/.test(error?.message || '')) {
+        if (/رقم الملف مستخدم بالفعل|تغير سجل المريض على جهاز آخر|بلا إصدار معروف/.test(error?.message || '')) {
           conflicts.push({ id: item.id, no: item.no, localBranchId: item.localBranchId, reason: error.message, detectedAt: new Date().toISOString() });
           blocked++;
         } else remaining.push(item);

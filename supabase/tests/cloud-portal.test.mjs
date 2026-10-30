@@ -38,3 +38,7 @@ assert.ok(portal.includes('dcos-staff-invite-code'), 'New staff must have a dedi
 assert.ok(portal.includes('dcos-invite-email'), 'Owner invitation must be bound to a staff email');
 assert.ok(portal.includes('dcos-invite-role'), 'Owner must select the staff role rather than letting staff self-assign it');
 assert.ok(portal.includes('dcos-invite-branch'), 'Owner must assign the invitation to a specific branch');
+
+assert.ok(portal.includes('function friendlyCloudError'), 'Cloud auth failures must be translated into clear user-facing Arabic messages');
+assert.ok(portal.includes('Invalid login credentials'), 'Invalid credentials must have a specific recovery hint');
+assert.ok(portal.includes('قاعدة بيانات Supabase تحتاج تطبيق تحديثات العيادة'), 'Missing database migrations must be distinguished from invalid credentials');

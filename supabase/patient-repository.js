@@ -10,7 +10,7 @@ import { getSupabaseClient, getCurrentSupabaseSession } from './auth-adapter.js'
 import { normalizePatient } from './patient-validation.js';
 
 const PATIENT_FIELDS = [
-  'id', 'clinic_id', 'branch_id', 'file_no', 'full_name', 'english_name', 'governorate', 'source', 'tags', 'assigned_dentist_user_id', 'phone', 'phone_alt',
+  'id', 'clinic_id', 'branch_id', 'file_no', 'source_local_id', 'full_name', 'english_name', 'governorate', 'source', 'tags', 'assigned_dentist_user_id', 'phone', 'phone_alt',
   'email', 'date_of_birth', 'sex', 'address', 'emergency_contact', 'status',
   'created_by', 'created_at', 'updated_at'
 ].join(',');
@@ -103,7 +103,7 @@ export async function listAllRemotePatients({ clinicId, branchId } = {}) {
  * Create one remote patient. Caller must explicitly map local branch IDs to a
  * remote branch UUID and provide a stable file number. Never bulk-imports D.
  */
-export async function createRemotePatient({ clinicId, branchId, fileNo, patient } = {}) {
+export async function createRemotePatient({ clinicId, branchId, fileNo, patient, localId } = {}) {
   requireId(clinicId, 'Remote clinic ID');
   requireId(branchId, 'Remote branch ID');
   const file_no = requireId(fileNo, 'Patient file number');
@@ -113,6 +113,7 @@ export async function createRemotePatient({ clinicId, branchId, fileNo, patient 
     clinic_id: clinicId,
     branch_id: branchId,
     file_no,
+    source_local_id: localId ? String(localId) : null,
     ...normalizePatient(patient),
     created_by: userId
   };
@@ -188,4 +189,30 @@ export function subscribeToRemotePatientChanges({ clinicId, branchId, onChange, 
       if (typeof onStatus === 'function') onStatus(status);
     });
   return () => client.removeChannel(channel);
+}
+
+
+/** Idempotent demographics-only upsert using the stable local patient ID. */
+export async function upsertRemotePatientFromLocal({ clinicId, branchId, localId, fileNo, patient } = {}) {
+  requireId(clinicId, 'Remote clinic ID');
+  requireId(branchId, 'Remote branch ID');
+  const stableLocalId = requireId(localId, 'Local patient ID');
+  const file_no = requireId(fileNo, 'Patient file number');
+  if (file_no.length > 80) throw new Error('Patient file number is too long.');
+  const userId = await currentUserId();
+  const payload = {
+    clinic_id: clinicId, branch_id: branchId, file_no,
+    source_local_id: stableLocalId,
+    ...normalizePatient(patient),
+    created_by: userId, updated_at: new Date().toISOString()
+  };
+  const { data, error } = await getSupabaseClient()
+    .from('clinic_patients')
+    .upsert(payload, { onConflict: 'clinic_id,branch_id,source_local_id' })
+    .select(PATIENT_FIELDS).single();
+  if (error) {
+    if (error.code === '23505') throw new Error('رقم الملف مستخدم بالفعل في السحابة لسجل غير مربوط بهذا الجهاز. يلزم ربط السجل يدويًا قبل المزامنة لتجنب تكرار المرضى أو استبدال بيانات خاطئة.');
+    throw error;
+  }
+  return toLocalPatient(data);
 }

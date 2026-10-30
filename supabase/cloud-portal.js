@@ -74,7 +74,7 @@ function friendlyCloudError(error, fallback) {
   if (/Email not confirmed/i.test(message)) return 'أكد بريدك الإلكتروني من الرسالة التي وصلتك، ثم سجّل الدخول مرة أخرى.';
   if (/User already registered/i.test(message)) return 'هذا البريد لديه حساب بالفعل. استخدم زر تسجيل الدخول بدل إنشاء حساب جديد.';
   if (/Failed to fetch|NetworkError|Load failed/i.test(message)) return 'تعذر الاتصال بالخادم. تأكد من الإنترنت وحاول مرة أخرى.';
-  if (/does not exist|Could not find the function|schema cache/i.test(message)) return 'إعدادات قاعدة بيانات العيادة غير مكتملة. يلزم تطبيق ملف OWNER_STAFF_SETUP.sql في Supabase SQL Editor بواسطة مسؤول المشروع.';
+  if (/does not exist|Could not find the function|schema cache|PGRST202|PGRST205/i.test(message)) return 'قاعدة بيانات Supabase تحتاج تطبيق تحديثات العيادة. يلزم تطبيق ملفات migrations وملف OWNER_STAFF_SETUP.sql في Supabase SQL Editor بواسطة مسؤول المشروع.';
   if (/INVALID_INVITE_EMAIL/.test(message)) return 'راجع إيميل الموظف؛ يبدو أنه غير مكتوب بشكل صحيح.';
   if (/OWNER_REQUIRED/.test(message)) return 'إنشاء دعوات الموظفين متاح لحساب مالك العيادة فقط.';
   if (/BRANCH_NOT_AVAILABLE/.test(message)) return 'الفرع المحدد غير متاح. حدّث الصفحة واختر فرعًا نشطًا.';

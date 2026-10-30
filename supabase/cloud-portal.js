@@ -384,7 +384,7 @@ async function refreshPatientsAfterRealtime(branchId) {
   if (patientRefreshInFlight || $('dcos-cloud-workspace').hidden || $('dcos-cloud-branch')?.value !== branchId) return;
   patientRefreshInFlight = true;
   try {
-    const patients = await listPatientsForAssignedBranch({ branchId, limit: 500 });
+    const patients = await listAllPatientsForAssignedBranch({ branchId });
     if ($('dcos-cloud-branch')?.value === branchId) {
       renderCloudPatients(patients, $('dcos-cloud-patients'));
       dispatchCloudPatientsToLocal(branchId, patients);

@@ -47,6 +47,7 @@ jobs:
           node --input-type=module --check < supabase/clinic-context.js
           node --input-type=module --check < supabase/patient-sync-service.js
           node --input-type=module --check < supabase/patient-import-service.js
+          node supabase/tests/realtime-publication.test.mjs
           node --input-type=module --check < supabase/appointment-repository.js
           node --input-type=module --check < supabase/appointment-sync-service.js
           node --input-type=module --check < supabase/clinical-record-repository.js
@@ -113,3 +114,6 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/012_treatment_to_invoice.sql
       - name: Test completed treatment invoicing
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/treatment-invoice.test.sql
+
+      - name: Apply migration 013
+        run: psql -v ON_ERROR_STOP=1 -f supabase/013_patient_realtime_publication.sql

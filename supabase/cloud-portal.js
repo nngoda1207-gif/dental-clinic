@@ -324,7 +324,7 @@ async function confirmPatientImport() {
     window.dispatchEvent(new CustomEvent('dcos:cloud-patient-links', { detail: {
       links: outcome.results.filter(x => x.state === 'imported' && x.remoteId).map(x => {
         const local = localImportSnapshot.patients.find(p => String(p.id || p.no) === x.localId);
-        return { localId: x.localId, remoteId: x.remoteId, remoteBranchId: x.remoteBranchId, localBranchId: String(local?.br ?? '') };
+        return { localId: x.localId, remoteId: x.remoteId, remoteBranchId: x.remoteBranchId, remoteUpdatedAt: x.remoteUpdatedAt, localBranchId: String(local?.br ?? '') };
       })
     } }));
     if (outcome.failed === 0 && importPreview.counts.conflict === 0 && importPreview.counts.blocked === 0) {
@@ -435,13 +435,13 @@ async function flushPatientSyncQueue() {
       if (!branchId) { remaining.push(item); blocked++; continue; }
       try {
         if (item.remoteId) {
-          await updatePatientInAssignedBranch({ branchId, patientId: item.remoteId, patient: item });
+          await updatePatientInAssignedBranch({ branchId, patientId: item.remoteId, patient: item, expectedUpdatedAt: item.cloudUpdatedAt });
         } else {
           await upsertPatientInAssignedBranch({ branchId, localId: item.id, fileNo: item.no, patient: item });
         }
         synced++;
       } catch (error) {
-        if (/رقم الملف مستخدم بالفعل/.test(error?.message || '')) {
+        if (/رقم الملف مستخدم بالفعل|تغير سجل المريض على جهاز آخر/.test(error?.message || '')) {
           conflicts.push({ id: item.id, no: item.no, localBranchId: item.localBranchId, reason: error.message, detectedAt: new Date().toISOString() });
           blocked++;
         } else remaining.push(item);

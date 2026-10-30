@@ -14,7 +14,10 @@ assert.ok(portal.includes('localStorage.getItem(\'dcos1\')'), 'Local database ma
 assert.ok(portal.includes('create_clinic_for_current_user'), 'First owner setup must use the server-side clinic RPC');
 assert.ok(portal.includes('function beginPatientImport()'), 'Local patient data is only read inside the explicit import workflow');
 assert.ok(portal.includes('function exportLocalBackup()'), 'The local database backup must be downloadable before cloud import');
-assert.ok(portal.includes('if (!localBackupExported)'), 'Patient import preview must be blocked until a local backup is exported');
+assert.ok(portal.includes('if (!localBackupExported)'), 'Patient import preview must be blocked until a local backup is verified');
+assert.ok(portal.includes('function confirmLocalBackupSaved()'), 'User must explicitly confirm the backup file exists before preview');
+assert.ok(portal.includes('backupExportStarted = true;'), 'Starting a download must not itself count as a verified backup');
+assert.ok(portal.includes('تأكدت من حفظ النسخة الاحتياطية'), 'Backup confirmation must be explicit and visible');
 assert.ok(portal.includes('dental-clinic-backup-'), 'Backup filename must be recognizable for safekeeping');
 assert.ok(portal.includes("event === 'PASSWORD_RECOVERY'"), 'Password recovery callback must be handled');
 assert.ok(portal.includes('function bindPasswordRecovery()'), 'Recovery listener must have a dedicated initializer');

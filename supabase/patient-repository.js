@@ -164,3 +164,28 @@ export async function archiveRemotePatient({ clinicId, branchId, patientId } = {
   if (error) throw error;
   return toLocalPatient(data);
 }
+
+
+/**
+ * Subscribe to branch-scoped patient changes. The caller must refresh the
+ * branch list on every event; RLS remains the authorization boundary.
+ * Realtime must be enabled for public.clinic_patients in the Supabase project.
+ */
+export function subscribeToRemotePatientChanges({ clinicId, branchId, onChange, onStatus } = {}) {
+  requireId(clinicId, 'Remote clinic ID');
+  requireId(branchId, 'Remote branch ID');
+  if (typeof onChange !== 'function') throw new Error('A patient change callback is required.');
+  const client = getSupabaseClient();
+  const channel = client
+    .channel('clinic-patients-' + branchId)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'clinic_patients',
+      filter: 'branch_id=eq.' + branchId
+    }, payload => onChange(payload))
+    .subscribe(status => {
+      if (typeof onStatus === 'function') onStatus(status);
+    });
+  return () => client.removeChannel(channel);
+}

@@ -68,6 +68,7 @@ document.body.append(launch, panel);
 const $ = id => document.getElementById(id);
 const status = message => { $('dcos-cloud-status').textContent = message || ''; };
 const open = () => panel.classList.add('open');
+window.openCloudPortal = open;
 const close = () => panel.classList.remove('open');
 function bindPasswordRecovery() {
   const client = getSupabaseClient();

@@ -43,7 +43,7 @@
 
 Open the **المزامنة السحابية** button in the app, enter the Supabase project URL and the public publishable/anon key, then sign in with a Supabase Auth email/password. A first-time owner can create a clinic and its primary branch. Existing members can view patient records only from branches assigned to their authenticated account. These settings are stored locally on that device; configure the second device separately. Never use a service-role/secret key in the browser or APK.
 
-The current portal does not copy local users, local patient records, clinical notes, financial records, or the complete `D` object to Supabase. A controlled import preview, explicit branch mapping, duplicate handling, offline queue and conflict strategy are still required before enabling writes or claiming two-way sync.
+The current portal does not copy local users, local patient records, clinical notes, financial records, or the complete `D` object to Supabase. The patient import preview requires a manually verified local backup, explicit branch mapping, duplicate handling, and a deliberate confirmation before demographic writes. Offline queue and conflict strategy are still required before enabling broader writes or claiming two-way sync.
 
 ## Why full sync is not enabled yet
 

@@ -1,7 +1,8 @@
 /*
  * Isolated Supabase cloud portal for the existing local-first app.
  * This first integration enables Supabase Auth, clinic/branch context and
- * branch-scoped patient reads. It does not upload or overwrite local D.
+ * branch-scoped patient sync. Demographic changes cross the local/cloud boundary
+ * only after backup, explicit branch mapping and owner opt-in; other D modules stay local.
  */
 import {
   configureSupabase, getSupabaseClient, signInWithPassword, signUpWithPassword, requestPasswordReset, updatePassword,

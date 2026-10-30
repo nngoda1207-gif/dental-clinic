@@ -4,6 +4,13 @@ const portal = readFileSync(new URL('../cloud-portal.js', import.meta.url), 'utf
 const index = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
 assert.ok(index.includes('./supabase/cloud-portal.js'), 'App must load the isolated cloud portal');
 assert.ok(portal.includes('signInWithPassword'), 'Cloud portal must use Supabase Auth');
+assert.ok(portal.includes('signUpWithEmail'), 'Cloud portal must support owner email signup');
+assert.ok(portal.includes('resendSignupConfirmation'), 'Cloud portal must support resending confirmation email');
+assert.ok(portal.includes('Confirm email'), 'Signup flow must explain the email confirmation step');
+const auth = readFileSync(new URL('../auth-adapter.js', import.meta.url), 'utf8');
+assert.ok(auth.includes('.auth.signUp('), 'Auth adapter must create users through Supabase Auth');
+assert.ok(auth.includes("type: 'signup'"), 'Confirmation resend must use the signup email type');
+assert.ok(auth.includes('email_confirmed_at'), 'Sign-in must reject unconfirmed email accounts');
 assert.ok(portal.includes('listAssignedRemoteBranches'), 'Cloud portal must resolve assigned branches');
 assert.ok(portal.includes('listPatientsForAssignedBranch'), 'Patient reads must use the guarded sync service');
 assert.ok(portal.includes('preparePatientImport'), 'Patient import must require a preview');

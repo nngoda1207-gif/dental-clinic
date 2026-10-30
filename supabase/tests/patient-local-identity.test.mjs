@@ -16,6 +16,8 @@ assert.match(repository, /\.eq\('source_local_id', stableLocalId\)/);
 assert.match(service, /upsertPatientInAssignedBranch/);
 assert.match(importer, /localId: row\.localId/);
 assert.match(portal, /dcos_patient_sync_queue_v1/);
+assert.match(portal, /dcos_patient_sync_conflicts_v1/);
+assert.match(portal, /conflicts\.push\(/);
 assert.match(portal, /flushPatientSyncQueue/);
 assert.match(portal, /dcos:patient-saved/);
 assert.match(portal, /enablePatientSync/);

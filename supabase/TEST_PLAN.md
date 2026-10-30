@@ -17,8 +17,9 @@ Run only in a disposable/test Supabase project with synthetic records. Do not us
 12. `012_treatment_to_invoice.sql`
 13. `013_patient_realtime_publication.sql`
 14. `014_patient_local_identity.sql`
+15. `015_patient_updated_at_trigger.sql`
 
-The SQL files have not been executed against the connected Supabase project as part of this repository change. The CI workflow applies all fourteen migrations and runs synthetic PostgreSQL compatibility/smoke tests, including atomic payment/refund, service-line and completed-treatment invoicing checks, but passing it does not prove Supabase Auth/RLS behavior; still test on a disposable Supabase project. Do not apply migrations to a project containing real patient data until the RLS and role matrix has been reviewed and tested.
+The SQL files have not been executed against the connected Supabase project as part of this repository change. The CI workflow applies all fifteen migrations and runs synthetic PostgreSQL compatibility/smoke tests, including atomic payment/refund, service-line and completed-treatment invoicing checks, but passing it does not prove Supabase Auth/RLS behavior; still test on a disposable Supabase project. Do not apply migrations to a project containing real patient data until the RLS and role matrix has been reviewed and tested.
 
 ## Required test identities
 Create synthetic Auth users for:
@@ -69,5 +70,6 @@ Use two branches in Clinic A and a second clinic with synthetic patients.
 - New/edited local patient demographics are queued, synced idempotently using stable local identity, and retried after reconnect; a conflicting legacy file number is blocked rather than overwritten.
 - Realtime patient updates are delivered only for an assigned branch; test on a real Supabase project with `clinic_patients` enabled in Realtime and confirm an update on device A refreshes the mapped local patient record on device B.
 - Snapshot-based conflict tests confirm remote-only changes apply, local-only changes are queued, and simultaneous divergent edits are preserved for review without last-write-wins overwrites.
+- The patient `updated_at` trigger advances the version on every row update, including updates from other clients, so stale writes fail their optimistic concurrency check.
 - Two-device concurrent edits, offline/network failure, expired sessions, and backup/restore are tested.
 - Main UI and existing local-only workflow still work before the remote adapter is enabled.

@@ -4,7 +4,7 @@
   "private": true,
   "description": "Dental Clinic OS Android packaging",
   "scripts": {
-    "build": "node -e \"const fs=require('fs');fs.mkdirSync('www',{recursive:true});fs.copyFileSync('index.html','www/index.html')\"",
+    "build": "node -e \"const fs=require('fs'),p=require('path');fs.rmSync('www',{recursive:true,force:true});fs.mkdirSync('www/supabase',{recursive:true});fs.copyFileSync('index.html','www/index.html');for(const f of fs.readdirSync('supabase').filter(x=>x.endsWith('.js')))fs.copyFileSync(p.join('supabase',f),p.join('www/supabase',f));if(!fs.existsSync('www/supabase/cloud-portal.js'))throw Error('Supabase cloud portal missing from Android assets');\"",
     "cap:sync": "npm run build && cap sync android"
   },
   "dependencies": {

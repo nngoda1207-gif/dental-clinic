@@ -103,8 +103,14 @@ panel.addEventListener('click', e => { if (e.target === panel) close(); });
 
 function restoreConfig() {
   try {
-    const c = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
-    if (c) { $('dcos-sb-url').value = c.url || ''; $('dcos-sb-key').value = c.publishableKey || ''; }
+    const embedded = window.DCOS_SUPABASE_CONFIG;
+    const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
+    const c = embedded?.url && embedded?.publishableKey ? embedded : saved;
+    if (c) {
+      $('dcos-sb-url').value = c.url || '';
+      $('dcos-sb-key').value = c.publishableKey || '';
+      if (embedded?.url && embedded?.publishableKey) localStorage.setItem(CONFIG_KEY, JSON.stringify(embedded));
+    }
   } catch {}
 }
 function configure() {
@@ -484,7 +490,9 @@ async function flushPatientSyncQueue() {
 
 restoreConfig();
 try {
-  const configured = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
+  const savedConfig = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
+  const embeddedConfig = window.DCOS_SUPABASE_CONFIG;
+  const configured = embeddedConfig?.url && embeddedConfig?.publishableKey ? embeddedConfig : savedConfig;
   if (configured?.url && configured?.publishableKey) {
     configureSupabase({ url: configured.url, publishableKey: configured.publishableKey });
     bindPasswordRecovery();

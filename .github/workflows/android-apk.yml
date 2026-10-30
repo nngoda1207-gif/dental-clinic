@@ -1,3 +1,4 @@
+# Rebuild trigger: fresh APK build; preserve app identity and signing configuration.
 name: Android APK build
 
 on:

@@ -27,6 +27,14 @@ insert into public.clinic_appointments(
 do $$
 begin
   if not exists (
+    select 1 from public.clinic_appointment_events
+    where appointment_id='82000000-0000-0000-0000-000000000001'
+      and event_type='created' and new_status='scheduled'
+  ) then
+    raise exception 'Appointment creation event was not recorded';
+  end if;
+
+  if not exists (
     select 1 from public.clinic_appointments
     where id='82000000-0000-0000-0000-000000000001'
       and source_local_id='local-appt-001'
@@ -69,6 +77,13 @@ begin
   perform pg_catalog.pg_sleep(0.01);
   update public.clinic_appointments set notes='version test'
    where id='82000000-0000-0000-0000-000000000001';
+  if not exists (
+    select 1 from public.clinic_appointment_events
+    where appointment_id='82000000-0000-0000-0000-000000000001'
+      and event_type='updated'
+  ) then
+    raise exception 'Appointment update event was not recorded';
+  end if;
   select updated_at into after_version from public.clinic_appointments
    where id='82000000-0000-0000-0000-000000000001';
   if after_version <= before_version then

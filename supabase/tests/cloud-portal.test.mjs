@@ -29,7 +29,8 @@ assert.ok(!portal.includes('service_role') && !portal.includes('secret key'), 'B
 console.log('Cloud portal integration safety checks passed.');
 
 assert.ok(portal.includes('كل شخص له حساب مستقل'), 'Portal must explain that every staff member has a separate identity');
-assert.ok(portal.includes('دعوات الموظفين وإضافة حساباتهم بأمان لم تُفعّل بعد'), 'Portal must not imply staff invitations are already available');
+assert.ok(portal.includes('انضمام موظف بدعوة'), 'Unlinked users must see a dedicated staff invitation flow');
+assert.ok(portal.includes('أنا صاحب العيادة وأجهّزها لأول مرة'), 'Owner clinic creation must be explicitly separated from staff onboarding');
 assert.ok(!portal.includes('استخدم نفس البريد الإلكتروني وكلمة المرور على كل أجهزة العيادة'), 'Portal must never instruct all devices to share one login');
 
 assert.ok(portal.includes("rpc('create_clinic_invitation'"), 'Only the authenticated owner portal can request a staff invitation');
@@ -42,3 +43,8 @@ assert.ok(portal.includes('dcos-invite-branch'), 'Owner must assign the invitati
 assert.ok(portal.includes('function friendlyCloudError'), 'Cloud auth failures must be translated into clear user-facing Arabic messages');
 assert.ok(portal.includes('Invalid login credentials'), 'Invalid credentials must have a specific recovery hint');
 assert.ok(portal.includes('قاعدة بيانات Supabase تحتاج تطبيق تحديثات العيادة'), 'Missing database migrations must be distinguished from invalid credentials');
+
+assert.ok(portal.includes('id="dcos-owner-setup"'), 'Owner setup must be opt-in and visually separated');
+assert.ok(portal.includes('كل مستخدم يرى بيانات العيادة المشتركة وفق دوره'), 'Portal must explain role-scoped shared clinic access');
+assert.ok(portal.includes('استخدم إيميلك الشخصي'), 'Each person must use their own email identity');
+assert.ok(portal.includes('INVALID_INVITE_EMAIL'), 'Invitation validation errors must have a clear Arabic message');

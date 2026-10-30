@@ -124,3 +124,8 @@ jobs:
 
       - name: Verify patient local identity schema
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/patient-local-identity.test.sql
+
+      - name: Apply migration 015
+        run: psql -v ON_ERROR_STOP=1 -f supabase/015_patient_updated_at_trigger.sql
+      - name: Verify patient optimistic version trigger
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/patient-updated-at-trigger.test.sql

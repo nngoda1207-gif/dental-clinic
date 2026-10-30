@@ -47,6 +47,7 @@ assert.match(index, /dcos:patient-saved/);
 assert.match(index, /localBranchId/);
 assert.match(index, /cloudSnapshot/);
 assert.match(index, /concurrent_edit/);
+assert.match(index, /تعارض في مزامنة بيانات هذا المريض/);
 const inlineScript = index.split('<script>')[1]?.split('</script>')[0];
 assert.ok(inlineScript, 'main app inline script must exist');
 new Function(inlineScript);

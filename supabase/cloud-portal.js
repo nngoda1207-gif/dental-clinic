@@ -12,6 +12,7 @@ import { preparePatientImport, importNewPatients } from './patient-import-servic
 
 const CONFIG_KEY = 'dcos_supabase_public_config_v1';
 let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null, localBackupExported = false;
+let recoveryListenerClient = null;
 const el = (tag, attrs = {}, html = '') => {
   const n = document.createElement(tag);
   Object.entries(attrs).forEach(([k, v]) => k === 'class' ? n.className = v : n.setAttribute(k, v));
@@ -64,21 +65,22 @@ const $ = id => document.getElementById(id);
 const status = message => { $('dcos-cloud-status').textContent = message || ''; };
 const open = () => panel.classList.add('open');
 const close = () => panel.classList.remove('open');
-launch.addEventListener('click', () => { open(); // Supabase emits PASSWORD_RECOVERY after a valid recovery link is opened.
-try {
-  const configured = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
-  if (configured?.url && configured?.publishableKey) {
-    configureSupabase({ url: configured.url, publishableKey: configured.publishableKey });
-    getSupabaseClient().auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        $('dcos-password-recovery').hidden = false;
-        $('dcos-cloud-auth').hidden = true;
-        status('تم التحقق من رابط الاستعادة. أدخل كلمة مرور جديدة.');
-        open();
-      }
-    });
-  }
-} catch (e) { status(e.message || 'تعذر تهيئة استعادة كلمة المرور.'); }
+function bindPasswordRecovery() {
+  const client = getSupabaseClient();
+  if (recoveryListenerClient === client) return;
+  recoveryListenerClient = client;
+  client.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      $('dcos-password-recovery').hidden = false;
+      $('dcos-cloud-auth').hidden = true;
+      status('تم التحقق من رابط الاستعادة. أدخل كلمة مرور جديدة.');
+      open();
+    }
+  });
+}
+
+launch.addEventListener('click', () => { open(); });
+
 $('dcos-save-new-password').addEventListener('click', async () => {
   const button = $('dcos-save-new-password');
   try {
@@ -92,8 +94,6 @@ $('dcos-save-new-password').addEventListener('click', async () => {
   } catch (e) { status(e.message || 'تعذر تحديث كلمة المرور.'); }
   finally { button.disabled = false; }
 });
-
-restoreConfig(); });
 $('dcos-cloud-close').addEventListener('click', close);
 panel.addEventListener('click', e => { if (e.target === panel) close(); });
 
@@ -107,6 +107,7 @@ function configure() {
   const url = $('dcos-sb-url').value.trim();
   const publishableKey = $('dcos-sb-key').value.trim();
   configureSupabase({ url, publishableKey });
+  bindPasswordRecovery();
   localStorage.setItem(CONFIG_KEY, JSON.stringify({ url, publishableKey }));
 }
 $('dcos-save-config').addEventListener('click', () => {
@@ -312,3 +313,10 @@ function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c =>
 function escapeAttr(value) { return escapeHtml(value); }
 
 restoreConfig();
+try {
+  const configured = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
+  if (configured?.url && configured?.publishableKey) {
+    configureSupabase({ url: configured.url, publishableKey: configured.publishableKey });
+    bindPasswordRecovery();
+  }
+} catch (e) { status(e.message || 'تعذر تهيئة الاتصال السحابي.'); }

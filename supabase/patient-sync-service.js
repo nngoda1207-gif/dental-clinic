@@ -15,7 +15,8 @@ import {
   listAllRemotePatients,
   createRemotePatient,
   updateRemotePatient,
-  archiveRemotePatient
+  archiveRemotePatient,
+  subscribeToRemotePatientChanges
 } from './patient-repository.js';
 
 const WRITE_ROLES = new Set(['owner', 'manager', 'dentist', 'reception']);
@@ -74,5 +75,17 @@ export async function archivePatientInAssignedBranch({ branchId, patientId } = {
     clinicId: scope.clinicId,
     branchId: scope.branchId,
     patientId
+  });
+}
+
+
+/** Subscribe only after validating active membership and explicit branch assignment. */
+export async function watchPatientsForAssignedBranch({ branchId, onChange, onStatus } = {}) {
+  const scope = await resolveScope(branchId);
+  return subscribeToRemotePatientChanges({
+    clinicId: scope.clinicId,
+    branchId: scope.branchId,
+    onChange,
+    onStatus
   });
 }

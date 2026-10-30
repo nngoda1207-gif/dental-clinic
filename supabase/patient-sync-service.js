@@ -95,9 +95,9 @@ export async function watchPatientsForAssignedBranch({ branchId, onChange, onSta
 
 
 /** Idempotent demographics-only upsert for a local patient with a stable ID. */
-export async function upsertPatientInAssignedBranch({ branchId, localId, fileNo, patient } = {}) {
+export async function upsertPatientInAssignedBranch({ branchId, localId, fileNo, patient, expectedUpdatedAt } = {}) {
   const scope = await resolveScope(branchId, { write: true });
   return upsertRemotePatientFromLocal({
-    clinicId: scope.clinicId, branchId: scope.branchId, localId, fileNo, patient
+    clinicId: scope.clinicId, branchId: scope.branchId, localId, fileNo, patient, expectedUpdatedAt
   });
 }

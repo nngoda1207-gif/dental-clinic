@@ -33,6 +33,7 @@ function toLocalPatient(row) {
   return {
     id: row.id,
     remoteId: row.id,
+    sourceLocalId: row.source_local_id || '',
     no: row.file_no,
     name: row.full_name,
     en: row.english_name || '',

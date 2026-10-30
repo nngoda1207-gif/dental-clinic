@@ -153,7 +153,12 @@ window.addEventListener('dcos-oauth-authenticated', async () => {
   } catch (e) { status(friendlyCloudError(e, 'تم الدخول لكن تعذر تحميل بيانات العيادة.')); }
 });
 window.addEventListener('dcos-oauth-error', e => status(e.detail || 'تعذر إكمال تسجيل الدخول باستخدام GitHub.'));
-$('dcos-sb-github').addEventListener('click', async () => {
+async function startGitHubSignIn() {
+  const button = $('dcos-sb-github');
+  if (button.dataset.busy === '1') return;
+  button.dataset.busy = '1';
+  button.disabled = true;
+  status('تم الضغط على GitHub. جارٍ تجهيز الاتصال…');
   try {
     configure();
     status('جارٍ فتح GitHub لتأكيد هويتك…');
@@ -161,8 +166,28 @@ $('dcos-sb-github').addEventListener('click', async () => {
     if (!window.Capacitor?.isNativePlatform?.()) {
       status('جارٍ تحويلك إلى GitHub. بعد الموافقة ستعود إلى التطبيق تلقائيًا.');
     }
-  } catch (e) { status(friendlyCloudError(e, 'تعذر بدء تسجيل الدخول باستخدام GitHub.')); }
-});
+  } catch (e) {
+    status(friendlyCloudError(e, 'تعذر بدء تسجيل الدخول باستخدام GitHub.'));
+  } finally {
+    button.disabled = false;
+    button.dataset.busy = '0';
+  }
+}
+// Use a direct DOM property handler plus delegated pointer/click fallbacks.
+// Some Android WebView builds fail to dispatch listeners attached to dynamically
+// inserted controls after a view transition; the capture handler keeps the
+// cloud auth action reachable and gives immediate visible feedback.
+$('dcos-sb-github').onclick = startGitHubSignIn;
+panel.addEventListener('click', event => {
+  const target = event.target?.closest?.('#dcos-sb-github');
+  if (target && target.dataset.busy !== '1') startGitHubSignIn();
+}, true);
+panel.addEventListener('pointerup', event => {
+  const target = event.target?.closest?.('#dcos-sb-github');
+  if (target && target.dataset.busy !== '1') {
+    status('تم استقبال الضغط على GitHub…');
+  }
+}, true);
 $('dcos-sb-login').addEventListener('click', async () => {
   try {
     configure();

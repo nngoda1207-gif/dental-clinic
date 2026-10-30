@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'index.html'
+      - 'supabase/**'
       - 'package.json'
       - 'package-lock.json'
       - 'capacitor.config.json'

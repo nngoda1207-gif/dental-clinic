@@ -1,10 +1,9 @@
 /*
  * Supabase Auth adapter prototype for Dental Clinic OS.
  *
- * This module is intentionally NOT wired into index.html yet. Integrate only after
- * the schema and RLS policies pass supabase/TEST_PLAN.md. The app currently uses
- * a single localStorage object, so enabling remote writes before the data-access
- * layer and per-role RLS are ready could expose patient data.
+ * Used by the isolated cloud portal for email/password authentication and clinic
+ * membership lookup. It does not replace the app's local login or sync the local
+ * D object. Remote data access remains limited to the guarded prototype services.
  *
  * Configure the URL and publishable/anon key through a deployment-time config.
  * Never place a service_role/secret key here.
@@ -43,7 +42,7 @@ export function getSupabaseClient() {
 export async function signUpWithEmail(email, password) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
   const rawPassword = String(password || '');
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalizedEmail)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
     throw new Error('أدخل بريدًا إلكترونيًا صحيحًا.');
   }
   if (rawPassword.length < 8) {
@@ -59,7 +58,7 @@ export async function signUpWithEmail(email, password) {
 
 export async function resendSignupConfirmation(email) {
   const normalizedEmail = String(email || '').trim().toLowerCase();
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalizedEmail)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
     throw new Error('أدخل البريد الإلكتروني الذي سجلت به.');
   }
   const { data, error } = await getSupabaseClient().auth.resend({

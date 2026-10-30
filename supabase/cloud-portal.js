@@ -461,8 +461,7 @@ async function flushPatientSyncQueue() {
     }
     localStorage.setItem(PATIENT_QUEUE_KEY, JSON.stringify(remaining));
     localStorage.setItem(PATIENT_CONFLICTS_KEY, JSON.stringify(conflicts));
-    if (synced) status('تمت مزامنة ' + synced + ' سجل مريض أساسي إلى السحابة.');
-    else if (blocked) status('تم إيقاف ' + blocked + ' سجلات متعارضة ونقلها لقائمة المراجعة؛ لم يتم استبدال أي مريض موجود.');
+    if (synced || blocked) status((synced ? 'تمت مزامنة ' + synced + ' سجل مريض أساسي. ' : '') + (blocked ? 'تم إيقاف ' + blocked + ' سجلات متعارضة ونقلها لقائمة المراجعة؛ لم يتم استبدال أي مريض موجود.' : ''));
   } finally {
     patientQueueFlushInFlight = false;
   }

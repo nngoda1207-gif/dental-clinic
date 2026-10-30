@@ -45,9 +45,9 @@ jobs:
           const path = 'android/app/build.gradle';
           let gradle = fs.readFileSync(path, 'utf8');
           const code = 1000 + Number(process.env.ANDROID_VERSION_CODE || 1);
-          if (!/versionCode\\s+\\d+/.test(gradle)) throw new Error('Could not find Android versionCode');
-          gradle = gradle.replace(/versionCode\\s+\\d+/, 'versionCode ' + code);
-          gradle = gradle.replace(/versionName\\s+"[^"]*"/, 'versionName "1.0.' + process.env.ANDROID_VERSION_CODE + '"');
+          if (!/versionCode\s+\d+/.test(gradle)) throw new Error('Could not find Android versionCode');
+          gradle = gradle.replace(/versionCode\s+\d+/, 'versionCode ' + code);
+          gradle = gradle.replace(/versionName\s+"[^"]*"/, 'versionName "1.0.' + process.env.ANDROID_VERSION_CODE + '"');
           fs.writeFileSync(path, gradle);
           console.log('Android versionCode=' + code);
           NODE

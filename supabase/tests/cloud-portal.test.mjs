@@ -27,3 +27,7 @@ assert.ok(portal.includes('dcos-save-new-password'), 'Recovery session must expo
 assert.ok(portal.includes("localStorage.getItem('dcos1')"), 'Local data read must be user-triggered, not automatic');
 assert.ok(!portal.includes('service_role') && !portal.includes('secret key'), 'Browser integration must not use privileged server keys');
 console.log('Cloud portal integration safety checks passed.');
+
+assert.ok(portal.includes('كل شخص له حساب مستقل'), 'Portal must explain that every staff member has a separate identity');
+assert.ok(portal.includes('دعوات الموظفين وإضافة حساباتهم بأمان لم تُفعّل بعد'), 'Portal must not imply staff invitations are already available');
+assert.ok(!portal.includes('استخدم نفس البريد الإلكتروني وكلمة المرور على كل أجهزة العيادة'), 'Portal must never instruct all devices to share one login');

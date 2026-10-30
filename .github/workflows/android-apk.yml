@@ -56,10 +56,10 @@ jobs:
           path = Path("android/app/build.gradle")
           source = path.read_text()
           version_code = int(os.environ["VERSION_CODE"])
-          updated, count = re.subn(r"versionCode\\s+\\d+", f"versionCode {version_code}", source, count=1)
+          updated, count = re.subn(r"versionCode\s+\d+", f"versionCode {version_code}", source, count=1)
           if count != 1:
               raise SystemExit("Could not update Android versionCode.")
-          updated, count = re.subn(r'versionName\\s+"[^"]+"', f'versionName "1.0.{version_code}"', updated, count=1)
+          updated, count = re.subn(r'versionName\s+"[^"]+"', f'versionName "1.0.{version_code}"', updated, count=1)
           if count != 1:
               raise SystemExit("Could not update Android versionName.")
           path.write_text(updated)

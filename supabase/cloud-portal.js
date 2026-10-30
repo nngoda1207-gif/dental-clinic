@@ -29,7 +29,7 @@ style.textContent = `
 #dcos-cloud-panel{position:fixed;inset:0;z-index:100;background:#0008;display:none;align-items:center;justify-content:center;padding:12px;font-family:Cairo, sans-serif}
 #dcos-cloud-panel.open{display:flex}
 #dcos-cloud-card{background:var(--cd,#fff);color:var(--tx,#14262e);width:min(680px,100%);max-height:92vh;overflow:auto;border-radius:14px;padding:18px;border:1px solid var(--bd,#d8e2e0);direction:rtl}
-#dcos-cloud-card input,#dcos-cloud-card select{width:100%;padding:9px;margin:4px 0 10px;border:1px solid var(--bd,#d8e2e0);border-radius:8px;background:var(--bg,#f3f6f5);color:inherit;font:inherit}
+#dcos-cloud-card input,#dcos-cloud-card select,#dcos-cloud-card textarea{width:100%;padding:9px;margin:4px 0 10px;border:1px solid var(--bd,#d8e2e0);border-radius:8px;background:var(--bg,#f3f6f5);color:inherit;font:inherit}
 #dcos-cloud-card button{font:inherit;border-radius:8px;padding:8px 13px;margin:3px;cursor:pointer;border:1px solid var(--ac,#1f8a80)}
 #dcos-cloud-card .primary{background:var(--ac,#1f8a80);color:white}
 #dcos-cloud-card .muted{color:var(--mu,#5b6f77);font-size:13px}
@@ -181,6 +181,10 @@ async function loadWorkspace() {
       <label>اسم الفرع الرئيسي<input id="dcos-new-branch" maxlength="160" value="الفرع الرئيسي"></label>
       <button class="primary" id="dcos-create-clinic" type="button">إنشاء العيادة السحابية</button>`;
     $('dcos-create-clinic').addEventListener('click', createClinic);
+    const joinBox = el('div', { class: 'cloud-row' });
+    joinBox.innerHTML = '<h3>لديك دعوة من صاحب العيادة؟</h3><p class="muted">أنشئ حسابك الشخصي أو سجّل الدخول به أولًا، ثم أدخل كود الدعوة الذي وصلك من صاحب العيادة.</p><label>كود الدعوة<input id="dcos-staff-invite-code" autocomplete="off" spellcheck="false" placeholder="الصق كود الدعوة هنا"></label><button id="dcos-redeem-staff-invite" type="button">قبول الدعوة والانضمام للعيادة</button>';
+    host.append(joinBox);
+    $('dcos-redeem-staff-invite').addEventListener('click', redeemStaffInvite);
     status('الحساب جديد ولم يتم ربطه بعيادة بعد.');
     return;
   }
@@ -197,12 +201,68 @@ async function loadWorkspace() {
     <label>الفرع السحابي<select id="dcos-cloud-branch">${branches.map(b => `<option value="${escapeAttr(b.id)}">${escapeHtml(b.name)}</option>`).join('')}</select></label>
     <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
     <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
+  if (membership.role === 'owner') {
+    const inviteBox = el('section', { class: 'cloud-row' });
+    inviteBox.innerHTML = '<h3>إضافة موظف للعيادة</h3><p class="muted">أنشئ دعوة مرتبطة بإيميل الموظف ووظيفته وفرعه. الكود يستخدم مرة واحدة وصلاحيته 72 ساعة.</p><label>إيميل الموظف<input id="dcos-invite-email" type="email" autocomplete="off" placeholder="staff@example.com"></label><label>الوظيفة<select id="dcos-invite-role"><option value="dentist">طبيب</option><option value="nurse">تمريض</option><option value="reception">استقبال</option><option value="accountant">حسابات</option><option value="manager">مدير</option><option value="invmgr">مسؤول مخزون</option><option value="readonly">قراءة فقط</option></select></label><label>الفرع<select id="dcos-invite-branch">' + branches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('') + '</select></label><button class="primary" id="dcos-create-staff-invite" type="button">إنشاء كود دعوة</button><textarea id="dcos-created-staff-invite" rows="2" readonly placeholder="سيظهر كود الدعوة هنا"></textarea><p class="muted">أرسل الكود للموظف عبر قناة خاصة ولا تشاركه علنًا.</p>';
+    host.prepend(inviteBox);
+    $('dcos-create-staff-invite').addEventListener('click', createStaffInvite);
+  }
   $('dcos-load-patients').addEventListener('click', loadPatients);
   $('dcos-cloud-branch').addEventListener('change', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
   flushPatientSyncQueue();
 }
+
+async function createStaffInvite() {
+  const button = $('dcos-create-staff-invite');
+  const output = $('dcos-created-staff-invite');
+  try {
+    const email = $('dcos-invite-email').value.trim().toLowerCase();
+    const role = $('dcos-invite-role').value;
+    const branchId = $('dcos-invite-branch').value;
+    if (!email || !branchId) throw new Error('أدخل إيميل الموظف واختر الفرع.');
+    button.disabled = true;
+    status('جارٍ إنشاء دعوة الموظف…');
+    const { data, error } = await getSupabaseClient().rpc('create_clinic_invitation', {
+      p_email: email, p_role: role, p_branch_id: branchId, p_expires_hours: 72
+    });
+    if (error) throw error;
+    if (typeof data !== 'string' || !/^[0-9a-f]{64}$/i.test(data)) throw new Error('لم يرجع الخادم كود دعوة صالحًا.');
+    output.value = data;
+    status('تم إنشاء كود دعوة لمرة واحدة. أرسله للموظف، ويجب أن يسجل بنفس الإيميل المحدد.');
+  } catch (e) {
+    const msg = String(e?.message || '');
+    status(/does not exist|Could not find the function|schema cache/i.test(msg)
+      ? 'ميزة دعوات الموظفين تحتاج تطبيق تحديث قاعدة البيانات رقم 022 على مشروع Supabase أولًا.'
+      : (msg || 'تعذر إنشاء دعوة الموظف.'));
+  } finally { button.disabled = false; }
+}
+
+async function redeemStaffInvite() {
+  const button = $('dcos-redeem-staff-invite');
+  try {
+    const token = $('dcos-staff-invite-code').value.trim();
+    if (!/^[0-9a-f]{64}$/i.test(token)) throw new Error('كود الدعوة غير مكتمل. الصق الكود كاملًا كما وصلك.');
+    button.disabled = true;
+    status('جارٍ التحقق من الدعوة وربط حسابك بالعيادة…');
+    const { error } = await getSupabaseClient().rpc('redeem_clinic_invitation', { p_token: token });
+    if (error) throw error;
+    $('dcos-staff-invite-code').value = '';
+    status('تم قبول الدعوة وربط حسابك بالعيادة والفرع. جارٍ تحميل الصلاحيات…');
+    await loadWorkspace();
+  } catch (e) {
+    const msg = String(e?.message || '');
+    const friendly = msg.includes('INVITATION_EMAIL_MISMATCH') ? 'هذا الكود مخصص لبريد مختلف. سجّل الدخول بالإيميل الذي أرسل إليه صاحب العيادة الدعوة.'
+      : msg.includes('INVITATION_EXPIRED') ? 'انتهت صلاحية الدعوة. اطلب من صاحب العيادة كودًا جديدًا.'
+      : msg.includes('INVITATION_ALREADY_USED') ? 'تم استخدام هذا الكود من قبل. اطلب دعوة جديدة.'
+      : msg.includes('INVALID_INVITATION_CODE') ? 'كود الدعوة غير صحيح.'
+      : /does not exist|Could not find the function|schema cache/i.test(msg) ? 'قاعدة بيانات العيادة تحتاج تطبيق التحديث رقم 022 أولًا.'
+      : (msg || 'تعذر قبول الدعوة.');
+    status(friendly);
+  } finally { button.disabled = false; }
+}
+
 async function createClinic() {
   try {
     const name = $('dcos-new-clinic').value.trim();

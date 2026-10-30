@@ -40,12 +40,47 @@ export function getSupabaseClient() {
   return client;
 }
 
+export async function signUpWithEmail(email, password) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const rawPassword = String(password || '');
+  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalizedEmail)) {
+    throw new Error('أدخل بريدًا إلكترونيًا صحيحًا.');
+  }
+  if (rawPassword.length < 8) {
+    throw new Error('كلمة المرور يجب ألا تقل عن 8 أحرف.');
+  }
+  const { data, error } = await getSupabaseClient().auth.signUp({
+    email: normalizedEmail,
+    password: rawPassword
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function resendSignupConfirmation(email) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalizedEmail)) {
+    throw new Error('أدخل البريد الإلكتروني الذي سجلت به.');
+  }
+  const { data, error } = await getSupabaseClient().auth.resend({
+    type: 'signup',
+    email: normalizedEmail
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function signInWithPassword(email, password) {
-  const { data, error } = await getSupabaseClient().auth.signInWithPassword({
-    email: String(email || '').trim(),
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: String(email || '').trim().toLowerCase(),
     password: String(password || '')
   });
   if (error) throw error;
+  if (!data.user?.email_confirmed_at && !data.user?.confirmed_at) {
+    await supabase.auth.signOut();
+    throw new Error('يجب تأكيد البريد الإلكتروني من الرسالة قبل تسجيل الدخول.');
+  }
   return data;
 }
 

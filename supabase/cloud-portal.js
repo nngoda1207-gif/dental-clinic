@@ -102,6 +102,7 @@ $('dcos-sb-signup').addEventListener('click', async () => {
 });
 $('dcos-sb-resend').addEventListener('click', async () => {
   try {
+    configure();
     const email = pendingConfirmationEmail || $('dcos-sb-email').value.trim().toLowerCase();
     if (!email) throw new Error('أدخل البريد الإلكتروني أولًا.');
     status('جارٍ إعادة إرسال رسالة التأكيد…');

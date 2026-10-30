@@ -12,6 +12,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 let client = null;
+let clientConfig = null;
 
 export function configureSupabase({ url, publishableKey }) {
   if (!url || !publishableKey) {
@@ -20,6 +21,8 @@ export function configureSupabase({ url, publishableKey }) {
   if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) {
     throw new Error('Unexpected Supabase project URL.');
   }
+  if (client && clientConfig?.url === url && clientConfig?.publishableKey === publishableKey) return client;
+  clientConfig = { url, publishableKey };
   client = createClient(url, publishableKey, {
     auth: {
       persistSession: true,

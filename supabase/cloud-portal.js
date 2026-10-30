@@ -11,7 +11,7 @@ import { listPatientsForAssignedBranch, listAllPatientsForAssignedBranch } from 
 import { preparePatientImport, importNewPatients } from './patient-import-service.js';
 
 const CONFIG_KEY = 'dcos_supabase_public_config_v1';
-let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null;
+let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null, localBackupExported = false;
 const el = (tag, attrs = {}, html = '') => {
   const n = document.createElement(tag);
   Object.entries(attrs).forEach(([k, v]) => k === 'class' ? n.className = v : n.setAttribute(k, v));
@@ -187,10 +187,10 @@ function beginPatientImport() {
     importPreview = null;
     const options = activeBranches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('');
     host.hidden = false;
-    host.innerHTML = '<h3>ربط الفروع المحلية بالسحابية</h3><p class="muted">اختر فرعًا سحابيًا لكل فرع محلي. لا يتم رفع بيانات في هذه الخطوة.</p>' +
+    host.innerHTML = '<h3>نسخة احتياطية قبل النقل</h3><p class="muted">بيانات العيادة المحلية تشمل معلومات مرضى حساسة. نزّل نسخة JSON كاملة واحفظها في مكان آمن قبل متابعة الاستيراد. التنزيل لا يرفع النسخة إلى السحابة.</p><button class="primary" id="dcos-export-local-backup" type="button">تنزيل النسخة الاحتياطية المحلية</button><p id="dcos-backup-status" class="muted">يجب تنزيل النسخة الاحتياطية قبل معاينة الاستيراد.</p><h3>ربط الفروع المحلية بالسحابية</h3><p class="muted">اختر فرعًا سحابيًا لكل فرع محلي. لا يتم رفع بيانات في هذه الخطوة.</p>' +
       localImportSnapshot.branches.map((b,i) => '<label>' + escapeHtml(b.name || ('فرع ' + (i+1))) + '<select data-local-branch="' + escapeAttr(String(b.id ?? '')) + '"><option value="">اختر الفرع السحابي</option>' + options + '</select></label>').join('') +
       '<button class="primary" id="dcos-preview-patient-import" type="button">معاينة الاستيراد</button><div id="dcos-import-preview-result" class="muted"></div>';
-    $('dcos-preview-patient-import').addEventListener('click', previewPatientImportNow);
+    $('dcos-preview-patient-import').disabled = true;\n    $('dcos-export-local-backup').addEventListener('click', exportLocalBackup);\n    $('dcos-preview-patient-import').addEventListener('click', previewPatientImportNow);
     // A preview is valid only for the exact branch mapping used to create it.
     // Invalidate it immediately if any mapping changes, preventing confirmation
     // of an import against a stale or different branch selection.

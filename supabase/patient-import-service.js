@@ -86,7 +86,7 @@ export async function importNewPatients({ localState, branchMap, preview } = {})
     try {
       const branchId = branchMap[String(patient.br ?? patient.branch_id ?? '')];
       const fileNo = String(patient.no ?? patient.file_no ?? '').trim();
-      await createPatientInAssignedBranch({ branchId, fileNo, patient });
+      await createPatientInAssignedBranch({ branchId, fileNo, patient, localId: row.localId });
       results.push({ localId: row.localId, state: 'imported' });
     } catch (error) {
       results.push({ localId: row.localId, state: 'failed', reason: error?.message || 'فشل رفع السجل.' });

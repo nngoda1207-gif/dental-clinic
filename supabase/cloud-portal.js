@@ -13,6 +13,7 @@ import { preparePatientImport, importNewPatients } from './patient-import-servic
 const CONFIG_KEY = 'dcos_supabase_public_config_v1';
 const BRANCH_MAP_KEY = 'dcos_supabase_branch_map_v1';
 const PATIENT_QUEUE_KEY = 'dcos_patient_sync_queue_v1';
+const PATIENT_CONFLICTS_KEY = 'dcos_patient_sync_conflicts_v1';
 let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null, localBackupExported = false, backupExportStarted = false;
 let recoveryListenerClient = null, patientRealtimeUnsubscribe = null, patientRefreshInFlight = false, patientQueueFlushInFlight = false;
 const el = (tag, attrs = {}, html = '') => {
@@ -384,7 +385,7 @@ function enqueueLocalPatientForSync(patient) {
   const index = queue.findIndex(x => x.id === item.id && x.localBranchId === item.localBranchId);
   if (index >= 0) queue[index] = item;
   else queue.push(item);
-  localStorage.setItem(PATIENT_QUEUE_KEY, JSON.stringify(queue.slice(-1000)));
+  localStorage.setItem(PATIENT_QUEUE_KEY, JSON.stringify(queue));
   flushPatientSyncQueue();
 }
 async function flushPatientSyncQueue() {
@@ -397,6 +398,7 @@ async function flushPatientSyncQueue() {
     catch { return {}; }
   })();
   let synced = 0, blocked = 0;
+  const conflicts = (() => { try { const x = JSON.parse(localStorage.getItem(PATIENT_CONFLICTS_KEY) || '[]'); return Array.isArray(x) ? x : []; } catch { return []; } })();
   try {
     for (const item of queue) {
       const branchId = branchMap[String(item.localBranchId)];
@@ -410,13 +412,16 @@ async function flushPatientSyncQueue() {
         });
         synced++;
       } catch (error) {
-        remaining.push(item);
-        if (/رقم الملف مستخدم بالفعل/.test(error?.message || '')) blocked++;
+        if (/رقم الملف مستخدم بالفعل/.test(error?.message || '')) {
+          conflicts.push({ id: item.id, no: item.no, localBranchId: item.localBranchId, reason: error.message, detectedAt: new Date().toISOString() });
+          blocked++;
+        } else remaining.push(item);
       }
     }
     localStorage.setItem(PATIENT_QUEUE_KEY, JSON.stringify(remaining));
+    localStorage.setItem(PATIENT_CONFLICTS_KEY, JSON.stringify(conflicts));
     if (synced) status('تمت مزامنة ' + synced + ' سجل مريض أساسي إلى السحابة.');
-    else if (blocked) status('توجد ' + blocked + ' سجلات تحتاج ربط فرع أو مراجعة تعارض قبل المزامنة.');
+    else if (blocked) status('تم إيقاف ' + blocked + ' سجلات متعارضة ونقلها لقائمة المراجعة؛ لم يتم استبدال أي مريض موجود.');
   } finally {
     patientQueueFlushInFlight = false;
   }

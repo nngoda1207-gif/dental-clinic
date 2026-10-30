@@ -53,7 +53,7 @@ assert.match(mapping, /Do not automatically merge local `dcos1` blobs/, 'migrati
 
 console.log('Patient repository static safety checks passed.');
 
-assert.match(repo, /export function subscribeToRemotePatientChanges\\b/, 'realtime subscription must be exported');
+assert.match(repo, /export function subscribeToRemotePatientChanges\b/, 'realtime subscription must be exported');
 assert.match(repo, /postgres_changes/, 'live updates must subscribe to Supabase Postgres changes');
 assert.match(repo, /filter: 'branch_id=eq\.' \+ branchId/, 'live updates must be restricted to the selected branch');
 assert.match(repo, /removeChannel\(channel\)/, 'live update subscriptions must be removable');

@@ -54,6 +54,18 @@ export async function listRemoteAppointments({ clinicId, branchId, from, to, lim
   if (error) throw error;
   return data || [];
 }
+export async function listRemoteAppointmentEvents({ clinicId, branchId, appointmentId, limit = 100 } = {}) {
+  requireUuid(clinicId, 'Remote clinic ID');
+  requireUuid(branchId, 'Remote branch ID');
+  requireUuid(appointmentId, 'Remote appointment ID');
+  const { data, error } = await getSupabaseClient().from('clinic_appointment_events')
+    .select('id,clinic_id,branch_id,appointment_id,actor_user_id,event_type,old_status,new_status,details,created_at')
+    .eq('clinic_id', clinicId).eq('branch_id', branchId).eq('appointment_id', appointmentId)
+    .order('created_at', { ascending: true })
+    .limit(Math.max(1, Math.min(Number(limit) || 100, 500)));
+  if (error) throw error;
+  return data || [];
+}
 export async function createRemoteAppointment({ clinicId, branchId, patientId, localId, appointment } = {}) {
   requireUuid(clinicId, 'Remote clinic ID'); requireUuid(branchId, 'Remote branch ID');
   requireUuid(patientId, 'Remote patient ID');

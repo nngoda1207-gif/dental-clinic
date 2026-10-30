@@ -7,12 +7,12 @@ import {
   configureSupabase, getSupabaseClient, signInWithPassword, signUpWithPassword, requestPasswordReset, updatePassword,
   signOutSupabase, getCurrentClinicMembership, listAssignedRemoteBranches
 } from './auth-adapter.js';
-import { listPatientsForAssignedBranch, listAllPatientsForAssignedBranch } from './patient-sync-service.js';
+import { listPatientsForAssignedBranch, listAllPatientsForAssignedBranch, watchPatientsForAssignedBranch } from './patient-sync-service.js';
 import { preparePatientImport, importNewPatients } from './patient-import-service.js';
 
 const CONFIG_KEY = 'dcos_supabase_public_config_v1';
 let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null, localBackupExported = false, backupExportStarted = false;
-let recoveryListenerClient = null;
+let recoveryListenerClient = null, patientRealtimeUnsubscribe = null, patientRefreshInFlight = false;
 const el = (tag, attrs = {}, html = '') => {
   const n = document.createElement(tag);
   Object.entries(attrs).forEach(([k, v]) => k === 'class' ? n.className = v : n.setAttribute(k, v));
@@ -149,6 +149,7 @@ $('dcos-sb-reset').addEventListener('click', async () => {
 $('dcos-sb-logout').addEventListener('click', async () => {
   try {
     await signOutSupabase();
+    if (patientRealtimeUnsubscribe) { patientRealtimeUnsubscribe(); patientRealtimeUnsubscribe = null; }
     $('dcos-cloud-workspace').hidden = true;
     $('dcos-cloud-workspace').innerHTML = '';
     $('dcos-sb-logout').hidden = true;
@@ -185,6 +186,7 @@ async function loadWorkspace() {
     <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button">تحميل مرضى الفرع</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
     <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
   $('dcos-load-patients').addEventListener('click', loadPatients);
+  $('dcos-cloud-branch').addEventListener('change', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
 }
@@ -308,15 +310,39 @@ async function confirmPatientImport() {
 async function loadPatients() {
   const branchId = $('dcos-cloud-branch').value;
   const host = $('dcos-cloud-patients');
+  if (!branchId) return;
+  if (patientRealtimeUnsubscribe) { patientRealtimeUnsubscribe(); patientRealtimeUnsubscribe = null; }
   host.textContent = 'جارٍ تحميل سجلات المرضى من Supabase…';
   try {
     const patients = await listPatientsForAssignedBranch({ branchId, limit: 500 });
-    host.innerHTML = patients.length ? patients.map(p => `<div class="cloud-row"><b>${escapeHtml(p.name)}</b><div>${escapeHtml(p.no)} · ${escapeHtml(p.ph)} · ${escapeHtml(p.st)}</div></div>`).join('') : 'لا توجد سجلات مرضى في هذا الفرع بعد.';
-    status(`تم تحميل ${patients.length} سجلًا من Supabase. لم يتم تعديل البيانات المحلية.`);
+    renderCloudPatients(patients, host);
+    status(`تم تحميل ${patients.length} سجلًا سحابيًا. جارٍ تفعيل متابعة التغييرات لهذا الفرع.`);
+    patientRealtimeUnsubscribe = await watchPatientsForAssignedBranch({
+      branchId,
+      onChange: () => refreshPatientsAfterRealtime(branchId),
+      onStatus: state => {
+        if (state === 'SUBSCRIBED') status('المتابعة اللحظية لمرضى هذا الفرع متصلة.');
+        else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') status('المتابعة اللحظية غير متاحة حاليًا؛ استخدم زر تحميل المرضى للتحديث اليدوي.');
+      }
+    });
   } catch (e) {
-    host.textContent = 'تعذر تحميل المرضى: ' + (e.message || 'خطأ غير معروف');
-    status('راجع صلاحيات الحساب وسياسات RLS وإعدادات المشروع.');
+    host.textContent = 'تعذر تحميل/متابعة المرضى: ' + (e.message || 'خطأ غير معروف');
+    status('راجع صلاحيات الحساب وسياسات RLS وإعدادات Realtime في Supabase.');
   }
+}
+function renderCloudPatients(patients, host) {
+  host.innerHTML = patients.length ? patients.map(p => `<div class="cloud-row"><b>${escapeHtml(p.name)}</b><div>${escapeHtml(p.no)} · ${escapeHtml(p.ph)} · ${escapeHtml(p.st)}</div></div>`).join('') : 'لا توجد سجلات مرضى في هذا الفرع بعد.';
+}
+async function refreshPatientsAfterRealtime(branchId) {
+  if (patientRefreshInFlight || $('dcos-cloud-workspace').hidden || $('dcos-cloud-branch')?.value !== branchId) return;
+  patientRefreshInFlight = true;
+  try {
+    const patients = await listPatientsForAssignedBranch({ branchId, limit: 500 });
+    if ($('dcos-cloud-branch')?.value === branchId) renderCloudPatients(patients, $('dcos-cloud-patients'));
+    status('تم تحديث قائمة المرضى بعد وصول تغيير من السحابة.');
+  } catch (e) {
+    status('وصل إشعار تغيير، لكن تعذر إعادة تحميل القائمة: ' + (e.message || 'خطأ غير معروف'));
+  } finally { patientRefreshInFlight = false; }
 }
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escapeAttr(value) { return escapeHtml(value); }

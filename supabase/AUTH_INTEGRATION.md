@@ -15,6 +15,20 @@ Before connecting it to the UI, complete these gates:
 
 The module's basic field mapping is intentionally incomplete. It must not be described as production sync or enabled in the live UI yet.
 
+## Owner email signup and confirmation
+
+The isolated cloud portal now exposes owner self-signup through Supabase Auth, a resend-confirmation action, and a sign-in check that rejects users whose email is not confirmed. The signup request intentionally uses the Supabase project's configured Site URL; after clicking the confirmation link, the user returns to the app and signs in with the same email/password.
+
+Before real use, the Supabase project owner must:
+- Enable email confirmations under Authentication settings.
+- Configure a working SMTP provider for the clinic's recipient addresses and review the email template.
+- Set the Auth Site URL and allowed redirect URLs appropriately for the deployment.
+- Test a new address, click the received confirmation link, then sign in again from the app.
+
+A successful GitHub build or local code test does not prove that Supabase delivered an email. Live delivery and post-confirmation login still require the actual project URL, public key, and a test mailbox. Do not share any service-role or secret key.
+
+Self-signup is for creating a new clinic owner account only. Staff invitation/provisioning and linking existing local nurse accounts to Supabase Auth are not implemented yet.
+
 ## Why authentication is separate from local app users
 The current app's `D.users` entries contain local password hashes and recovery/session data. These are not valid Supabase Auth credentials. Do not copy those values into `auth.users`, and do not let a browser client assign its own role or branch membership.
 

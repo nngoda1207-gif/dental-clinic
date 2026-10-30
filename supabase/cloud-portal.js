@@ -185,12 +185,15 @@ function beginPatientImport() {
     localImportSnapshot = JSON.parse(raw);
     if (!Array.isArray(localImportSnapshot.patients) || !Array.isArray(localImportSnapshot.branches)) throw new Error('بيانات المرضى أو الفروع المحلية غير مكتملة.');
     importPreview = null;
+    localBackupExported = false;
     const options = activeBranches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('');
     host.hidden = false;
     host.innerHTML = '<h3>نسخة احتياطية قبل النقل</h3><p class="muted">بيانات العيادة المحلية تشمل معلومات مرضى حساسة. نزّل نسخة JSON كاملة واحفظها في مكان آمن قبل متابعة الاستيراد. التنزيل لا يرفع النسخة إلى السحابة.</p><button class="primary" id="dcos-export-local-backup" type="button">تنزيل النسخة الاحتياطية المحلية</button><p id="dcos-backup-status" class="muted">يجب تنزيل النسخة الاحتياطية قبل معاينة الاستيراد.</p><h3>ربط الفروع المحلية بالسحابية</h3><p class="muted">اختر فرعًا سحابيًا لكل فرع محلي. لا يتم رفع بيانات في هذه الخطوة.</p>' +
       localImportSnapshot.branches.map((b,i) => '<label>' + escapeHtml(b.name || ('فرع ' + (i+1))) + '<select data-local-branch="' + escapeAttr(String(b.id ?? '')) + '"><option value="">اختر الفرع السحابي</option>' + options + '</select></label>').join('') +
       '<button class="primary" id="dcos-preview-patient-import" type="button">معاينة الاستيراد</button><div id="dcos-import-preview-result" class="muted"></div>';
-    $('dcos-preview-patient-import').disabled = true;\n    $('dcos-export-local-backup').addEventListener('click', exportLocalBackup);\n    $('dcos-preview-patient-import').addEventListener('click', previewPatientImportNow);
+    $('dcos-preview-patient-import').disabled = true;
+    $('dcos-export-local-backup').addEventListener('click', exportLocalBackup);
+    $('dcos-preview-patient-import').addEventListener('click', previewPatientImportNow);
     // A preview is valid only for the exact branch mapping used to create it.
     // Invalidate it immediately if any mapping changes, preventing confirmation
     // of an import against a stale or different branch selection.
@@ -206,9 +209,26 @@ function beginPatientImport() {
   } catch (e) { status(e.message || 'تعذر تجهيز المعاينة.'); }
 }
 
+function exportLocalBackup() {
+  try {
+    if (!localImportSnapshot || typeof localImportSnapshot !== 'object') throw new Error('لا توجد بيانات محلية جاهزة للنسخ الاحتياطي.');
+    const date = new Date().toISOString().replace(/[:.]/g, '-');
+    const blob = new Blob([JSON.stringify({format:'dental-clinic-os-local-backup',version:1,exportedAt:new Date().toISOString(),data:localImportSnapshot}, null, 2)], {type:'application/json;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'dental-clinic-backup-' + date + '.json';
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    localBackupExported = true;
+    $('dcos-preview-patient-import').disabled = false;
+    $('dcos-backup-status').textContent = 'تم بدء تنزيل النسخة الاحتياطية. تأكد من وجود الملف في التنزيلات قبل المتابعة، واحفظه في مكان آمن.';
+    status('تم إنشاء ملف النسخة الاحتياطية المحلية؛ تحقق من تنزيله قبل متابعة الاستيراد.');
+  } catch (e) { status(e.message || 'تعذر تنزيل النسخة الاحتياطية.'); }
+}
+
 async function previewPatientImportNow() {
   const result = $('dcos-import-preview-result');
   try {
+    if (!localBackupExported) throw new Error('نزّل النسخة الاحتياطية المحلية أولًا قبل معاينة الاستيراد.');
     const selects = [...$('dcos-patient-import').querySelectorAll('select[data-local-branch]')];
     importBranchMap = {};
     for (const select of selects) {

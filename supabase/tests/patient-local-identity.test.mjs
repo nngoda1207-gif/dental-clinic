@@ -19,6 +19,7 @@ assert.match(portal, /dcos_patient_sync_queue_v1/);
 assert.match(portal, /flushPatientSyncQueue/);
 assert.match(portal, /dcos:patient-saved/);
 assert.match(portal, /enablePatientSync/);
+assert.match(portal, /if \(!branchMap\[String\(patient\.localBranchId\)\]\) return/);
 assert.match(index, /dcos:patient-saved/);
 assert.match(index, /localBranchId/);
 console.log('Stable patient identity and local-to-cloud sync bridge checks passed.');

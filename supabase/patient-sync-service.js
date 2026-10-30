@@ -12,6 +12,7 @@ import {
 import { requireActiveClinicContext, requireAssignedRemoteBranch } from './clinic-context.js';
 import {
   listRemotePatients,
+  listAllRemotePatients,
   createRemotePatient,
   updateRemotePatient,
   archiveRemotePatient
@@ -36,6 +37,12 @@ async function resolveScope(branchId, { write = false } = {}) {
 export async function listPatientsForAssignedBranch({ branchId, limit } = {}) {
   const scope = await resolveScope(branchId);
   return listRemotePatients({ clinicId: scope.clinicId, branchId: scope.branchId, limit });
+}
+
+/** Loads every patient in the assigned branch for duplicate-safe import preview. */
+export async function listAllPatientsForAssignedBranch({ branchId } = {}) {
+  const scope = await resolveScope(branchId);
+  return listAllRemotePatients({ clinicId: scope.clinicId, branchId: scope.branchId });
 }
 
 /** Creates one patient after active membership, branch and role checks. */

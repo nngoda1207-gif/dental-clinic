@@ -339,8 +339,7 @@ async function confirmPatientImport() {
 
 
 function dispatchCloudPatientsToLocal(branchId, patients) {
-  let map = {};
-  try { map = JSON.parse(localStorage.getItem(BRANCH_MAP_KEY) || '{}'); } catch {}
+  const map = getSavedBranchMap();
   const localBranchId = Object.keys(map).find(key => map[key] === branchId);
   if (!localBranchId) return;
   window.dispatchEvent(new CustomEvent('dcos:cloud-patients', {
@@ -420,7 +419,7 @@ function readPatientQueue() {
 }
 function enqueueLocalPatientForSync(patient) {
   const queue = readPatientQueue();
-  const item = { ...patient, queuedAt: new Date().toISOString() };
+  const item = { ...patient, clinicId: activeMembership?.clinic_id || '', queuedAt: new Date().toISOString() };
   const index = queue.findIndex(x => x.id === item.id && x.localBranchId === item.localBranchId);
   if (index >= 0) queue[index] = item;
   else queue.push(item);
@@ -437,6 +436,7 @@ async function flushPatientSyncQueue() {
   const conflicts = (() => { try { const x = JSON.parse(localStorage.getItem(PATIENT_CONFLICTS_KEY) || '[]'); return Array.isArray(x) ? x : []; } catch { return []; } })();
   try {
     for (const item of queue) {
+      if (!item.clinicId || item.clinicId !== activeMembership.clinic_id) { remaining.push(item); continue; }
       const branchId = branchMap[String(item.localBranchId)];
       if (!branchId) { remaining.push(item); blocked++; continue; }
       try {
@@ -454,7 +454,7 @@ async function flushPatientSyncQueue() {
         synced++;
       } catch (error) {
         if (/رقم الملف مستخدم بالفعل|تغير سجل المريض على جهاز آخر|بلا إصدار معروف|إصدار المزامنة غير معروف/.test(error?.message || '')) {
-          conflicts.push({ id: item.id, no: item.no, localBranchId: item.localBranchId, reason: error.message, detectedAt: new Date().toISOString() });
+          conflicts.push({ clinicId: item.clinicId, id: item.id, no: item.no, localBranchId: item.localBranchId, reason: error.message, detectedAt: new Date().toISOString() });
           blocked++;
         } else remaining.push(item);
       }

@@ -52,7 +52,7 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
   <div id="dcos-cloud-auth">
     <label>البريد الإلكتروني<input id="dcos-sb-email" type="email" placeholder="البريد الإلكتروني" autocomplete="username"></label>
     <label>كلمة المرور<input id="dcos-sb-password" type="password" placeholder="كلمة المرور" autocomplete="current-password"></label>
-    <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">تسجيل الدخول</button><button id="dcos-sb-signup" type="button">إنشاء حساب جديد</button><button id="dcos-sb-reset" type="button">نسيت كلمة المرور؟</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
+    <label>نوع الدخول المباشر<select id="dcos-cloud-role"><option value="dentist">طبيب</option><option value="nurse">تمريض</option><option value="owner">مالك العيادة</option><option value="other">باقي الفريق</option></select></label><div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">دخول مباشر</button><button id="dcos-sb-signup" type="button">إنشاء حساب / قبول دعوة</button><button id="dcos-sb-reset" type="button">نسيت كلمة المرور؟</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
     <p class="muted">استخدم إيميلك الشخصي. صاحب العيادة ينشئ حسابه أولًا، والموظف ينشئ حسابًا بإيميله الذي استلم عليه الدعوة. لا تنشئ حسابًا ثانيًا إذا كان لديك حساب بالفعل؛ استخدم تسجيل الدخول.</p>
   </div>
   <div id="dcos-password-recovery" hidden>
@@ -151,6 +151,9 @@ $('dcos-sb-login').addEventListener('click', async () => {
     $('dcos-sb-password').value = '';
     $('dcos-sb-logout').hidden = false;
     await loadWorkspace();
+    const expectedRole = $('dcos-cloud-role').value;
+    if (activeMembership && expectedRole !== 'other' && activeMembership.role !== expectedRole) { await signOutSupabase(); $('dcos-cloud-workspace').hidden = true; $('dcos-cloud-workspace').innerHTML = ''; $('dcos-sb-logout').hidden = true; throw new Error('نوع الحساب المختار لا يطابق الدور المسجل لهذا البريد. اختر الدور الصحيح.'); }
+    if (activeMembership && expectedRole === 'other' && ['dentist','nurse','owner'].includes(activeMembership.role)) { await signOutSupabase(); $('dcos-cloud-workspace').hidden = true; $('dcos-cloud-workspace').innerHTML = ''; $('dcos-sb-logout').hidden = true; throw new Error('هذا الحساب له واجهة دخول مستقلة. اختر نوع الحساب الصحيح.'); }
     flushPatientSyncQueue();
   } catch (e) { status(friendlyCloudError(e, 'فشل تسجيل الدخول.')); }
 });
@@ -193,8 +196,8 @@ async function loadWorkspace() {
   host.innerHTML = '<p class="muted">جارٍ تحميل صلاحياتك والفروع المتاحة…</p>';
   const result = await getCurrentClinicMembership();
   if (!result) {
-    host.innerHTML = `<section class="cloud-row"><h3>انضمام موظف بدعوة</h3>
-      <p class="muted">لو صاحب العيادة أرسل لك كودًا: سجّل الدخول بإيميلك الشخصي أولًا، ثم الصق الكود هنا. يجب أن يطابق الإيميل الذي أُرسلت إليه الدعوة.</p>
+    host.innerHTML = `<section class="cloud-row"><h3>انضمام مباشر برابط الدعوة</h3>
+      <p class="muted">افتح الرابط الذي أرسله صاحب العيادة، وسجّل أو ادخل بالإيميل نفسه الذي استلم الدعوة. سيتم التحقق من الإيميل وصلاحية الرابط قبل الانضمام.</p>
       <label>كود الدعوة<input id="dcos-staff-invite-code" autocomplete="off" spellcheck="false" placeholder="الصق كود الدعوة هنا"></label>
       <button class="primary" id="dcos-redeem-staff-invite" type="button">قبول الدعوة والانضمام</button></section>
       <details class="cloud-row" id="dcos-owner-setup"><summary><b>أنا صاحب العيادة وأجهّزها لأول مرة</b></summary>
@@ -222,7 +225,7 @@ async function loadWorkspace() {
     <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
   if (membership.role === 'owner') {
     const inviteBox = el('section', { class: 'cloud-row' });
-    inviteBox.innerHTML = '<h3>إضافة موظف للعيادة</h3><p class="muted">أنشئ دعوة مرتبطة بإيميل الموظف ووظيفته وفرعه. الكود يستخدم مرة واحدة وصلاحيته 72 ساعة.</p><label>إيميل الموظف<input id="dcos-invite-email" type="email" autocomplete="off" placeholder="staff@example.com"></label><label>الوظيفة<select id="dcos-invite-role"><option value="dentist">طبيب</option><option value="nurse">تمريض</option><option value="reception">استقبال</option><option value="accountant">حسابات</option><option value="manager">مدير</option><option value="invmgr">مسؤول مخزون</option><option value="readonly">قراءة فقط</option></select></label><label>الفرع<select id="dcos-invite-branch">' + branches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('') + '</select></label><button class="primary" id="dcos-create-staff-invite" type="button">إنشاء كود دعوة</button><textarea id="dcos-created-staff-invite" rows="2" readonly placeholder="سيظهر كود الدعوة هنا"></textarea><p class="muted">أرسل الكود للموظف عبر قناة خاصة ولا تشاركه علنًا.</p>';
+    inviteBox.innerHTML = '<h3>إضافة موظف للعيادة</h3><p class="muted">أنشئ رابطًا فريدًا مرتبطًا بإيميل الموظف ووظيفته وفرعه. الرابط يستخدم مرة واحدة وصلاحيته 72 ساعة، ويمكن فتحه مباشرة من الهاتف.</p><label>إيميل الموظف<input id="dcos-invite-email" type="email" autocomplete="off" placeholder="staff@example.com"></label><label>الوظيفة<select id="dcos-invite-role"><option value="dentist">طبيب</option><option value="nurse">تمريض</option><option value="reception">استقبال</option><option value="accountant">حسابات</option><option value="manager">مدير</option><option value="invmgr">مسؤول مخزون</option><option value="readonly">قراءة فقط</option></select></label><label>الفرع<select id="dcos-invite-branch">' + branches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('') + '</select></label><button class="primary" id="dcos-create-staff-invite" type="button">إنشاء كود دعوة</button><textarea id="dcos-created-staff-invite" rows="2" readonly placeholder="سيظهر كود الدعوة هنا"></textarea><p class="muted">انسخ رابط الدعوة وأرسله للموظف عبر قناة خاصة. الرابط يحتوي على رمز سري أحادي الاستخدام.</p>';
     host.prepend(inviteBox);
     $('dcos-create-staff-invite').addEventListener('click', createStaffInvite);
   }
@@ -248,8 +251,9 @@ async function createStaffInvite() {
     });
     if (error) throw error;
     if (typeof data !== 'string' || !/^[0-9a-f]{64}$/i.test(data)) throw new Error('لم يرجع الخادم كود دعوة صالحًا.');
-    output.value = data;
-    status('تم إنشاء كود دعوة لمرة واحدة. أرسله للموظف، ويجب أن يسجل بنفس الإيميل المحدد.');
+    const inviteUrl = new URL(location.href); inviteUrl.searchParams.set('invite', data); inviteUrl.hash = '';
+    output.value = inviteUrl.toString();
+    status('تم إنشاء رابط دعوة خاص لمرة واحدة وصلاحيته 72 ساعة. أرسله للموظف المحدد، وسيفتح التطبيق على شاشة الانضمام.');
   } catch (e) {
     const msg = String(e?.message || '');
     status(/does not exist|Could not find the function|schema cache/i.test(msg)
@@ -261,7 +265,7 @@ async function createStaffInvite() {
 async function redeemStaffInvite() {
   const button = $('dcos-redeem-staff-invite');
   try {
-    const token = $('dcos-staff-invite-code').value.trim();
+    const token = ($('dcos-staff-invite-code').value.trim() || new URLSearchParams(location.search).get('invite') || '').trim();
     if (!/^[0-9a-f]{64}$/i.test(token)) throw new Error('كود الدعوة غير مكتمل. الصق الكود كاملًا كما وصلك.');
     button.disabled = true;
     status('جارٍ التحقق من الدعوة وربط حسابك بالعيادة…');
@@ -269,6 +273,7 @@ async function redeemStaffInvite() {
     if (error) throw error;
     $('dcos-staff-invite-code').value = '';
     status('تم قبول الدعوة وربط حسابك بالعيادة والفرع. جارٍ تحميل الصلاحيات…');
+    const cleanUrl = new URL(location.href); cleanUrl.searchParams.delete('invite'); history.replaceState({}, '', cleanUrl.toString());
     await loadWorkspace();
   } catch (e) {
     const msg = String(e?.message || '');

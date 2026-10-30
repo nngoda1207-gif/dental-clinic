@@ -5,7 +5,7 @@ const index = readFileSync(new URL('../../index.html', import.meta.url), 'utf8')
 assert.ok(index.includes('./supabase/cloud-portal.js'), 'App must load the isolated cloud portal');
 assert.ok(portal.includes('signInWithPassword'), 'Cloud portal must use Supabase Auth');
 assert.ok(portal.includes('listAssignedRemoteBranches'), 'Cloud portal must resolve assigned branches');
-assert.ok(portal.includes('listPatientsForAssignedBranch'), 'Patient reads must use the guarded sync service');
+assert.ok(portal.includes('listAllPatientsForAssignedBranch'), 'Patient reads must use the guarded sync service');
 assert.ok(portal.includes('preparePatientImport'), 'Patient import must require a preview');
 assert.ok(portal.includes('window.confirm'), 'Patient import must require explicit confirmation');
 assert.ok(portal.includes("select.addEventListener('change'"), 'Changing a branch mapping must invalidate the previous import preview');

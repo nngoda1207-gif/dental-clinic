@@ -3,7 +3,7 @@
  * PostgreSQL RLS is the final authorization boundary.
  */
 import { getSupabaseClient } from './auth-adapter.js';
-const FIELDS = 'id,clinic_id,branch_id,patient_id,appointment_id,dentist_user_id,record_type,occurred_at,complaint,examination,diagnosis,treatment,notes,created_by,created_at,updated_at';
+const FIELDS = 'id,clinic_id,branch_id,patient_id,appointment_id,dentist_user_id,record_type,occurred_at,complaint,examination,diagnosis,treatment,notes,source_local_id,created_by,created_at,updated_at';
 const TYPES = new Set(['visit','diagnosis','prescription','consent','note']);
 function required(value,label){if(typeof value!=='string'||!value.trim())throw new Error(label+' is required.');return value.trim();}
 function dateValue(value,label){const d=new Date(value||Date.now());if(Number.isNaN(d.getTime()))throw new Error(label+' must be a valid date/time.');return d.toISOString();}
@@ -23,19 +23,21 @@ export async function listRemoteClinicalRecords({clinicId,branchId,patientId,lim
   .order('occurred_at',{ascending:false}).limit(Math.max(1,Math.min(Number(limit)||200,500)));
  if(error)throw error;return data||[];
 }
-export async function createRemoteClinicalRecord({clinicId,branchId,patientId,appointmentId,record}={}) {
+export async function createRemoteClinicalRecord({clinicId,branchId,patientId,appointmentId,sourceLocalId,record}={}) {
  required(clinicId,'Remote clinic ID');required(branchId,'Remote branch ID');required(patientId,'Remote patient ID');
  const actor=await userId();
  const payload={clinic_id:clinicId,branch_id:branchId,patient_id:patientId,
-  appointment_id:appointmentId||null,...fields(record),created_by:actor};
+  appointment_id:appointmentId||null,source_local_id:sourceLocalId||null,...fields(record),created_by:actor};
  const {data,error}=await getSupabaseClient().from('clinic_clinical_records').insert(payload).select(FIELDS).single();
  if(error)throw error;return data;
 }
-export async function updateRemoteClinicalRecord({clinicId,branchId,recordId,record}={}) {
+export async function updateRemoteClinicalRecord({clinicId,branchId,recordId,expectedUpdatedAt,record}={}) {
  required(clinicId,'Remote clinic ID');required(branchId,'Remote branch ID');required(recordId,'Remote clinical record ID');
  await userId();
+ if(!expectedUpdatedAt)throw new Error('Clinical record version is unknown; refresh before updating.');
  const {data,error}=await getSupabaseClient().from('clinic_clinical_records')
-  .update({...fields(record),updated_at:new Date().toISOString()})
-  .eq('id',recordId).eq('clinic_id',clinicId).eq('branch_id',branchId).select(FIELDS).single();
- if(error)throw error;return data;
+  .update(fields(record))
+  .eq('id',recordId).eq('clinic_id',clinicId).eq('branch_id',branchId)
+  .eq('updated_at',expectedUpdatedAt).select(FIELDS).maybeSingle();
+ if(error)throw error;if(!data)throw new Error('Clinical record changed on another device. Refresh and reconcile before updating.');return data;
 }

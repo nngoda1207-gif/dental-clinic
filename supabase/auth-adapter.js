@@ -10,8 +10,6 @@
  * Never place a service_role/secret key here.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { App } from 'https://esm.sh/@capacitor/app@7';
-import { Browser } from 'https://esm.sh/@capacitor/browser@7';
 
 let client = null;
 let clientConfig = null;
@@ -19,6 +17,10 @@ let oauthListenerInstalled = false;
 
 async function installOAuthReturnHandler() {
   if (oauthListenerInstalled || !window.Capacitor?.isNativePlatform?.()) return;
+  const [{ App }, { Browser }] = await Promise.all([
+    import('https://esm.sh/@capacitor/app@7'),
+    import('https://esm.sh/@capacitor/browser@7')
+  ]);
   oauthListenerInstalled = true;
   await App.addListener('appUrlOpen', async ({ url }) => {
     if (!url || !url.startsWith('com.dentalclinic.os://auth-callback')) return;
@@ -78,6 +80,7 @@ export async function signInWithGitHub() {
   if (error) throw error;
   if (native) {
     if (!data?.url) throw new Error('لم يُرجع Supabase رابط تسجيل الدخول.');
+    const { Browser } = await import('https://esm.sh/@capacitor/browser@7');
     await Browser.open({ url: data.url });
   }
   return data;

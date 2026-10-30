@@ -28,7 +28,7 @@ assert.ok(portal.includes("localStorage.getItem('dcos1')"), 'Local data read mus
 assert.ok(!portal.includes('service_role') && !portal.includes('secret key'), 'Browser integration must not use privileged server keys');
 console.log('Cloud portal integration safety checks passed.');
 
-assert.ok(portal.includes('كل شخص له حساب مستقل'), 'Portal must explain that every staff member has a separate identity');
+assert.ok(portal.includes('حساب مستقل لكل شخص'), 'Portal must explain that every staff member has a separate identity');
 assert.ok(portal.includes('انضمام موظف بدعوة'), 'Unlinked users must see a dedicated staff invitation flow');
 assert.ok(portal.includes('أنا صاحب العيادة وأجهّزها لأول مرة'), 'Owner clinic creation must be explicitly separated from staff onboarding');
 assert.ok(!portal.includes('استخدم نفس البريد الإلكتروني وكلمة المرور على كل أجهزة العيادة'), 'Portal must never instruct all devices to share one login');

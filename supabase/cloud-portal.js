@@ -5,13 +5,14 @@
  */
 import {
   configureSupabase, getSupabaseClient, signInWithPassword,
-  signOutSupabase, getCurrentClinicMembership, listAssignedRemoteBranches
+  signOutSupabase, signUpWithEmail, resendSignupConfirmation,
+  getCurrentClinicMembership, listAssignedRemoteBranches
 } from './auth-adapter.js';
 import { listPatientsForAssignedBranch } from './patient-sync-service.js';
 import { preparePatientImport, importNewPatients } from './patient-import-service.js';
 
 const CONFIG_KEY = 'dcos_supabase_public_config_v1';
-let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null;
+let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null, pendingConfirmationEmail = '';
 const el = (tag, attrs = {}, html = '') => {
   const n = document.createElement(tag);
   Object.entries(attrs).forEach(([k, v]) => k === 'class' ? n.className = v : n.setAttribute(k, v));
@@ -47,7 +48,8 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
   <div id="dcos-cloud-auth">
     <label>البريد الإلكتروني<input id="dcos-sb-email" type="email" autocomplete="username"></label>
     <label>كلمة مرور Supabase<input id="dcos-sb-password" type="password" autocomplete="current-password"></label>
-    <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">تسجيل الدخول السحابي</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
+    <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">تسجيل الدخول السحابي</button><button id="dcos-sb-signup" type="button">إنشاء حساب جديد</button><button id="dcos-sb-resend" type="button" hidden>إعادة إرسال رسالة التأكيد</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
+    <p class="muted">إنشاء الحساب مخصص لمالك عيادة جديدة. بعد تأكيد البريد، ارجع وسجّل الدخول. حسابات الموظفين تحتاج إضافة من إدارة العيادة؛ لا يتم منح الموظف صلاحية مالك تلقائيًا.</p>
   </div>
   <div id="dcos-cloud-workspace" hidden></div>
   <p id="dcos-cloud-status" class="muted" role="status" aria-live="polite"></p>
@@ -77,6 +79,36 @@ function configure() {
 $('dcos-save-config').addEventListener('click', () => {
   try { configure(); status('تم حفظ إعداد الاتصال على هذا الجهاز.'); }
   catch (e) { status(e.message || 'تعذر إعداد الاتصال.'); }
+});
+$('dcos-sb-signup').addEventListener('click', async () => {
+  try {
+    configure();
+    const email = $('dcos-sb-email').value.trim().toLowerCase();
+    const password = $('dcos-sb-password').value;
+    status('جارٍ إنشاء الحساب وإرسال رسالة تأكيد البريد…');
+    const data = await signUpWithEmail(email, password);
+    $('dcos-sb-password').value = '';
+    if (data.user?.identities?.length === 0) {
+      throw new Error('هذا البريد مسجل بالفعل. جرّب تسجيل الدخول أو إعادة إرسال رسالة التأكيد.');
+    }
+    if (data.session) {
+      await signOutSupabase();
+      throw new Error('الحساب أُنشئ، لكن المشروع لا يفرض تأكيد البريد حاليًا. فعّل Confirm email في إعدادات Supabase ثم أعد المحاولة.');
+    }
+    pendingConfirmationEmail = email;
+    $('dcos-sb-resend').hidden = false;
+    status('تم طلب إنشاء الحساب. افتح رسالة Supabase على البريد واضغط Confirm email، ثم ارجع إلى التطبيق وسجّل الدخول بنفس البريد وكلمة المرور.');
+  } catch (e) { status(e.message || 'تعذر إنشاء الحساب أو إرسال رسالة التأكيد.'); }
+});
+$('dcos-sb-resend').addEventListener('click', async () => {
+  try {
+    const email = pendingConfirmationEmail || $('dcos-sb-email').value.trim().toLowerCase();
+    if (!email) throw new Error('أدخل البريد الإلكتروني أولًا.');
+    status('جارٍ إعادة إرسال رسالة التأكيد…');
+    await resendSignupConfirmation(email);
+    pendingConfirmationEmail = email;
+    status('تم إرسال طلب إعادة رسالة التأكيد. راجع صندوق الوارد والرسائل غير المرغوب فيها.');
+  } catch (e) { status(e.message || 'تعذرت إعادة إرسال رسالة التأكيد.'); }
 });
 $('dcos-sb-login').addEventListener('click', async () => {
   try {

@@ -191,6 +191,8 @@ $('dcos-sb-logout').addEventListener('click', async () => {
 });
 
 async function loadWorkspace() {
+  activeMembership = null;
+  activeBranches = [];
   const host = $('dcos-cloud-workspace');
   host.hidden = false;
   host.innerHTML = '<p class="muted">جارٍ تحميل صلاحياتك والفروع المتاحة…</p>';

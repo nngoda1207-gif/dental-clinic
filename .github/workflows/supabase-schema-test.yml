@@ -136,3 +136,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/016_appointment_local_identity.sql
       - name: Verify appointment sync identity and chair guards
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/appointment-local-identity.test.sql
+
+      - name: Apply migration 017
+        run: psql -v ON_ERROR_STOP=1 -f supabase/017_inventory_idempotent_posting.sql
+      - name: Verify idempotent inventory movement posting
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/inventory-idempotent-posting.test.sql

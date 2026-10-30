@@ -17,8 +17,8 @@ async function actorId(){
 }
 function client(){return getSupabaseClient();}
 const HISTORY_FIELDS='id,clinic_id,branch_id,patient_id,allergies,medical_conditions,medications,prior_surgeries,notes,updated_by,created_at,updated_at';
-const TOOTH_FIELDS='id,clinic_id,branch_id,patient_id,tooth_code,surface_code,finding_code,finding_label,status,notes,recorded_by,occurred_at,created_at';
-const PERIO_FIELDS='id,clinic_id,branch_id,patient_id,tooth_code,site_code,pocket_depth_mm,recession_mm,bleeding,plaque,notes,recorded_by,measured_at,created_at';
+const TOOTH_FIELDS='id,clinic_id,branch_id,patient_id,source_local_id,tooth_code,surface_code,finding_code,finding_label,status,notes,recorded_by,occurred_at,created_at';
+const PERIO_FIELDS='id,clinic_id,branch_id,patient_id,source_local_id,tooth_code,site_code,pocket_depth_mm,recession_mm,bleeding,plaque,notes,recorded_by,measured_at,created_at';
 function textFields(input,keys){const out={};for(const key of keys)out[key]=String(input?.[key]??'').trim();return out;}
 function scope({clinicId,branchId,patientId}={}){
  return {clinic_id:required(clinicId,'Remote clinic ID'),branch_id:required(branchId,'Remote branch ID'),patient_id:required(patientId,'Remote patient ID')};
@@ -31,9 +31,16 @@ export async function getRemoteMedicalHistory(args={}){
 }
 export async function saveRemoteMedicalHistory(args={}){
  const s=scope(args), actor=await actorId();
- const payload={...s,...textFields(args.history,['allergies','medical_conditions','medications','prior_surgeries','notes']),updated_by:actor,updated_at:new Date().toISOString()};
- const {data,error}=await client().from('clinic_patient_medical_history')
-  .upsert(payload,{onConflict:'clinic_id,patient_id'}).select(HISTORY_FIELDS).single();
+ const payload={...s,...textFields(args.history,['allergies','medical_conditions','medications','prior_surgeries','notes']),updated_by:actor};
+ const existing=await getRemoteMedicalHistory(args);
+ if(existing){
+  if(!args.expectedUpdatedAt)throw new Error('Medical history version is unknown; refresh before updating.');
+  const {data,error}=await client().from('clinic_patient_medical_history').update(payload)
+   .eq('clinic_id',s.clinic_id).eq('branch_id',s.branch_id).eq('patient_id',s.patient_id)
+   .eq('updated_at',args.expectedUpdatedAt).select(HISTORY_FIELDS).maybeSingle();
+  if(error)throw error;if(!data)throw new Error('Medical history changed on another device. Refresh and reconcile first.');return data;
+ }
+ const {data,error}=await client().from('clinic_patient_medical_history').insert(payload).select(HISTORY_FIELDS).single();
  if(error)throw error;return data;
 }
 export async function listRemoteToothRecords(args={}){
@@ -48,7 +55,7 @@ export async function createRemoteToothRecord(args={}){
  const tooth_code=required(v.tooth_code,'Tooth code');
  const status=v.status||'active';
  if(!['active','resolved','historical'].includes(status))throw new Error('Unsupported tooth-record status.');
- const payload={...s,tooth_code,surface_code:String(v.surface_code||'').trim(),finding_code:String(v.finding_code||'').trim(),
+ const payload={...s,source_local_id:args.sourceLocalId||null,tooth_code,surface_code:String(v.surface_code||'').trim(),finding_code:String(v.finding_code||'').trim(),
   finding_label:String(v.finding_label||'').trim(),status,notes:String(v.notes||'').trim(),recorded_by:actor,
   occurred_at:v.occurred_at?new Date(v.occurred_at).toISOString():new Date().toISOString()};
  const {data,error}=await client().from('clinic_tooth_records').insert(payload).select(TOOTH_FIELDS).single();
@@ -64,7 +71,7 @@ export async function listRemotePeriodontalMeasurements(args={}){
 export async function createRemotePeriodontalMeasurement(args={}){
  const s=scope(args),actor=await actorId(),v=args.measurement||{};
  const tooth_code=required(v.tooth_code,'Tooth code');
- const payload={...s,tooth_code,site_code:String(v.site_code||'').trim(),notes:String(v.notes||'').trim(),recorded_by:actor,
+ const payload={...s,source_local_id:args.sourceLocalId||null,tooth_code,site_code:String(v.site_code||'').trim(),notes:String(v.notes||'').trim(),recorded_by:actor,
   measured_at:v.measured_at?new Date(v.measured_at).toISOString():new Date().toISOString()};
  for(const key of ['pocket_depth_mm','recession_mm'])if(v[key]!==undefined&&v[key]!==null&&v[key]!==''){
   const n=Number(v[key]);if(!Number.isFinite(n))throw new Error(key+' must be numeric.');payload[key]=n;

@@ -48,13 +48,14 @@ export async function listAllPatientsForAssignedBranch({ branchId } = {}) {
 }
 
 /** Creates one patient after active membership, branch and role checks. */
-export async function createPatientInAssignedBranch({ branchId, fileNo, patient } = {}) {
+export async function createPatientInAssignedBranch({ branchId, fileNo, patient, localId } = {}) {
   const scope = await resolveScope(branchId, { write: true });
   return createRemotePatient({
     clinicId: scope.clinicId,
     branchId: scope.branchId,
     fileNo,
-    patient
+    patient,
+    localId
   });
 }
 

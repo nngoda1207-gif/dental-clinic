@@ -4,7 +4,7 @@
  * branch-scoped patient reads. It does not upload or overwrite local D.
  */
 import {
-  configureSupabase, getSupabaseClient, signInWithPassword, signUpWithPassword, requestPasswordReset,
+  configureSupabase, getSupabaseClient, signInWithPassword, signUpWithPassword, requestPasswordReset, updatePassword,
   signOutSupabase, getCurrentClinicMembership, listAssignedRemoteBranches
 } from './auth-adapter.js';
 import { listPatientsForAssignedBranch, listAllPatientsForAssignedBranch } from './patient-sync-service.js';
@@ -50,6 +50,11 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
     <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">تسجيل الدخول السحابي</button><button id="dcos-sb-signup" type="button">إنشاء حساب دائم</button><button id="dcos-sb-reset" type="button">نسيت كلمة المرور؟</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
     <p class="muted">استخدم نفس البريد وكلمة المرور بعد إعادة تثبيت التطبيق. إذا كان تأكيد البريد مفعّلًا، افتح رسالة التأكيد أولًا. الحساب السحابي وحده لا ينقل بيانات المرضى المحلية تلقائيًا.</p>
   </div>
+  <div id="dcos-password-recovery" hidden>
+    <h3>تعيين كلمة مرور جديدة</h3>
+    <label>كلمة المرور الجديدة<input id="dcos-new-password" type="password" minlength="8" autocomplete="new-password"></label>
+    <button class="primary" id="dcos-save-new-password" type="button">حفظ كلمة المرور الجديدة</button>
+  </div>
   <div id="dcos-cloud-workspace" hidden></div>
   <p id="dcos-cloud-status" class="muted" role="status" aria-live="polite"></p>
 </section>`;
@@ -59,7 +64,36 @@ const $ = id => document.getElementById(id);
 const status = message => { $('dcos-cloud-status').textContent = message || ''; };
 const open = () => panel.classList.add('open');
 const close = () => panel.classList.remove('open');
-launch.addEventListener('click', () => { open(); restoreConfig(); });
+launch.addEventListener('click', () => { open(); // Supabase emits PASSWORD_RECOVERY after a valid recovery link is opened.
+try {
+  const configured = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
+  if (configured?.url && configured?.publishableKey) {
+    configureSupabase({ url: configured.url, publishableKey: configured.publishableKey });
+    getSupabaseClient().auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        $('dcos-password-recovery').hidden = false;
+        $('dcos-cloud-auth').hidden = true;
+        status('تم التحقق من رابط الاستعادة. أدخل كلمة مرور جديدة.');
+        open();
+      }
+    });
+  }
+} catch (e) { status(e.message || 'تعذر تهيئة استعادة كلمة المرور.'); }
+$('dcos-save-new-password').addEventListener('click', async () => {
+  const button = $('dcos-save-new-password');
+  try {
+    button.disabled = true;
+    await updatePassword($('dcos-new-password').value);
+    $('dcos-new-password').value = '';
+    $('dcos-password-recovery').hidden = true;
+    $('dcos-cloud-auth').hidden = false;
+    $('dcos-sb-logout').hidden = false;
+    status('تم تحديث كلمة المرور. يمكنك تسجيل الدخول بها على أجهزتك الأخرى.');
+  } catch (e) { status(e.message || 'تعذر تحديث كلمة المرور.'); }
+  finally { button.disabled = false; }
+});
+
+restoreConfig(); });
 $('dcos-cloud-close').addEventListener('click', close);
 panel.addEventListener('click', e => { if (e.target === panel) close(); });
 

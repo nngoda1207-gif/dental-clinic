@@ -10,9 +10,31 @@
  * Never place a service_role/secret key here.
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { App } from 'https://esm.sh/@capacitor/app@7';
+import { Browser } from 'https://esm.sh/@capacitor/browser@7';
 
 let client = null;
 let clientConfig = null;
+let oauthListenerInstalled = false;
+
+async function installOAuthReturnHandler() {
+  if (oauthListenerInstalled || !window.Capacitor?.isNativePlatform?.()) return;
+  oauthListenerInstalled = true;
+  await App.addListener('appUrlOpen', async ({ url }) => {
+    if (!url || !url.startsWith('com.dentalclinic.os://auth-callback')) return;
+    try {
+      const callback = new URL(url);
+      const code = callback.searchParams.get('code');
+      if (!code) throw new Error('لم يصل رمز تسجيل الدخول من GitHub.');
+      const { error } = await getSupabaseClient().auth.exchangeCodeForSession(code);
+      if (error) throw error;
+      await Browser.close().catch(() => {});
+      window.dispatchEvent(new CustomEvent('dcos-oauth-authenticated'));
+    } catch (error) {
+      window.dispatchEvent(new CustomEvent('dcos-oauth-error', { detail: error?.message || 'تعذر إكمال تسجيل الدخول.' }));
+    }
+  });
+}
 
 export function configureSupabase({ url, publishableKey }) {
   if (!url || !publishableKey) {
@@ -35,12 +57,30 @@ export function configureSupabase({ url, publishableKey }) {
       headers: { 'X-Client-Info': 'dental-clinic-web-prototype' }
     }
   });
+  installOAuthReturnHandler().catch(() => {});
   return client;
 }
 
 export function getSupabaseClient() {
   if (!client) throw new Error('Supabase client has not been configured.');
   return client;
+}
+
+export async function signInWithGitHub() {
+  const native = Boolean(window.Capacitor?.isNativePlatform?.());
+  const redirectTo = native
+    ? 'com.dentalclinic.os://auth-callback'
+    : window.location.origin + window.location.pathname;
+  const { data, error } = await getSupabaseClient().auth.signInWithOAuth({
+    provider: 'github',
+    options: { redirectTo, skipBrowserRedirect: native }
+  });
+  if (error) throw error;
+  if (native) {
+    if (!data?.url) throw new Error('لم يُرجع Supabase رابط تسجيل الدخول.');
+    await Browser.open({ url: data.url });
+  }
+  return data;
 }
 
 export async function signInWithPassword(email, password) {

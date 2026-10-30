@@ -5,7 +5,7 @@
  * only after backup, explicit branch mapping and owner opt-in; other D modules stay local.
  */
 import {
-  configureSupabase, getSupabaseClient, signInWithPassword, signUpWithPassword, requestPasswordReset, updatePassword,
+  configureSupabase, getSupabaseClient, signInWithPassword, signInWithGitHub, signUpWithPassword, requestPasswordReset, updatePassword,
   signOutSupabase, getCurrentClinicMembership, listAssignedRemoteBranches
 } from './auth-adapter.js';
 import { listAllPatientsForAssignedBranch, watchPatientsForAssignedBranch, upsertPatientInAssignedBranch, updatePatientInAssignedBranch } from './patient-sync-service.js';
@@ -52,7 +52,7 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
   <div id="dcos-cloud-auth">
     <label>البريد الإلكتروني<input id="dcos-sb-email" type="email" placeholder="البريد الإلكتروني" autocomplete="username"></label>
     <label>كلمة المرور<input id="dcos-sb-password" type="password" placeholder="كلمة المرور" autocomplete="current-password"></label>
-    <label>نوع الدخول المباشر<select id="dcos-cloud-role"><option value="dentist">طبيب</option><option value="nurse">تمريض</option><option value="owner">مالك العيادة</option><option value="other">باقي الفريق</option></select></label><div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">دخول مباشر</button><button id="dcos-sb-signup" type="button">إنشاء حساب / قبول دعوة</button><button id="dcos-sb-reset" type="button">نسيت كلمة المرور؟</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
+    <label>نوع الدخول المباشر<select id="dcos-cloud-role"><option value="dentist">طبيب</option><option value="nurse">تمريض</option><option value="owner">مالك العيادة</option><option value="other">باقي الفريق</option></select></label><div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">دخول مباشر</button><button id="dcos-sb-github" type="button">الدخول باستخدام GitHub</button><button id="dcos-sb-signup" type="button">إنشاء حساب / قبول دعوة</button><button id="dcos-sb-reset" type="button">نسيت كلمة المرور؟</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
     <p class="muted">استخدم إيميلك الشخصي. صاحب العيادة ينشئ حسابه أولًا، والموظف ينشئ حسابًا بإيميله الذي استلم عليه الدعوة. لا تنشئ حسابًا ثانيًا إذا كان لديك حساب بالفعل؛ استخدم تسجيل الدخول.</p>
   </div>
   <div id="dcos-password-recovery" hidden>
@@ -142,6 +142,26 @@ function configure() {
 $('dcos-save-config').addEventListener('click', () => {
   try { configure(); status('تم حفظ إعداد الاتصال على هذا الجهاز.'); }
   catch (e) { status(e.message || 'تعذر إعداد الاتصال.'); }
+});
+window.addEventListener('dcos-oauth-authenticated', async () => {
+  try {
+    status('تم الرجوع من GitHub. جارٍ التحقق من حسابك وعضوية العيادة…');
+    $('dcos-sb-logout').hidden = false;
+    await loadWorkspace();
+    flushPatientSyncQueue();
+    status('تم تسجيل الدخول باستخدام GitHub بنجاح.');
+  } catch (e) { status(friendlyCloudError(e, 'تم الدخول لكن تعذر تحميل بيانات العيادة.')); }
+});
+window.addEventListener('dcos-oauth-error', e => status(e.detail || 'تعذر إكمال تسجيل الدخول باستخدام GitHub.'));
+$('dcos-sb-github').addEventListener('click', async () => {
+  try {
+    configure();
+    status('جارٍ فتح GitHub لتأكيد هويتك…');
+    await signInWithGitHub();
+    if (!window.Capacitor?.isNativePlatform?.()) {
+      status('جارٍ تحويلك إلى GitHub. بعد الموافقة ستعود إلى التطبيق تلقائيًا.');
+    }
+  } catch (e) { status(friendlyCloudError(e, 'تعذر بدء تسجيل الدخول باستخدام GitHub.')); }
 });
 $('dcos-sb-login').addEventListener('click', async () => {
   try {

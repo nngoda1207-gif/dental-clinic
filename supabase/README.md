@@ -15,6 +15,7 @@
 - `012_treatment_to_invoice.sql` links completed treatment items to invoice lines, locks treatment rows during billing, and prevents a treatment item from being invoiced twice.
 - `013_patient_realtime_publication.sql` adds `clinic_patients` to the Supabase Realtime publication when it exists, enabling branch-scoped live refresh notifications; it does not write local app data.
 - `014_patient_local_identity.sql` adds a stable local patient ID to the cloud patient row so demographic updates from the same device can be retried idempotently without creating duplicates.
+- `015_patient_updated_at_trigger.sql` advances the patient version timestamp on every update so optimistic concurrency checks can detect changes made by any client.
 - `009_patient_profile_fields.sql` adds missing patient-form fields (English name, governorate, source, assigned dentist Auth ID, and tags) without changing existing records.
 - `003_app_mapping.md` maps the existing UI/data to the proposed schema; `TEST_PLAN.md` lists required synthetic-data RLS and migration tests.
 - `.github/workflows/supabase-schema-test.yml` runs migrations `001`–`014` against a disposable PostgreSQL service and executes synthetic smoke tests. This is a compatibility smoke test, not a substitute for testing on Supabase itself.
@@ -35,7 +36,7 @@
 ## Before running the migration
 
 1. The GitHub Actions PostgreSQL smoke test should pass, then test in a separate Supabase project using synthetic data only.
-2. Apply all fourteen SQL files in numerical order (`001` through `014`) in a separate disposable Supabase project.
+2. Apply all fifteen SQL files in numerical order (`001` through `015`) in a separate disposable Supabase project.
 3. Follow `TEST_PLAN.md`; do not treat a successful SQL run alone as proof that role/branch security is correct.
 4. Confirm the project has a recent backup.
 5. Review the SQL and confirm the desired owner/member workflow.

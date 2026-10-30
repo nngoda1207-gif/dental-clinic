@@ -5,7 +5,7 @@
 import {getCurrentClinicMembership,listAssignedRemoteBranches} from './auth-adapter.js';
 import {requireActiveClinicContext,requireAssignedRemoteBranch} from './clinic-context.js';
 import {
-  listRemoteInventoryItems,listRemoteInventoryMovements,
+  listRemoteInventoryItems,getRemoteInventoryItem,listRemoteInventoryMovements,
   upsertRemoteInventoryItemFromLocal,postRemoteInventoryMovementFromLocal
 } from './inventory-repository.js';
 
@@ -29,6 +29,7 @@ export async function upsertInventoryItemInAssignedBranch(options={}){
   return upsertRemoteInventoryItemFromLocal({...options,clinicId:s.clinicId,branchId:s.branchId});
 }
 export async function postInventoryMovementInAssignedBranch(options={}){
-  await scope(options.branchId,true);
+  const s=await scope(options.branchId,true);
+  await getRemoteInventoryItem({clinicId:s.clinicId,branchId:s.branchId,itemId:options.itemId});
   return postRemoteInventoryMovementFromLocal(options);
 }

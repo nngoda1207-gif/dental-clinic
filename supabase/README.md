@@ -34,7 +34,7 @@
 ## Before running the migration
 
 1. The GitHub Actions PostgreSQL smoke test should pass, then test in a separate Supabase project using synthetic data only.
-2. Apply all twelve SQL files in numerical order (`001` through `012`) in a separate disposable Supabase project.
+2. Apply all thirteen SQL files in numerical order (`001` through `013`) in a separate disposable Supabase project.
 3. Follow `TEST_PLAN.md`; do not treat a successful SQL run alone as proof that role/branch security is correct.
 4. Confirm the project has a recent backup.
 5. Review the SQL and confirm the desired owner/member workflow.

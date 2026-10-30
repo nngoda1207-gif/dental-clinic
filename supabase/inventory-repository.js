@@ -20,6 +20,12 @@ export async function listRemoteInventoryItems({clinicId,branchId,limit=500}={})
     .limit(Math.max(1,Math.min(Number(limit)||500,1000)));
   if(error)throw error;return data||[];
 }
+export async function getRemoteInventoryItem({clinicId,branchId,itemId}={}){
+  uuid(clinicId,'Remote clinic ID');uuid(branchId,'Remote branch ID');uuid(itemId,'Remote inventory item ID');
+  const {data,error}=await getSupabaseClient().from('clinic_inventory_items').select(ITEM_FIELDS)
+    .eq('id',itemId).eq('clinic_id',clinicId).eq('branch_id',branchId).single();
+  if(error)throw error;return data;
+}
 export async function listRemoteInventoryMovements({clinicId,branchId,itemId,limit=500}={}){
   uuid(clinicId,'Remote clinic ID');uuid(branchId,'Remote branch ID');
   let query=getSupabaseClient().from('clinic_inventory_movements').select(MOVEMENT_FIELDS)
@@ -34,7 +40,7 @@ export async function upsertRemoteInventoryItemFromLocal({clinicId,branchId,loca
   const stableId=required(localId,'Local inventory item ID');const actor=await actorId();
   if(!item||typeof item!=='object')throw new Error('Inventory item details are required.');
   const payload={
-    supplier_id:item.supplier_id||null,
+    supplier_id:item.supplier_id?uuid(item.supplier_id,'Mapped remote supplier ID'):null,
     sku:String(item.sku||'').trim().slice(0,100),
     name:required(item.name,'Inventory item name').slice(0,200),
     unit:String(item.unit||'piece').trim().slice(0,40),

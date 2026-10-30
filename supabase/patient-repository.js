@@ -52,6 +52,7 @@ function toLocalPatient(row) {
     br: row.branch_id,
     remoteClinicId: row.clinic_id,
     created: row.created_at,
+    remoteUpdatedAt: row.updated_at,
     remoteCreatedBy: row.created_by
   };
 }

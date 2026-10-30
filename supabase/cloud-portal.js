@@ -462,6 +462,7 @@ async function flushPatientSyncQueue() {
       } catch (error) {
         if (/رقم الملف مستخدم بالفعل|تغير سجل المريض على جهاز آخر|بلا إصدار معروف|إصدار المزامنة غير معروف/.test(error?.message || '')) {
           conflicts.push({ clinicId: item.clinicId, id: item.id, no: item.no, localBranchId: item.localBranchId, reason: error.message, detectedAt: new Date().toISOString() });
+          window.dispatchEvent(new CustomEvent('dcos:patient-sync-conflict', { detail: { localId: item.id, localBranchId: item.localBranchId, reason: error.message } }));
           blocked++;
         } else remaining.push(item);
       }

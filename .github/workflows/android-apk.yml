@@ -56,8 +56,8 @@ jobs:
           ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
         run: |
           if [ -z "$ANDROID_DEBUG_KEYSTORE_BASE64" ]; then
-            echo "::warning::No persistent Android debug keystore secret configured; this APK may not update-install over a previously signed APK."
-            exit 0
+            echo "::error::Configure the ANDROID_DEBUG_KEYSTORE_BASE64 repository secret before building an installable update."
+            exit 1
           fi
           mkdir -p "$HOME/.android"
           printf '%s' "$ANDROID_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/debug.keystore"

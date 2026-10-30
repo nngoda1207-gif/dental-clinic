@@ -1,5 +1,7 @@
 -- Minimal Supabase Auth compatibility shim for PostgreSQL schema smoke tests.
 create schema if not exists auth;
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
 do $$
 begin
   if not exists (select 1 from pg_roles where rolname = 'authenticated') then
@@ -11,7 +13,8 @@ begin
 end
 $$;
 create table if not exists auth.users (
-  id uuid primary key
+  id uuid primary key,
+  email text
 );
 create or replace function auth.uid()
 returns uuid
@@ -22,3 +25,12 @@ as $$
 $$;
 grant usage on schema auth to authenticated;
 grant execute on function auth.uid() to authenticated;
+
+create or replace function auth.jwt()
+returns jsonb
+language sql
+stable
+as $$
+  select coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb, '{}'::jsonb);
+$$;
+grant execute on function auth.jwt() to authenticated;

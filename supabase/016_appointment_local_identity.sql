@@ -79,7 +79,39 @@ create trigger clinic_appointments_touch_updated_at
 before update on public.clinic_appointments
 for each row execute function public.touch_appointment_updated_at();
 
-do $$
+-- Every successful remote appointment insert/update gets an immutable audit event.
+-- The actor is always the authenticated Supabase user, never a local display name.
+create or replace function public.record_clinic_appointment_event()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $
+declare
+  v_actor uuid := auth.uid();
+  v_event_type text;
+begin
+  if tg_op = 'INSERT' then
+    v_event_type := 'created';
+    insert into public.clinic_appointment_events(clinic_id, branch_id, appointment_id, actor_user_id, event_type, new_status, details)
+    values (new.clinic_id, new.branch_id, new.id, v_actor, v_event_type, new.status,
+      pg_catalog.jsonb_build_object('starts_at', new.starts_at, 'ends_at', new.ends_at, 'dentist_user_id', new.dentist_user_id, 'chair_id', new.chair_id, 'source', new.source));
+  else
+    v_event_type := case when old.status is distinct from new.status then 'status_changed' else 'updated' end;
+    insert into public.clinic_appointment_events(clinic_id, branch_id, appointment_id, actor_user_id, event_type, old_status, new_status, details)
+    values (new.clinic_id, new.branch_id, new.id, v_actor, v_event_type, old.status, new.status,
+      pg_catalog.jsonb_build_object('starts_at', new.starts_at, 'ends_at', new.ends_at, 'dentist_user_id', new.dentist_user_id, 'chair_id', new.chair_id, 'source', new.source));
+  end if;
+  return new;
+end;
+$;
+
+drop trigger if exists clinic_appointments_audit_event on public.clinic_appointments;
+create trigger clinic_appointments_audit_event after insert or update on public.clinic_appointments
+for each row execute function public.record_clinic_appointment_event();
+revoke all on function public.record_clinic_appointment_event() from public, anon, authenticated;
+
+do $
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
      and not exists (
@@ -90,8 +122,12 @@ begin
      ) then
     alter publication supabase_realtime add table public.clinic_appointments;
   end if;
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'clinic_appointment_events') then
+    alter publication supabase_realtime add table public.clinic_appointment_events;
+  end if;
 end
-$$;
+$;
 
 comment on column public.clinic_appointments.source_local_id
   is 'Stable local appointment ID used for idempotent device sync; never inferred from patient/time.';

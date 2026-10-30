@@ -5,7 +5,7 @@ const service = readFileSync('supabase/appointment-sync-service.js','utf8');
 const schema = readFileSync('supabase/002_operational_tables.sql','utf8');
 const overlap = readFileSync('supabase/007_stock_privileges_and_appointment_overlap.sql','utf8');
 const identity = readFileSync('supabase/016_appointment_local_identity.sql','utf8');
-for (const fn of ['listRemoteAppointments','createRemoteAppointment','updateRemoteAppointment','upsertRemoteAppointmentFromLocal']) {
+for (const fn of ['listRemoteAppointments','listRemoteAppointmentEvents','createRemoteAppointment','updateRemoteAppointment','upsertRemoteAppointmentFromLocal']) {
   assert.ok(repo.includes('export async function '+fn), 'repository exports '+fn);
 }
 assert.ok(repo.includes(".eq('clinic_id', clinicId).eq('branch_id', branchId)"), 'appointment operations must be clinic and branch scoped');
@@ -20,6 +20,8 @@ assert.ok(service.includes('requireActiveClinicContext(await getCurrentClinicMem
 assert.ok(service.includes('requireAssignedRemoteBranch(context, branchId, branches.map(branch => branch.id))'));
 assert.ok(service.includes("new Set(['owner','manager','dentist','reception'])"));
 assert.ok(service.includes('upsertAppointmentInAssignedBranch'), 'safe idempotent upsert is exposed');
+assert.ok(service.includes('listAppointmentEventsForAssignedBranch'), 'event history is branch-scoped');
+assert.ok(identity.includes('record_clinic_appointment_event'), 'remote appointment changes append immutable event history');
 assert.ok(schema.includes("check (status in ('scheduled','confirmed','arrived','completed','cancelled','no_show'))"));
 assert.ok(overlap.includes('prevent_dentist_appointment_overlap'), 'database must enforce dentist overlap');
 assert.ok(overlap.includes('pg_advisory_xact_lock'), 'overlap prevention must serialize concurrent writes');

@@ -185,7 +185,10 @@ panel.addEventListener('click', event => {
 panel.addEventListener('pointerup', event => {
   const target = event.target?.closest?.('#dcos-sb-github');
   if (target && target.dataset.busy !== '1') {
-    status('تم استقبال الضغط على GitHub…');
+    // Android WebView may deliver pointer events without a reliable click.
+    // Start OAuth directly on pointer release; startGitHubSignIn guards
+    // against the subsequent click event invoking the flow a second time.
+    startGitHubSignIn();
   }
 }, true);
 $('dcos-sb-login').addEventListener('click', async () => {

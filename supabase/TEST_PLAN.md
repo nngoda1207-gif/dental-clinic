@@ -67,6 +67,7 @@ Use two branches in Clinic A and a second clinic with synthetic patients.
 - The existing app's fields have an explicit migration mapping; no field silently dropped.
 - Import preview reports counts and validation failures, and a backup can be restored.
 - New/edited local patient demographics are queued, synced idempotently using stable local identity, and retried after reconnect; a conflicting legacy file number is blocked rather than overwritten.
-- Realtime patient updates are delivered only for an assigned branch; test on a real Supabase project with `clinic_patients` enabled in Realtime and confirm an update on device A refreshes the cloud patient list on device B.
+- Realtime patient updates are delivered only for an assigned branch; test on a real Supabase project with `clinic_patients` enabled in Realtime and confirm an update on device A refreshes the mapped local patient record on device B.
+- Snapshot-based conflict tests confirm remote-only changes apply, local-only changes are queued, and simultaneous divergent edits are preserved for review without last-write-wins overwrites.
 - Two-device concurrent edits, offline/network failure, expired sessions, and backup/restore are tested.
 - Main UI and existing local-only workflow still work before the remote adapter is enabled.

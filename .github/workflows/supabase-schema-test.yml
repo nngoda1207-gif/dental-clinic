@@ -164,3 +164,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/021_lab_payment_retry_timestamp.sql
       - name: Verify lab payment retry without explicit timestamp
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/lab-payment-retry-timestamp.test.sql
+
+      - name: Apply migration 022 staff invitations
+        run: psql -v ON_ERROR_STOP=1 -f supabase/022_staff_invitations.sql
+      - name: Verify owner-issued single-use staff invitations
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/staff-invitations.test.sql

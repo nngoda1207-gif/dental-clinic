@@ -86,7 +86,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $appointment_event$
 declare
   v_actor uuid := auth.uid();
   v_event_type text;
@@ -104,14 +104,14 @@ begin
   end if;
   return new;
 end;
-$;
+$appointment_event$;
 
 drop trigger if exists clinic_appointments_audit_event on public.clinic_appointments;
 create trigger clinic_appointments_audit_event after insert or update on public.clinic_appointments
 for each row execute function public.record_clinic_appointment_event();
 revoke all on function public.record_clinic_appointment_event() from public, anon, authenticated;
 
-do $
+do $appointment_publication$
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
      and not exists (
@@ -127,7 +127,7 @@ begin
     alter publication supabase_realtime add table public.clinic_appointment_events;
   end if;
 end
-$;
+$appointment_publication$;
 
 comment on column public.clinic_appointments.source_local_id
   is 'Stable local appointment ID used for idempotent device sync; never inferred from patient/time.';

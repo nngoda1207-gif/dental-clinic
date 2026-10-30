@@ -11,7 +11,7 @@ import { listPatientsForAssignedBranch, listAllPatientsForAssignedBranch } from 
 import { preparePatientImport, importNewPatients } from './patient-import-service.js';
 
 const CONFIG_KEY = 'dcos_supabase_public_config_v1';
-let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null, localBackupExported = false;
+let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null, localBackupExported = false, backupExportStarted = false;
 let recoveryListenerClient = null;
 const el = (tag, attrs = {}, html = '') => {
   const n = document.createElement(tag);
@@ -221,6 +221,7 @@ function beginPatientImport() {
     if (!Array.isArray(localImportSnapshot.patients) || !Array.isArray(localImportSnapshot.branches)) throw new Error('بيانات المرضى أو الفروع المحلية غير مكتملة.');
     importPreview = null;
     localBackupExported = false;
+    backupExportStarted = false;
     const options = activeBranches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('');
     host.hidden = false;
     host.innerHTML = '<h3>نسخة احتياطية قبل النقل</h3><p class="muted">بيانات العيادة المحلية تشمل معلومات مرضى حساسة. نزّل نسخة JSON كاملة واحفظها في مكان آمن قبل متابعة الاستيراد. التنزيل لا يرفع النسخة إلى السحابة.</p><button class="primary" id="dcos-export-local-backup" type="button">تنزيل النسخة الاحتياطية المحلية</button><p id="dcos-backup-status" class="muted">يجب تنزيل النسخة الاحتياطية قبل معاينة الاستيراد.</p><h3>ربط الفروع المحلية بالسحابية</h3><p class="muted">اختر فرعًا سحابيًا لكل فرع محلي. لا يتم رفع بيانات في هذه الخطوة.</p>' +
@@ -253,11 +254,19 @@ function exportLocalBackup() {
     const a = document.createElement('a'); a.href = url; a.download = 'dental-clinic-backup-' + date + '.json';
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
-    localBackupExported = true;
-    $('dcos-preview-patient-import').disabled = false;
-    $('dcos-backup-status').textContent = 'تم بدء تنزيل النسخة الاحتياطية. تأكد من وجود الملف في التنزيلات قبل المتابعة، واحفظه في مكان آمن.';
-    status('تم إنشاء ملف النسخة الاحتياطية المحلية؛ تحقق من تنزيله قبل متابعة الاستيراد.');
+    backupExportStarted = true;
+    $('dcos-backup-status').innerHTML = 'بدأ تنزيل الملف. افتح مجلد التنزيلات وتأكد أن ملف النسخة الاحتياطية موجود ويمكن فتحه، ثم أكد ذلك للمتابعة. <button type="button" id="dcos-confirm-backup-saved">تأكدت من حفظ النسخة الاحتياطية</button>';
+    $('dcos-confirm-backup-saved').addEventListener('click', confirmLocalBackupSaved);
+    status('بدأ تنزيل النسخة الاحتياطية. لن تُتاح المعاينة حتى تؤكد بنفسك وجود الملف المحفوظ.');
   } catch (e) { status(e.message || 'تعذر تنزيل النسخة الاحتياطية.'); }
+}
+
+function confirmLocalBackupSaved() {
+  if (!backupExportStarted) throw new Error('ابدأ تنزيل النسخة الاحتياطية أولًا.');
+  localBackupExported = true;
+  $('dcos-preview-patient-import').disabled = false;
+  $('dcos-backup-status').textContent = 'أكدت وجود النسخة الاحتياطية على هذا الجهاز. احتفظ بها في مكان آمن قبل متابعة النقل.';
+  status('تم تأكيد حفظ النسخة الاحتياطية يدويًا. يمكنك الآن معاينة الاستيراد.');
 }
 
 async function previewPatientImportNow() {

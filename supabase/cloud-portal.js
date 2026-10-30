@@ -168,6 +168,17 @@ function beginPatientImport() {
       localImportSnapshot.branches.map((b,i) => '<label>' + escapeHtml(b.name || ('فرع ' + (i+1))) + '<select data-local-branch="' + escapeAttr(String(b.id ?? '')) + '"><option value="">اختر الفرع السحابي</option>' + options + '</select></label>').join('') +
       '<button class="primary" id="dcos-preview-patient-import" type="button">معاينة الاستيراد</button><div id="dcos-import-preview-result" class="muted"></div>';
     $('dcos-preview-patient-import').addEventListener('click', previewPatientImportNow);
+    // A preview is valid only for the exact branch mapping used to create it.
+    // Invalidate it immediately if any mapping changes, preventing confirmation
+    // of an import against a stale or different branch selection.
+    host.querySelectorAll('select[data-local-branch]').forEach(select => {
+      select.addEventListener('change', () => {
+        importPreview = null;
+        const previewHost = $('dcos-import-preview-result');
+        if (previewHost) previewHost.innerHTML = '<p class="muted">تغيّر ربط الفروع. أعد المعاينة قبل تأكيد أي استيراد.</p>';
+        status('تم تغيير ربط الفروع؛ المعاينة السابقة لم تعد صالحة.');
+      });
+    });
     status('تم تجهيز البيانات المحلية للمعاينة فقط؛ لم يتم الرفع.');
   } catch (e) { status(e.message || 'تعذر تجهيز المعاينة.'); }
 }

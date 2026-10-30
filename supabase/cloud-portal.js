@@ -207,7 +207,9 @@ async function loadWorkspace() {
       <button class="primary" id="dcos-create-clinic" type="button">إنشاء العيادة والفرع</button></details>`;
     $('dcos-create-clinic').addEventListener('click', createClinic);
     $('dcos-redeem-staff-invite').addEventListener('click', redeemStaffInvite);
-    status('الحساب غير مرتبط بعيادة بعد. اختر الانضمام بدعوة أو إعداد العيادة إذا كنت المالك.');
+    const inviteFromLink = new URLSearchParams(location.search).get('invite');
+    if (inviteFromLink) $('dcos-staff-invite-code').value = inviteFromLink;
+    status(inviteFromLink ? 'تم فتح رابط الدعوة. راجع البريد المستخدم ثم اضغط قبول الدعوة والانضمام.' : 'الحساب غير مرتبط بعيادة بعد. اختر الانضمام بدعوة أو إعداد العيادة إذا كنت المالك.');
     return;
   }
   const membership = result.membership;

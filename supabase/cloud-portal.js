@@ -41,8 +41,8 @@ document.head.append(style);
 const launch = el('button', { id: 'dcos-cloud-launch', type: 'button' }, '☁ المزامنة السحابية');
 const panel = el('div', { id: 'dcos-cloud-panel' });
 panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true" aria-labelledby="dcos-cloud-title">
-  <div style="display:flex;align-items:center;gap:10px;justify-content:space-between"><h2 id="dcos-cloud-title" style="margin:0">اتصال العيادة بـ Supabase</h2><button id="dcos-cloud-close" type="button">إغلاق</button></div>
-  <p class="muted">هذه مساحة سحابية منفصلة عن قاعدة البيانات المحلية الحالية. تسجيل الدخول هنا لا يغيّر حسابات التطبيق المحلية، ولا يتم رفع أي بيانات محلية تلقائيًا.</p>
+  <div style="display:flex;align-items:center;gap:10px;justify-content:space-between"><h2 id="dcos-cloud-title" style="margin:0">حساب العيادة</h2><button id="dcos-cloud-close" type="button">إغلاق</button></div>
+  <p class="muted">استخدم نفس البريد الإلكتروني وكلمة المرور على كل أجهزة العيادة. لا تنشئ حسابًا جديدًا على هاتف الممرضة.</p>
   <div id="dcos-cloud-config">
     <label>رابط مشروع Supabase<input id="dcos-sb-url" type="url" placeholder="https://xxxx.supabase.co" autocomplete="url"></label>
     <label>Publishable / anon key<input id="dcos-sb-key" type="password" placeholder="المفتاح العام للمشروع فقط" autocomplete="off"></label>
@@ -50,10 +50,10 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
     <p class="muted">لا تضع Service Role أو Secret Key هنا. الإعدادات تحفظ على هذا الجهاز فقط.</p>
   </div>
   <div id="dcos-cloud-auth">
-    <label>البريد الإلكتروني<input id="dcos-sb-email" type="email" autocomplete="username"></label>
-    <label>كلمة مرور Supabase<input id="dcos-sb-password" type="password" autocomplete="current-password"></label>
-    <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">تسجيل الدخول السحابي</button><button id="dcos-sb-signup" type="button">إنشاء حساب دائم</button><button id="dcos-sb-reset" type="button">نسيت كلمة المرور؟</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
-    <p class="muted">استخدم نفس البريد وكلمة المرور بعد إعادة تثبيت التطبيق. إذا كان تأكيد البريد مفعّلًا، افتح رسالة التأكيد أولًا. الحساب السحابي وحده لا ينقل بيانات المرضى المحلية تلقائيًا.</p>
+    <label>البريد الإلكتروني<input id="dcos-sb-email" type="email" placeholder="البريد الإلكتروني" autocomplete="username"></label>
+    <label>كلمة المرور<input id="dcos-sb-password" type="password" placeholder="كلمة المرور" autocomplete="current-password"></label>
+    <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">دخول إلى حساب العيادة</button><button id="dcos-sb-signup" type="button">إنشاء حساب العيادة لأول مرة</button><button id="dcos-sb-reset" type="button">نسيت كلمة المرور؟</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
+    <p class="muted">أول مرة فقط: أنشئ حساب العيادة على جهازك الأساسي. بعد ذلك استخدم نفس البريد وكلمة المرور على الجهاز الآخر. لا تضغط «إنشاء حساب» مرة ثانية.</p>
   </div>
   <div id="dcos-password-recovery" hidden>
     <h3>تعيين كلمة مرور جديدة</h3>
@@ -67,7 +67,7 @@ document.body.append(launch, panel);
 
 const $ = id => document.getElementById(id);
 const status = message => { $('dcos-cloud-status').textContent = message || ''; };
-const open = () => panel.classList.add('open');
+const open = () => { const embedded = window.DCOS_SUPABASE_CONFIG; if (embedded?.url && embedded?.publishableKey) $('dcos-cloud-config').hidden = true; panel.classList.add('open'); };
 window.openCloudPortal = open;
 const close = () => panel.classList.remove('open');
 function bindPasswordRecovery() {
@@ -145,7 +145,7 @@ $('dcos-sb-signup').addEventListener('click', async () => {
     if (data.session) {
       $('dcos-sb-logout').hidden = false;
       await loadWorkspace();
-      status('تم إنشاء الحساب وتسجيل الدخول. أنشئ العيادة السحابية إذا كان هذا حساب المالك الأول.');
+      status('تم إنشاء الحساب. أكمل إعداد العيادة على جهازك الأساسي فقط.');
     } else {
       status('تم إرسال رسالة تأكيد إلى البريد إن كان التأكيد مطلوبًا. افتح الرسالة، ثم ارجع وسجّل الدخول بنفس البيانات. لم تُرفع بيانات المرضى بعد.');
     }
@@ -175,13 +175,13 @@ async function loadWorkspace() {
   host.innerHTML = '<p class="muted">جارٍ تحميل صلاحياتك والفروع المتاحة…</p>';
   const result = await getCurrentClinicMembership();
   if (!result) {
-    host.innerHTML = `<h3>إنشاء عيادة سحابية جديدة</h3>
-      <p class="muted">هذا الخيار ينشئ عيادة ومالكًا وفرعًا رئيسيًا في Supabase. استخدمه فقط إذا لم تكن عضوًا في عيادة موجودة.</p>
+    host.innerHTML = `<h3>إعداد حساب العيادة لأول مرة</h3>
+      <p class="muted">أنت مسجل الدخول، لكن هذا الحساب لم يتم ربطه بعيادة بعد. أكمل الإعداد مرة واحدة على جهاز صاحب العيادة فقط. لا تستخدم هذه الخطوة على هاتف الممرضة.</p>
       <label>اسم العيادة<input id="dcos-new-clinic" maxlength="160"></label>
       <label>اسم الفرع الرئيسي<input id="dcos-new-branch" maxlength="160" value="الفرع الرئيسي"></label>
       <button class="primary" id="dcos-create-clinic" type="button">إنشاء العيادة السحابية</button>`;
     $('dcos-create-clinic').addEventListener('click', createClinic);
-    status('لا توجد عضوية نشطة لهذا الحساب.');
+    status('الحساب جديد ولم يتم ربطه بعيادة بعد.');
     return;
   }
   const membership = result.membership;

@@ -149,3 +149,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/018_clinical_local_identity.sql
       - name: Verify clinical local identities and versioning
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/clinical-local-identity.test.sql
+
+      - name: Apply migration 019
+        run: psql -v ON_ERROR_STOP=1 -f supabase/019_idempotent_financial_ledger.sql
+      - name: Verify retry-safe payment and refund ledger
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/financial-idempotent-ledger.test.sql

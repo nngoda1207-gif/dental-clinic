@@ -63,7 +63,7 @@ jobs:
               '                <data android:scheme="com.dentalclinic.os" android:host="auth-callback" />',
               '            </intent-filter>',
               ''
-            ].join('\\n');
+            ].join('\n');
             xml = xml.slice(0, close) + filter + xml.slice(close);
             fs.writeFileSync(path, xml);
           }

@@ -129,3 +129,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/015_patient_updated_at_trigger.sql
       - name: Verify patient optimistic version trigger
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/patient-updated-at-trigger.test.sql
+
+      - name: Apply migration 016
+        run: psql -v ON_ERROR_STOP=1 -f supabase/016_appointment_local_identity.sql
+      - name: Verify appointment sync identity and chair guards
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/appointment-local-identity.test.sql

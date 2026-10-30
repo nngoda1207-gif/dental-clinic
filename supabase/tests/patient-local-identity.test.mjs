@@ -27,6 +27,7 @@ assert.match(portal, /dcos:cloud-patients/);
 assert.match(portal, /dcos:cloud-patient-links/);
 assert.match(portal, /dcos:patient-saved/);
 assert.match(portal, /enablePatientSync/);
+assert.match(portal, /new Set\(mappedBranches\)\.size !== mappedBranches\.length/);
 assert.match(portal, /initialImportComplete/);
 assert.match(portal, /if \(!branchMap\[String\(patient\.localBranchId\)\]\) return/);
 assert.match(index, /dcos:patient-saved/);

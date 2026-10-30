@@ -73,15 +73,30 @@ export async function signInWithGitHub() {
   const redirectTo = native
     ? 'com.dentalclinic.os://auth-callback'
     : window.location.origin + window.location.pathname;
-  const { data, error } = await getSupabaseClient().auth.signInWithOAuth({
-    provider: 'github',
-    options: { redirectTo, skipBrowserRedirect: native }
-  });
-  if (error) throw error;
+  let data;
+  try {
+    const result = await getSupabaseClient().auth.signInWithOAuth({
+      provider: 'github',
+      options: { redirectTo, skipBrowserRedirect: native }
+    });
+    if (result.error) throw result.error;
+    data = result.data;
+  } catch (error) {
+    const message = String(error?.message || error || '');
+    if (/Failed to fetch|NetworkError|Load failed|fetch failed/i.test(message) || error instanceof TypeError) {
+      const host = (() => { try { return new URL(clientConfig?.url || '').host; } catch { return 'عنوان Supabase'; } })();
+      throw new Error('التطبيق لم يستطع الوصول إلى خادم Supabase (' + host + '). تحقق من اتصال الإنترنت، ثم تأكد أن رابط المشروع صحيح وأن خدمة Supabase متاحة. لم نصل بعد إلى خطوة GitHub.');
+    }
+    throw error;
+  }
   if (native) {
-    if (!data?.url) throw new Error('لم يُرجع Supabase رابط تسجيل الدخول.');
-    const { Browser } = await import('https://esm.sh/@capacitor/browser@7');
-    await Browser.open({ url: data.url });
+    if (!data?.url) throw new Error('اتصل التطبيق بـ Supabase لكن لم يرجع رابط GitHub. راجع تفعيل GitHub داخل Supabase Auth → Providers.');
+    try {
+      const { Browser } = await import('https://esm.sh/@capacitor/browser@7');
+      await Browser.open({ url: data.url });
+    } catch (error) {
+      throw new Error('تم الاتصال بـ Supabase وتجهيز رابط GitHub، لكن تعذر فتح نافذة المتصفح داخل التطبيق. أعد المحاولة وتأكد من تحديث مكونات Android.');
+    }
   }
   return data;
 }

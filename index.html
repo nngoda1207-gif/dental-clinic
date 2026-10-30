@@ -77,6 +77,60 @@ const age=d=>{if(!d)return'';const a=new Date(d),n=new Date();let y=n.getFullYea
 let D=null,ME=null,view='dash',sel=null,tab='ov',q='',st='active',lim=25,br='all';
 try{const r=localStorage.getItem('dcos1');if(r)D=JSON.parse(r)}catch(e){}
 function save(){try{localStorage.setItem('dcos1',JSON.stringify(D))}catch(e){toast('تعذر الحفظ في المتصفح')}}
+
+const CLOUD_PATIENT_FIELDS=['name','en','gov','so','tg','ph','ph2','em','dob','g','ad','ec','st'];
+function cloudPatientSnapshot(p){const x={};for(const k of CLOUD_PATIENT_FIELDS)x[k]=k==='tg'?(Array.isArray(p?.[k])?p[k]:[]):(p?.[k]??'');return x}
+function sameCloudSnapshot(a,b){return JSON.stringify(cloudPatientSnapshot(a))===JSON.stringify(cloudPatientSnapshot(b))}
+function applyCloudPatientFields(local,remote){const s=cloudPatientSnapshot(remote);Object.assign(local,s)}
+function localPatientSyncPayload(p){return {id:p.id,localBranchId:p.br,no:p.no,...cloudPatientSnapshot(p)}}
+window.addEventListener('dcos:cloud-patient-links',event=>{
+  if(!D||!ME)return;
+  let changed=false;
+  for(const link of event.detail?.links||[]){
+    const local=D.patients.find(p=>String(p.id)===String(link.localId)&&p.br===link.localBranchId);
+    if(!local)continue;
+    local.remoteId=link.remoteId;local.remoteBranchId=link.remoteBranchId;
+    local.cloudSnapshot=cloudPatientSnapshot(local);local.cloudConflict='';
+    changed=true;
+  }
+  if(changed){save();if(!$('#dlg')?.open&&!$('#dlg2')?.open)render()}
+});
+window.addEventListener('dcos:cloud-patients',event=>{
+  if(!D||!ME)return;
+  const {localBranchId,patients=[]}=event.detail||{};
+  if(!localBranchId||!myBr().some(b=>b.id===localBranchId))return;
+  let changed=false,conflicts=0;
+  for(const remote of patients){
+    const incoming=cloudPatientSnapshot(remote);
+    let local=D.patients.find(p=>p.remoteId&&p.remoteId===remote.remoteId);
+    if(!local)local=D.patients.find(p=>p.br===localBranchId&&String(p.no)===String(remote.no));
+    if(!local){
+      const added={id:uid(),no:remote.no,...incoming,br:localBranchId,created:remote.created||now(),by:'مزامنة سحابية',byr:'cloud',notes:[],remoteId:remote.remoteId,remoteBranchId:remote.br,cloudSnapshot:incoming,cloudUpdatedAt:remote.remoteUpdatedAt||''};
+      D.patients.push(added);changed=true;continue;
+    }
+    if(local.remoteId&&local.remoteId!==remote.remoteId){conflicts++;local.cloudConflict='remote_id_mismatch';continue}
+    const baseline=local.cloudSnapshot||null;
+    const current=cloudPatientSnapshot(local);
+    if(!baseline){
+      if(sameCloudSnapshot(current,incoming)){
+        local.remoteId=remote.remoteId;local.remoteBranchId=remote.br;local.cloudSnapshot=incoming;local.cloudUpdatedAt=remote.remoteUpdatedAt||'';changed=true;
+      }else{local.cloudConflict='needs_manual_link';conflicts++}
+      continue;
+    }
+    const localChanged=!sameCloudSnapshot(current,baseline);
+    const remoteChanged=!sameCloudSnapshot(incoming,baseline);
+    if(localChanged&&remoteChanged&&!sameCloudSnapshot(current,incoming)){
+      local.cloudConflict='concurrent_edit';conflicts++;continue;
+    }
+    if(remoteChanged&&!localChanged){applyCloudPatientFields(local,remote);local.cloudSnapshot=incoming;changed=true}
+    else if(localChanged&&!remoteChanged){
+      window.dispatchEvent(new CustomEvent('dcos:patient-saved',{detail:localPatientSyncPayload(local)}));
+    }else if(sameCloudSnapshot(current,incoming)){local.cloudSnapshot=incoming;local.cloudConflict='';changed=true}
+    local.remoteId=remote.remoteId;local.remoteBranchId=remote.br;local.cloudUpdatedAt=remote.remoteUpdatedAt||'';
+  }
+  if(changed){save();if(!$('#dlg')?.open&&!$('#dlg2')?.open)render()}
+  if(conflicts)toast('هناك '+conflicts+' تعارضات في بيانات المرضى؛ احتفظنا بالنسخة المحلية ولم نستبدلها.');
+});
 function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',2800)}
 function audit(act,ref,det){D.audit.unshift({id:uid(),t:now(),u:ME?ME.name:'—',r:ME?ME.role:'',act,ref:ref||'',det:det||''});D.audit.length=Math.min(D.audit.length,2000)}
 async function hp(p,s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s+':'+p));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}

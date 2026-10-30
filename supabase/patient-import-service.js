@@ -91,7 +91,7 @@ export async function importNewPatients({ localState, branchMap, preview } = {})
       const branchId = branchMap[String(patient.br ?? patient.branch_id ?? '')];
       const fileNo = String(patient.no ?? patient.file_no ?? '').trim();
       const remote = await createPatientInAssignedBranch({ branchId, fileNo, patient, localId: row.localId });
-      results.push({ localId: row.localId, state: 'imported', remoteId: remote.remoteId, remoteBranchId: branchId });
+      results.push({ localId: row.localId, state: 'imported', remoteId: remote.remoteId, remoteBranchId: branchId, remoteUpdatedAt: remote.remoteUpdatedAt });
     } catch (error) {
       results.push({ localId: row.localId, state: 'failed', reason: error?.message || 'فشل رفع السجل.' });
     }

@@ -4,7 +4,7 @@
   "private": true,
   "description": "Dental Clinic OS Android packaging",
   "scripts": {
-    "build": "node -e \"const fs=require('fs');fs.mkdirSync('www',{recursive:true});fs.copyFileSync('index.html','www/index.html');fs.rmSync('www/supabase',{recursive:true,force:true});fs.cpSync('supabase','www/supabase',{recursive:true})\"",
+    "build": "node scripts/build-web.js",
     "cap:sync": "npm run build && cap sync android"
   },
   "dependencies": {

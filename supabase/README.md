@@ -74,3 +74,6 @@ Supabase Auth must also be integrated with the current local login carefully. Th
 6. Implement load/save, validation, and conflict handling in the app.
 7. Test with two devices and test every role/branch, including attempts to access another branch.
 8. Build and install a new APK only after the web app tests pass.
+
+
+Staff invitations are database-ready in migration 022 and covered by synthetic SQL tests. They are not available in a deployed clinic until migration 022 is applied to that Supabase project; do not distribute invitation codes before then.

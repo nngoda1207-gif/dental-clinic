@@ -13,6 +13,9 @@ assert.ok(portal.includes('importPreview = null;'), 'A stale import preview must
 assert.ok(portal.includes('localStorage.getItem(\'dcos1\')'), 'Local database may only be read inside the explicit import workflow');
 assert.ok(portal.includes('create_clinic_for_current_user'), 'First owner setup must use the server-side clinic RPC');
 assert.ok(portal.includes('function beginPatientImport()'), 'Local patient data is only read inside the explicit import workflow');
+assert.ok(portal.includes('function exportLocalBackup()'), 'The local database backup must be downloadable before cloud import');
+assert.ok(portal.includes('if (!localBackupExported)'), 'Patient import preview must be blocked until a local backup is exported');
+assert.ok(portal.includes('dental-clinic-backup-'), 'Backup filename must be recognizable for safekeeping');
 assert.ok(portal.includes("localStorage.getItem('dcos1')"), 'Local data read must be user-triggered, not automatic');
 assert.ok(!portal.includes('service_role') && !portal.includes('secret key'), 'Browser integration must not use privileged server keys');
 console.log('Cloud portal integration safety checks passed.');

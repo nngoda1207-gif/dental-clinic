@@ -285,7 +285,6 @@ async function previewPatientImportNow() {
       if (!select.value) throw new Error('اربط كل الفروع المحلية بفرع سحابي قبل المعاينة.');
       importBranchMap[select.dataset.localBranch] = select.value;
     }
-    localStorage.setItem(BRANCH_MAP_KEY, JSON.stringify(importBranchMap));
     const remoteIds = [...new Set(Object.values(importBranchMap))];
     const lists = await Promise.all(remoteIds.map(branchId => listAllPatientsForAssignedBranch({branchId})));
     importPreview = preparePatientImport({localState:localImportSnapshot, clinicId:activeMembership.clinic_id, branchMap:importBranchMap, remotePatients:lists.flat()});
@@ -293,10 +292,19 @@ async function previewPatientImportNow() {
     result.innerHTML = '<p><b>معاينة — بيانات المرضى الأساسية فقط</b></p><p>جديد: ' + n.new + ' · موجود: ' + n.duplicate + ' · تعارض: ' + n.conflict + ' · مستبعد: ' + n.blocked + '</p>' +
       '<p class="muted">لن يتم رفع السجلات العلاجية أو الأشعة أو الوصفات أو المدفوعات، ولن يتم تعديل مريض موجود.</p><ul>' +
       importPreview.rows.filter(x => x.state !== 'new').slice(0,30).map(x => '<li>' + escapeHtml(x.localId) + ' — ' + escapeHtml(x.reason) + '</li>').join('') + '</ul>' +
-      (n.new ? '<button class="primary" id="dcos-confirm-patient-import" type="button">تأكيد رفع المرضى الجدد فقط</button>' : '<p>لا توجد سجلات جديدة جاهزة للرفع.</p>');
+      (n.new ? '<button class="primary" id="dcos-confirm-patient-import" type="button">تأكيد رفع المرضى الجدد فقط</button>' : '<p>لا توجد سجلات جديدة جاهزة للرفع.</p>') + '<button id="dcos-enable-patient-sync" type="button">اعتماد ربط الفروع وتشغيل المزامنة التلقائية لبيانات المرضى الأساسية</button>';
     if (n.new) $('dcos-confirm-patient-import').addEventListener('click', confirmPatientImport);
+    $('dcos-enable-patient-sync').addEventListener('click', enablePatientSync);
     status('اكتملت المعاينة دون كتابة أي بيانات على Supabase.');
   } catch (e) { result.textContent = e.message || 'تعذر إعداد المعاينة.'; }
+}
+
+function enablePatientSync() {
+  if (!importBranchMap || !Object.keys(importBranchMap).length) return;
+  if (!window.confirm('سيتم حفظ ربط الفروع على هذا الجهاز. بعد ذلك ستتم مزامنة بيانات المرضى الأساسية عند حفظها، مع إبقاء السجلات الطبية والمالية محلية. هل توافق؟')) return;
+  localStorage.setItem(BRANCH_MAP_KEY, JSON.stringify(importBranchMap));
+  status('تم اعتماد ربط الفروع. ستتم مزامنة بيانات المرضى الأساسية فقط عند الحفظ أو عودة الاتصال.');
+  flushPatientSyncQueue();
 }
 
 async function confirmPatientImport() {

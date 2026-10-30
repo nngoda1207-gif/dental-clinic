@@ -77,3 +77,6 @@ Supabase Auth must also be integrated with the current local login carefully. Th
 
 
 Staff invitations are database-ready in migration 022 and covered by synthetic SQL tests. They are not available in a deployed clinic until migration 022 is applied to that Supabase project; do not distribute invitation codes before then.
+
+
+For initial account onboarding on a fresh Supabase project, `OWNER_STAFF_SETUP.sql` bundles migrations 001 and 022 (clinic owner/branch identity plus one-time staff invitations). Take a backup first and apply it in Supabase SQL Editor. This bundle alone does not enable patient or other operational data sync; the remaining migrations are separate and must be reviewed/applied in order before those features are used.

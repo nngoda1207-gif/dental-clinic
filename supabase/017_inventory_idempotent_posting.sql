@@ -60,6 +60,13 @@ begin
     raise exception 'Inventory item not found' using errcode = 'P0002';
   end if;
 
+  if not (
+    public.has_clinic_role(v_item.clinic_id, array['owner','manager','invmgr','dentist','nurse'])
+    and public.can_access_clinic_branch(v_item.clinic_id, v_item.branch_id)
+  ) then
+    raise exception 'Not allowed to post inventory movement for this item' using errcode = '42501';
+  end if;
+
   -- The item row lock serializes retries for the same stock item.
   select * into v_existing
     from public.clinic_inventory_movements
@@ -77,13 +84,6 @@ begin
         using errcode = '23505';
     end if;
     return v_existing;
-  end if;
-
-  if not (
-    public.has_clinic_role(v_item.clinic_id, array['owner','manager','invmgr','dentist','nurse'])
-    and public.can_access_clinic_branch(v_item.clinic_id, v_item.branch_id)
-  ) then
-    raise exception 'Not allowed to post inventory movement for this item' using errcode = '42501';
   end if;
 
   v_next_quantity := v_item.quantity + p_quantity_delta;

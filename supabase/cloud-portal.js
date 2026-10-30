@@ -7,7 +7,7 @@ import {
   configureSupabase, getSupabaseClient, signInWithPassword, signUpWithPassword, requestPasswordReset, updatePassword,
   signOutSupabase, getCurrentClinicMembership, listAssignedRemoteBranches
 } from './auth-adapter.js';
-import { listPatientsForAssignedBranch, listAllPatientsForAssignedBranch, watchPatientsForAssignedBranch, upsertPatientInAssignedBranch } from './patient-sync-service.js';
+import { listPatientsForAssignedBranch, listAllPatientsForAssignedBranch, watchPatientsForAssignedBranch, upsertPatientInAssignedBranch, updatePatientInAssignedBranch } from './patient-sync-service.js';
 import { preparePatientImport, importNewPatients } from './patient-import-service.js';
 
 const CONFIG_KEY = 'dcos_supabase_public_config_v1';
@@ -319,6 +319,12 @@ async function confirmPatientImport() {
   try {
     const outcome = await importNewPatients({localState:localImportSnapshot, branchMap:importBranchMap, preview:importPreview});
     result.textContent = 'انتهى الاستيراد: تمت إضافة ' + outcome.imported + '، وفشل ' + outcome.failed + '. لم يتم رفع أي بيانات طبية فرعية.';
+    window.dispatchEvent(new CustomEvent('dcos:cloud-patient-links', { detail: {
+      links: outcome.results.filter(x => x.state === 'imported' && x.remoteId).map(x => {
+        const local = localImportSnapshot.patients.find(p => String(p.id || p.no) === x.localId);
+        return { localId: x.localId, remoteId: x.remoteId, remoteBranchId: x.remoteBranchId, localBranchId: String(local?.br ?? '') };
+      })
+    } }));
     if (outcome.failed === 0 && importPreview.counts.conflict === 0 && importPreview.counts.blocked === 0) {
       initialImportComplete = true;
       const enableButton = $('dcos-enable-patient-sync');
@@ -326,6 +332,17 @@ async function confirmPatientImport() {
       status('اكتمل الاستيراد الأولي دون تعارض. يمكنك الآن اعتماد ربط الفروع لتشغيل مزامنة بيانات المرضى الأساسية.');
     } else status('الاستيراد غير مكتمل أو توجد تعارضات؛ لن تُفعّل المزامنة التلقائية حتى تُراجع.');
   } catch (e) { result.textContent = e.message || 'توقف الاستيراد بسبب خطأ.'; button.disabled = false; }
+}
+
+
+function dispatchCloudPatientsToLocal(branchId, patients) {
+  let map = {};
+  try { map = JSON.parse(localStorage.getItem(BRANCH_MAP_KEY) || '{}'); } catch {}
+  const localBranchId = Object.keys(map).find(key => map[key] === branchId);
+  if (!localBranchId) return;
+  window.dispatchEvent(new CustomEvent('dcos:cloud-patients', {
+    detail: { localBranchId, patients }
+  }));
 }
 
 async function loadPatients() {
@@ -337,6 +354,7 @@ async function loadPatients() {
   try {
     const patients = await listPatientsForAssignedBranch({ branchId, limit: 500 });
     renderCloudPatients(patients, host);
+    dispatchCloudPatientsToLocal(branchId, patients);
     status(`تم تحميل ${patients.length} سجلًا سحابيًا. جارٍ تفعيل متابعة التغييرات لهذا الفرع.`);
     patientRealtimeUnsubscribe = await watchPatientsForAssignedBranch({
       branchId,
@@ -359,7 +377,10 @@ async function refreshPatientsAfterRealtime(branchId) {
   patientRefreshInFlight = true;
   try {
     const patients = await listPatientsForAssignedBranch({ branchId, limit: 500 });
-    if ($('dcos-cloud-branch')?.value === branchId) renderCloudPatients(patients, $('dcos-cloud-patients'));
+    if ($('dcos-cloud-branch')?.value === branchId) {
+      renderCloudPatients(patients, $('dcos-cloud-patients'));
+      dispatchCloudPatientsToLocal(branchId, patients);
+    }
     status('تم تحديث قائمة المرضى بعد وصول تغيير من السحابة.');
   } catch (e) {
     status('وصل إشعار تغيير، لكن تعذر إعادة تحميل القائمة: ' + (e.message || 'خطأ غير معروف'));
@@ -411,12 +432,11 @@ async function flushPatientSyncQueue() {
       const branchId = branchMap[String(item.localBranchId)];
       if (!branchId) { remaining.push(item); blocked++; continue; }
       try {
-        await upsertPatientInAssignedBranch({
-          branchId,
-          localId: item.id,
-          fileNo: item.no,
-          patient: item
-        });
+        if (item.remoteId) {
+          await updatePatientInAssignedBranch({ branchId, patientId: item.remoteId, patient: item });
+        } else {
+          await upsertPatientInAssignedBranch({ branchId, localId: item.id, fileNo: item.no, patient: item });
+        }
         synced++;
       } catch (error) {
         if (/رقم الملف مستخدم بالفعل/.test(error?.message || '')) {

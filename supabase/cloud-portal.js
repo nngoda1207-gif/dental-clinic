@@ -67,6 +67,17 @@ document.body.append(launch, panel);
 
 const $ = id => document.getElementById(id);
 const status = message => { $('dcos-cloud-status').textContent = message || ''; };
+function friendlyCloudError(error, fallback) {
+  const message = String(error?.message || error || '');
+  if (/Supabase URL and publishable key are required/i.test(message)) return 'إعداد الاتصال السحابي غير مكتمل. أدخل رابط المشروع والمفتاح العام أو استخدم نسخة التطبيق المجهزة بالإعدادات.';
+  if (/Invalid login credentials/i.test(message)) return 'الإيميل أو كلمة المرور غير صحيحين. راجع البيانات أو استخدم «نسيت كلمة المرور؟».';
+  if (/Email not confirmed/i.test(message)) return 'أكد بريدك الإلكتروني من الرسالة التي وصلتك، ثم سجّل الدخول مرة أخرى.';
+  if (/User already registered/i.test(message)) return 'هذا البريد لديه حساب بالفعل. استخدم زر تسجيل الدخول بدل إنشاء حساب جديد.';
+  if (/Failed to fetch|NetworkError|Load failed/i.test(message)) return 'تعذر الاتصال بالخادم. تأكد من الإنترنت وحاول مرة أخرى.';
+  if (/does not exist|Could not find the function|schema cache/i.test(message)) return 'قاعدة بيانات Supabase تحتاج تطبيق تحديثات العيادة. افتح ملف OWNER_STAFF_SETUP.sql في مستودع المشروع وطبّقه من SQL Editor.';
+  return message || fallback;
+}
+
 const open = () => { const embedded = window.DCOS_SUPABASE_CONFIG; if (embedded?.url && embedded?.publishableKey) $('dcos-cloud-config').hidden = true; panel.classList.add('open'); };
 window.openCloudPortal = open;
 const close = () => panel.classList.remove('open');
@@ -134,7 +145,7 @@ $('dcos-sb-login').addEventListener('click', async () => {
     $('dcos-sb-logout').hidden = false;
     await loadWorkspace();
     flushPatientSyncQueue();
-  } catch (e) { status(e.message || 'فشل تسجيل الدخول.'); }
+  } catch (e) { status(friendlyCloudError(e, 'فشل تسجيل الدخول.')); }
 });
 $('dcos-sb-signup').addEventListener('click', async () => {
   try {
@@ -149,14 +160,14 @@ $('dcos-sb-signup').addEventListener('click', async () => {
     } else {
       status('تم إرسال رسالة تأكيد إلى البريد إن كان التأكيد مطلوبًا. افتح الرسالة، ثم ارجع وسجّل الدخول بنفس البيانات. لم تُرفع بيانات المرضى بعد.');
     }
-  } catch (e) { status(e.message || 'تعذر إنشاء الحساب.'); }
+  } catch (e) { status(friendlyCloudError(e, 'تعذر إنشاء الحساب.')); }
 });
 $('dcos-sb-reset').addEventListener('click', async () => {
   try {
     configure();
     await requestPasswordReset($('dcos-sb-email').value);
     status('إذا كان البريد مسجلًا، ستصلك رسالة لإعادة تعيين كلمة المرور. افحص البريد الوارد والرسائل غير المرغوب فيها.');
-  } catch (e) { status(e.message || 'تعذر إرسال رسالة استعادة كلمة المرور.'); }
+  } catch (e) { status(friendlyCloudError(e, 'تعذر إرسال رسالة استعادة كلمة المرور.')); }
 });
 $('dcos-sb-logout').addEventListener('click', async () => {
   try {
@@ -284,7 +295,7 @@ async function createClinic() {
     if (assignmentError) throw assignmentError;
     status('تم إنشاء العيادة والفرع السحابي. جارٍ تحميل مساحة العمل…');
     await loadWorkspace();
-  } catch (e) { status(e.message || 'تعذر إنشاء العيادة.'); }
+  } catch (e) { status(friendlyCloudError(e, 'تعذر إنشاء العيادة.')); }
 }
 
 function beginPatientImport() {

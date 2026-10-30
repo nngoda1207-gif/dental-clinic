@@ -34,6 +34,13 @@ jobs:
         run: npm install
       - name: Build web assets
         run: npm run build
+      - name: Verify Supabase modules are included in Android assets
+        run: |
+          test -s www/supabase/cloud-portal.js
+          for file in auth-adapter.js patient-sync-service.js patient-import-service.js clinic-context.js patient-repository.js patient-validation.js import-preview.js; do
+            test -s "www/supabase/$file"
+          done
+          node --input-type=module --check < www/supabase/cloud-portal.js
       - name: Add Android platform
         run: npx cap add android
       - name: Sync Android project

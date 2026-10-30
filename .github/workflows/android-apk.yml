@@ -50,10 +50,21 @@ jobs:
           const fs = require('fs');
           const path = 'android/app/src/main/AndroidManifest.xml';
           let xml = fs.readFileSync(path, 'utf8');
-          if (!xml.includes('com.dentalclinic.os') ) {
-            const activity = /(<activity\\b(?=[^>]*android:name="[^"]*MainActivity")[\\s\\S]*?)(<\\/activity>)/;
-            if (!activity.test(xml)) throw new Error('MainActivity manifest entry not found');
-            xml = xml.replace(activity, '$1\\n            <intent-filter>\\n                <action android:name="android.intent.action.VIEW" />\\n                <category android:name="android.intent.category.DEFAULT" />\\n                <category android:name="android.intent.category.BROWSABLE" />\\n                <data android:scheme="com.dentalclinic.os" android:host="auth-callback" />\\n            </intent-filter>\\n        $2');
+          if (!xml.includes('com.dentalclinic.os')) {
+            const main = xml.indexOf('MainActivity');
+            const start = xml.lastIndexOf('<activity', main);
+            const close = xml.indexOf('</activity>', main);
+            if (main < 0 || start < 0 || close < 0) throw new Error('MainActivity manifest entry not found');
+            const filter = [
+              '            <intent-filter>',
+              '                <action android:name="android.intent.action.VIEW" />',
+              '                <category android:name="android.intent.category.DEFAULT" />',
+              '                <category android:name="android.intent.category.BROWSABLE" />',
+              '                <data android:scheme="com.dentalclinic.os" android:host="auth-callback" />',
+              '            </intent-filter>',
+              ''
+            ].join('\\n');
+            xml = xml.slice(0, close) + filter + xml.slice(close);
             fs.writeFileSync(path, xml);
           }
           NODE

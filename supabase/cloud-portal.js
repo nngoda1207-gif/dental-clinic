@@ -429,7 +429,8 @@ function enqueueLocalPatientForSync(patient) {
 async function flushPatientSyncQueue() {
   if (patientQueueFlushInFlight || !navigator.onLine || !activeMembership) return;
   patientQueueFlushInFlight = true;
-  let queue = readPatientQueue();
+  const queue = readPatientQueue();
+  const initialQueueByKey = new Map(queue.map(item => [String(item.clinicId)+'::'+String(item.localBranchId)+'::'+String(item.id), item]));
   const remaining = [];
   const branchMap = getSavedBranchMap();
   let synced = 0, blocked = 0;
@@ -459,7 +460,14 @@ async function flushPatientSyncQueue() {
         } else remaining.push(item);
       }
     }
-    localStorage.setItem(PATIENT_QUEUE_KEY, JSON.stringify(remaining));
+    const finalQueueByKey = new Map(remaining.map(item => [String(item.clinicId)+'::'+String(item.localBranchId)+'::'+String(item.id), item]));
+    // Preserve saves that arrived while an earlier network request was awaiting.
+    for (const latest of readPatientQueue()) {
+      const key = String(latest.clinicId)+'::'+String(latest.localBranchId)+'::'+String(latest.id);
+      const initial = initialQueueByKey.get(key);
+      if (!initial || latest.queuedAt !== initial.queuedAt) finalQueueByKey.set(key, latest);
+    }
+    localStorage.setItem(PATIENT_QUEUE_KEY, JSON.stringify([...finalQueueByKey.values()]));
     localStorage.setItem(PATIENT_CONFLICTS_KEY, JSON.stringify(conflicts));
     if (synced || blocked) status((synced ? 'تمت مزامنة ' + synced + ' سجل مريض أساسي. ' : '') + (blocked ? 'تم إيقاف ' + blocked + ' سجلات متعارضة ونقلها لقائمة المراجعة؛ لم يتم استبدال أي مريض موجود.' : ''));
   } finally {

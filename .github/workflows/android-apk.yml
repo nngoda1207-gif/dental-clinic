@@ -8,6 +8,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'capacitor.config.json'
+      - 'supabase/**'
       - '.github/workflows/android-apk.yml'
   push:
     branches: [feature/supabase-shared-clinic]
@@ -16,6 +17,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'capacitor.config.json'
+      - 'supabase/**'
       - '.github/workflows/android-apk.yml'
 
 jobs:

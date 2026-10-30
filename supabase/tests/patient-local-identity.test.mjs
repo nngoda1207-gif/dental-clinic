@@ -37,4 +37,7 @@ assert.match(index, /dcos:patient-saved/);
 assert.match(index, /localBranchId/);
 assert.match(index, /cloudSnapshot/);
 assert.match(index, /concurrent_edit/);
+const inlineScripts = [...index.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)];
+assert.ok(inlineScripts.length > 0, 'main app inline script must exist');
+for (const script of inlineScripts) new Function(script[1]);
 console.log('Stable patient identity and local-to-cloud sync bridge checks passed.');

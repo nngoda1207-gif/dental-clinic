@@ -74,14 +74,14 @@ const LC=()=>LANG==='en'?'en-GB':'ar-EG';
 const fd=t=>t?new Date(t).toLocaleString(LC(),{dateStyle:'medium',timeStyle:'short'}):'—';
 const v=id=>($('#'+id)||{value:''}).value.trim();
 const age=d=>{if(!d)return'';const a=new Date(d),n=new Date();let y=n.getFullYear()-a.getFullYear();if(n<new Date(n.getFullYear(),a.getMonth(),a.getDate()))y--;return y>=0?y+' سنة':''};
-let D=null,ME=null,view='dash',sel=null,tab='ov',q='',st='active',lim=25,br='all';
+let D=null,ME=null,view='dash',sel=null,tab='ov',q='',st='active',lim=25,br='all',LOGIN_MODE='admin';
 try{const r=localStorage.getItem('dcos1');if(r)D=JSON.parse(r)}catch(e){}
 function save(){try{localStorage.setItem('dcos1',JSON.stringify(D))}catch(e){toast('تعذر الحفظ في المتصفح')}}
 function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',2800)}
 function audit(act,ref,det){D.audit.unshift({id:uid(),t:now(),u:ME?ME.name:'—',r:ME?ME.role:'',act,ref:ref||'',det:det||''});D.audit.length=Math.min(D.audit.length,2000)}
 async function hp(p,s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s+':'+p));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
-const R={owner:'مالك العيادة',manager:'مدير فرع',dentist:'طبيب',reception:'استقبال',accountant:'محاسب',readonly:'قراءة فقط'};
-const P={owner:['*'],manager:['pv','pa','pe','pr','ex','au','br'],dentist:['pv','pa','pe'],reception:['pv','pa','pe'],accountant:['pv','ex'],readonly:['pv']};
+const R={owner:'مالك العيادة',manager:'مدير فرع',dentist:'طبيب',nurse:'ممرضة',reception:'استقبال',accountant:'محاسب',readonly:'قراءة فقط'};
+const P={owner:['*'],manager:['pv','pa','pe','pr','ex','au','br'],dentist:['pv','pa','pe'],nurse:['pv'],reception:['pv','pa','pe'],accountant:['pv','ex'],readonly:['pv']};
 const can=p=>!!ME&&(P[ME.role].includes('*')||P[ME.role].includes(p));
 const myBr=()=>ME.role==='owner'?D.branches:D.branches.filter(b=>ME.branches.includes(b.id));
 const vis=()=>{const ids=myBr().map(b=>b.id);return D.patients.filter(p=>ids.includes(p.br)&&(br==='all'||p.br===br))};
@@ -102,9 +102,10 @@ D={v:1,seq:0,settings:{clinic:c,ph:nd(v('s_w'))},branches:[{id:bid,name:b,addres
 ME=o;audit('setup','','إنشاء النظام');save();render();newRc()}
 const RK='dcs_rm';let FA=0,FT=0,FORCE=0;
 const gen=n=>{const a='ABCDEFGHJKMNPQRSTUVWXYZ23456789',r=crypto.getRandomValues(new Uint8Array(n));return[...r].map(x=>a[x%a.length]).join('')};
-function loginV(){$('#app').innerHTML=`<div class="card auth"><h2>${h(D.settings.clinic)}</h2><div style="display:flex;justify-content:space-between;align-items:center"><p class="m">تسجيل الدخول</p><button class="g" onclick="tgLang()">${LANG==='en'?'عربي':'EN'}</button></div>${fld('l_u','اسم المستخدم','')}${fld('l_p','كلمة المرور','','password')}<label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input id="l_r" type="checkbox" checked style="width:auto;margin:0"> تذكّرني على هذا الجهاز (30 يومًا)</label><div class="act" style="justify-content:space-between"><a style="cursor:pointer;text-decoration:underline;align-self:center" onclick="forgot()">نسيت كلمة المرور؟</a><button class="b" onclick="doLogin()">دخول</button></div></div>`}
+function setLoginMode(mode){LOGIN_MODE=mode==='nurse'?'nurse':'admin';loginV()}
+function loginV(){$('#app').innerHTML=`<div class="card auth"><h2>${h(D.settings.clinic)}</h2><div style="display:flex;justify-content:space-between;align-items:center"><p class="m">تسجيل الدخول</p><button class="g" onclick="tgLang()">${LANG==='en'?'عربي':'EN'}</button></div><div class="bar"><button class="${LOGIN_MODE==='admin'?'b':'g'}" onclick="setLoginMode('admin')">دخول الإدارة</button><button class="${LOGIN_MODE==='nurse'?'b':'g'}" onclick="setLoginMode('nurse')">دخول الممرضة</button></div><p class="m">${LOGIN_MODE==='nurse'?'استخدم اسم المستخدم وكلمة المرور اللذين أنشأهما مالك العيادة لك.':'أدخل بيانات حساب العيادة.'}</p>${fld('l_u','اسم المستخدم','')}${fld('l_p','كلمة المرور','','password')}<label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input id="l_r" type="checkbox" checked style="width:auto;margin:0"> تذكّرني على هذا الجهاز (30 يومًا)</label><div class="act" style="justify-content:space-between"><a style="cursor:pointer;text-decoration:underline;align-self:center" onclick="forgot()">نسيت كلمة المرور؟</a><button class="b" onclick="doLogin()">${LOGIN_MODE==='nurse'?'دخول الممرضة':'دخول'}</button></div></div>`}
 async function doLogin(){if(FA>=5&&Date.now()-FT<3e4)return toast('محاولات كثيرة، انتظر 30 ثانية');const u=v('l_u').toLowerCase(),p=$('#l_p').value,x=D.users.find(z=>z.user===u);
-if(!x||!x.active||x.hash!==await hp(p,x.salt)){FA++;FT=Date.now();audit('login_fail','',u);save();return toast('بيانات الدخول غير صحيحة')}
+if(!x||!x.active||x.hash!==await hp(p,x.salt)||(LOGIN_MODE==='nurse'&&x.role!=='nurse')||(LOGIN_MODE==='admin'&&x.role==='nurse')){FA++;FT=Date.now();audit('login_fail','',u);save();return toast('بيانات الدخول غير صحيحة أو الحساب غير مخصص لهذا النوع من الدخول')}
 FA=0;ME=x;try{sessionStorage.setItem('dcs',x.id)}catch(e){}
 if($('#l_r')&&$('#l_r').checked)await remember(x);audit('login');save();view='dash';sel=null;br='all';render();if(x.must)forcePw()}
 async function remember(x){const t=gen(32);x.rt=(x.rt||[]).filter(r=>r.e>Date.now());x.rt.push({h:await hp(t,x.salt),e:Date.now()+30*864e5});try{localStorage.setItem(RK,JSON.stringify({u:x.id,t}))}catch(e){}}
@@ -160,7 +161,7 @@ if(id){Object.assign(D.branches.find(x=>x.id===id),o);audit('branch_edit',o.name
 
 function usrV(){$('#main').innerHTML=`<h2>المستخدمون</h2><div class="bar"><button class="b" onclick="uform()">+ مستخدم جديد</button></div><div class="card tw"><table><tr><th>الاسم</th><th>المستخدم</th><th>الدور</th><th>الفروع</th><th>الحالة</th><th></th></tr>${D.users.map(u=>`<tr><td>${h(u.name)}</td><td dir="ltr">${h(u.user)}</td><td>${R[u.role]}</td><td>${u.role==='owner'?'الكل':u.branches.map(bn).map(h).join('، ')}</td><td>${u.active?'نشط':'موقوف'}</td><td><button class="g" onclick="uform('${u.id}')">تعديل</button>${u.id!==ME.id?` <button class="g" onclick="utemp('${u.id}')">كلمة مرور مؤقتة</button>`:''}</td></tr>`).join('')}</table></div>`}
 function uform(id){const u=id?D.users.find(x=>x.id===id):{role:'reception',branches:[],active:true};
-openD(`<h2>${id?'تعديل مستخدم':'مستخدم جديد'}</h2>${fld('un','الاسم *',u.name)}${fld('uu','اسم المستخدم *',u.user)}${fld('uph','رقم الواتساب',u.ph,'tel')}${fld('ucm','نسبة عمولة الطبيب % (من قيمة المنفذ)',u.comm,'number')}${fld('up',id?'كلمة مرور جديدة (اتركها فارغة بدون تغيير)':'كلمة المرور * (8 أحرف على الأقل)','','password')}${sel_('ur','الدور',Object.keys(R).map(k=>[k,R[k]]),u.role)}<div class="fl">الفروع المسموحة${D.branches.map(b=>`<label style="display:block"><input type="checkbox" class="ubx" style="width:auto" value="${b.id}" ${u.branches.includes(b.id)?'checked':''}> ${h(b.name)}</label>`).join('')}</div>${sel_('ua','الحالة',[['1','نشط'],['0','موقوف']],u.active?'1':'0')}<div class="act"><button class="g" onclick="closeD()">إلغاء</button><button class="b" onclick="su('${id||''}')">حفظ</button></div>`)}
+openD(`<h2>${id?'تعديل مستخدم':'مستخدم جديد'}</h2>${fld('un','الاسم *',u.name)}${fld('uu','اسم المستخدم *',u.user)}${fld('uph','رقم الواتساب',u.ph,'tel')}${fld('ucm','نسبة عمولة الطبيب % (من قيمة المنفذ)',u.comm,'number')}${fld('up',id?'كلمة مرور جديدة (اتركها فارغة بدون تغيير)':'كلمة المرور * (8 أحرف على الأقل)','','password')}${sel_('ur','الدور',Object.keys(R).map(k=>[k,R[k]]),u.role)}<p class="m">دور الممرضة يسمح بعرض ملفات المرضى والمواعيد فقط، ولا يتيح الإدارة أو المالية أو تعديل بيانات المرضى.</p><div class="fl">الفروع المسموحة${D.branches.map(b=>`<label style="display:block"><input type="checkbox" class="ubx" style="width:auto" value="${b.id}" ${u.branches.includes(b.id)?'checked':''}> ${h(b.name)}</label>`).join('')}</div>${sel_('ua','الحالة',[['1','نشط'],['0','موقوف']],u.active?'1':'0')}<div class="act"><button class="g" onclick="closeD()">إلغاء</button><button class="b" onclick="su('${id||''}')">حفظ</button></div>`)}
 async function su(id){const o={name:v('un'),user:v('uu').toLowerCase(),ph:nd(v('uph')),comm:Math.min(100,Math.max(0,+v('ucm')||0)),role:v('ur'),active:v('ua')==='1',branches:[...document.querySelectorAll('.ubx:checked')].map(x=>x.value)},p=$('#up').value;
 if(!o.name||!o.user)return toast('الاسم واسم المستخدم مطلوبان');if(D.users.some(x=>x.id!==id&&x.user===o.user))return toast('اسم المستخدم مستخدم بالفعل');
 if((!id||p)&&p.length<8)return toast('كلمة المرور أقل من 8 أحرف');if(o.role!=='owner'&&!o.branches.length)return toast('اختر فرعًا واحدًا على الأقل');
@@ -508,6 +509,12 @@ const ENS=`لوحة التحكم|Dashboard
 اسم المستخدم|Username
 تذكّرني على هذا الجهاز (30 يومًا)|Remember me on this device (30 days)
 نسيت كلمة المرور؟|Forgot password?
+ممرضة|Nurse
+دخول الإدارة|Admin login
+دخول الممرضة|Nurse login
+استخدم اسم المستخدم وكلمة المرور اللذين أنشأهما مالك العيادة لك.|Use the username and password created for you by the clinic owner.
+أدخل بيانات حساب العيادة.|Enter your clinic account credentials.
+دخول|Log in
 نسيت كلمة المرور|Forgot password
 تغيير كلمة المرور|Change password
 كلمة المرور الحالية|Current password

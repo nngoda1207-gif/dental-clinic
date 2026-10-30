@@ -75,6 +75,31 @@ export async function listRemotePatients({ clinicId, branchId, limit = 500 } = {
 }
 
 /**
+ * Read every patient in a branch using bounded pages. Import duplicate checks
+ * must not silently compare against only the first 1,000 rows.
+ */
+export async function listAllRemotePatients({ clinicId, branchId } = {}) {
+  requireId(clinicId, 'Remote clinic ID');
+  requireId(branchId, 'Remote branch ID');
+  const pageSize = 1000;
+  const all = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await getSupabaseClient()
+      .from('clinic_patients')
+      .select(PATIENT_FIELDS)
+      .eq('clinic_id', clinicId)
+      .eq('branch_id', branchId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    const page = data || [];
+    all.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return all.map(toLocalPatient);
+}
+
+/**
  * Create one remote patient. Caller must explicitly map local branch IDs to a
  * remote branch UUID and provide a stable file number. Never bulk-imports D.
  */

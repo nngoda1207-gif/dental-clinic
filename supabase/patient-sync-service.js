@@ -60,13 +60,14 @@ export async function createPatientInAssignedBranch({ branchId, fileNo, patient,
 }
 
 /** Updates one patient without allowing clinic/branch/file-number reassignment. */
-export async function updatePatientInAssignedBranch({ branchId, patientId, patient } = {}) {
+export async function updatePatientInAssignedBranch({ branchId, patientId, patient, expectedUpdatedAt } = {}) {
   const scope = await resolveScope(branchId, { write: true });
   return updateRemotePatient({
     clinicId: scope.clinicId,
     branchId: scope.branchId,
     patientId,
-    patient
+    patient,
+    expectedUpdatedAt
   });
 }
 

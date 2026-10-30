@@ -9,7 +9,8 @@ for (const method of [
   'listPatientsForAssignedBranch',
   'createPatientInAssignedBranch',
   'updatePatientInAssignedBranch',
-  'archivePatientInAssignedBranch'
+  'archivePatientInAssignedBranch',
+  'watchPatientsForAssignedBranch'
 ]) {
   assert.ok(service.includes('export async function ' + method), method + ' must be exported');
 }
@@ -25,3 +26,6 @@ assert.ok(schema.includes("public.has_clinic_role(clinic_id, array['owner','mana
 assert.doesNotMatch(service, /localStorage|dcos1|service_role|secret key/i, 'service must not access local blob or embed privileged credentials');
 
 console.log('Patient sync service safety checks passed.');
+
+assert.ok(service.includes('subscribeToRemotePatientChanges'), 'realtime watcher must use the scoped repository subscription');
+assert.ok(service.includes('const scope = await resolveScope(branchId)'), 'realtime watcher must validate active membership and branch assignment');

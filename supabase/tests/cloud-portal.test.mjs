@@ -65,6 +65,9 @@ assert.ok(portal.includes('pendingPatientWrites'), 'Cloud sync completion must e
 assert.ok(portal.includes('modules.push({ module: names[index]'), 'Cloud sync completion must report each module independently');
 assert.ok(portal.includes("module: 'patients', synced: Number(patientQueue.synced || 0)"), 'Cloud sync completion must include patient migration counts');
 assert.ok(portal.includes('completedAt: new Date().toISOString()'), 'Cloud sync completion must be timestamped for migration verification');
+assert.ok(portal.includes("window.addEventListener('dcos:cloud-sync-complete'"), 'Cloud portal must display structured completion reports in its live status region');
+assert.ok(portal.includes("'اكتملت دورة المزامنة — ' + lines.join(' | ')"), 'Cloud portal status must summarize each synced module and its unresolved work');
+
 
 assert.ok(portal.includes('patientWritesBlocked'), 'Cloud sync completion must expose blocked patient writes');
 assert.ok(portal.includes('conflictCount'), 'Cloud sync completion must report unresolved conflicts instead of treating partial sync as success');

@@ -137,9 +137,9 @@ drop policy if exists clinic_audit_insert on public.clinic_audit_events;
 create policy clinic_audit_insert on public.clinic_audit_events
 for insert to authenticated
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','dentist','reception','accountant','invmgr','nurse'])
+  private.has_clinic_role(clinic_id, array['owner','manager','dentist','reception','accountant','invmgr','nurse'])
   and actor_user_id = auth.uid()
-  and (branch_id is null or public.can_access_clinic_branch(clinic_id, branch_id))
+  and (branch_id is null or private.can_access_clinic_branch(clinic_id, branch_id))
 );
 
 create or replace function public.reject_audit_mutation()

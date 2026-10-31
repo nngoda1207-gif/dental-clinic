@@ -978,22 +978,33 @@ async function syncAllCloudModulesForBranch(branchId, showStatus = false) {
     const names = ['appointments', 'inventory', 'clinical_finance_labs', 'auxiliary'];
     const failures = last.filter(item => item.status === 'rejected').map(item => item.reason?.message || 'sync_error');
     const conflicts = [];
+    const modules = [];
     let synced = Number(patientQueue.synced || 0);
     last.forEach((item, index) => {
-      if (item.status !== 'fulfilled') return;
+      if (item.status !== 'fulfilled') {
+        modules.push({ module: names[index], synced: 0, conflicts: 0, failures: [item.reason?.message || 'sync_error'] });
+        return;
+      }
       const value = item.value || {};
+      const moduleConflicts = Array.isArray(value.conflicts) ? value.conflicts.length : (Number(value.conflicts) || 0);
+      const moduleFailures = (value.failed || []).map(failure => failure.module + ': ' + (failure.error?.message || 'sync_error'));
       synced += Number(value.synced || 0);
       if (Array.isArray(value.conflicts)) {
         for (const conflict of value.conflicts) conflicts.push({ ...conflict, module: names[index] });
       } else if (Number(value.conflicts) > 0) {
         conflicts.push({ module: names[index], count: Number(value.conflicts) });
       }
-      for (const failure of value.failed || []) failures.push(failure.module + ': ' + (failure.error?.message || 'sync_error'));
+      failures.push(...moduleFailures);
+      modules.push({ module: names[index], synced: Number(value.synced || 0), conflicts: moduleConflicts, failures: moduleFailures });
     });
-    const conflictCount = conflicts.reduce((sum, item) => sum + Number(item.count || 1), 0) +
-      Math.max(Number(patientQueue.blocked || 0), Number(patientQueue.conflicts || 0));
+    const patientConflicts = Math.max(Number(patientQueue.blocked || 0), Number(patientQueue.conflicts || 0));
+    modules.push({
+      module: 'patients', synced: Number(patientQueue.synced || 0),
+      conflicts: patientConflicts, pending: Number(patientQueue.pending || 0), failures: []
+    });
+    const conflictCount = conflicts.reduce((sum, item) => sum + Number(item.count || 1), 0) + patientConflicts;
     const report = {
-      branchId, synced, conflicts, conflictCount, failures,
+      branchId, completedAt: new Date().toISOString(), synced, modules, conflicts, conflictCount, failures,
       pendingPatientWrites: Number(patientQueue.pending || 0),
       patientWritesBlocked: Number(patientQueue.blocked || 0)
     };

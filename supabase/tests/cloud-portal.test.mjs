@@ -60,6 +60,10 @@ assert.ok(portal.includes('function appointmentPayloadEqual') && portal.includes
 assert.ok(portal.includes('function inventoryPayloadEqual(a,b) { return cloudPayloadEqual(a,b); }'), 'Inventory conflict checks must use canonical payload comparisons');
 assert.ok(portal.includes('syncClinicalFinanceAndLabsForBranch'), 'Clinical, finance and lab sync must be grouped for manual and automatic use');
 assert.ok(portal.includes('function syncAllCloudModulesForBranch'), 'All supported cloud modules must share one automatic sync coordinator');
+assert.ok(portal.includes('function syncAuxModulesForBranch'), 'Prices, suppliers, settings and branch configuration must be included in cloud sync');
+assert.ok(portal.includes("'prices','suppliers','settings','branches'"), 'Auxiliary cloud modules must be synchronized automatically');
+assert.ok(index.includes("window.addEventListener('dcos:get-local-aux'"), 'The app must expose local auxiliary module snapshots');
+assert.ok(index.includes("window.addEventListener('dcos:cloud-aux'"), 'The app must safely apply remote auxiliary module snapshots');
 assert.ok(portal.includes("window.addEventListener('dcos:local-data-saved'"), 'Every local save must queue automatic cloud synchronization');
 assert.ok(portal.includes("window.addEventListener('online'"), 'Offline changes must resume synchronization when connectivity returns');
 assert.ok(portal.includes('cloudAutoSyncAttempts') && portal.includes('[2000, 5000, 15000]'), 'Transient sync failures must use bounded automatic retries');

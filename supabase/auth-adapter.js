@@ -83,6 +83,61 @@ export async function signInWithPassword(email, password) {
   return data;
 }
 
+export async function signInWithIdentity(identifier, password) {
+  const value = String(identifier || '').trim();
+  if (!value) throw new Error('أدخل البريد الإلكتروني أو اسم المستخدم.');
+  if (value.includes('@')) return signInWithPassword(value, password);
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.functions.invoke('clinic-auth', {
+    body: { action: 'login', username: value.toLowerCase(), password: String(password || '') }
+  });
+  if (error) throw error;
+  if (!data?.access_token || !data?.refresh_token) {
+    throw new Error('تعذر إنشاء جلسة الدخول السحابية.');
+  }
+  const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+    access_token: data.access_token,
+    refresh_token: data.refresh_token
+  });
+  if (sessionError) throw sessionError;
+  return sessionData;
+}
+
+export async function createClinicStaff({ displayName, username, password, role, branchId } = {}) {
+  const { data, error } = await getSupabaseClient().functions.invoke('clinic-auth', {
+    body: {
+      action: 'create_staff',
+      display_name: String(displayName || '').trim(),
+      username: String(username || '').trim().toLowerCase(),
+      password: String(password || ''),
+      role: String(role || ''),
+      branch_id: String(branchId || '')
+    }
+  });
+  if (error) throw error;
+  if (!data?.ok) throw new Error(data?.error || 'تعذر إنشاء حساب الموظف.');
+  return data;
+}
+
+export async function listClinicStaff() {
+  const { data, error } = await getSupabaseClient().functions.invoke('clinic-auth', {
+    body: { action: 'list_staff' }
+  });
+  if (error) throw error;
+  if (!data?.ok) throw new Error(data?.error || 'تعذر تحميل حسابات العاملين.');
+  return data.staff || [];
+}
+
+export async function updateClinicStaffPermissions(userId, permissions) {
+  const { data, error } = await getSupabaseClient().functions.invoke('clinic-auth', {
+    body: { action: 'manage_permissions', user_id: userId, permissions }
+  });
+  if (error) throw error;
+  if (!data?.ok) throw new Error(data?.error || 'تعذر تحديث صلاحيات الموظف.');
+  return data;
+}
+
 export async function signOutSupabase() {
   const { error } = await getSupabaseClient().auth.signOut();
   if (error) throw error;
@@ -129,22 +184,35 @@ export async function listAssignedRemoteBranches(clinicId) {
     throw new Error('A valid remote clinic ID is required.');
   }
 
-  const { data: assignments, error: assignmentError } = await supabase
-    .from('clinic_member_branches')
-    .select('branch_id')
+  const { data: membership, error: membershipError } = await supabase
+    .from('clinic_members')
+    .select('role')
     .eq('clinic_id', clinicId)
-    .eq('user_id', session.user.id);
-  if (assignmentError) throw assignmentError;
-  const ids = [...new Set((assignments || []).map(row => row.branch_id).filter(Boolean))];
-  if (!ids.length) return [];
+    .eq('user_id', session.user.id)
+    .eq('active', true)
+    .maybeSingle();
+  if (membershipError) throw membershipError;
+  if (!membership) throw new Error('Active clinic membership is required.');
 
-  const { data: branches, error: branchError } = await supabase
+  let query = supabase
     .from('clinic_branches')
     .select('id,name,address,phone,active')
     .eq('clinic_id', clinicId)
-    .eq('active', true)
-    .in('id', ids)
-    .order('name', { ascending: true });
+    .eq('active', true);
+
+  if (membership.role !== 'owner') {
+    const { data: assignments, error: assignmentError } = await supabase
+      .from('clinic_member_branches')
+      .select('branch_id')
+      .eq('clinic_id', clinicId)
+      .eq('user_id', session.user.id);
+    if (assignmentError) throw assignmentError;
+    const ids = [...new Set((assignments || []).map(row => row.branch_id).filter(Boolean))];
+    if (!ids.length) return [];
+    query = query.in('id', ids);
+  }
+
+  const { data: branches, error: branchError } = await query.order('name', { ascending: true });
   if (branchError) throw branchError;
   return branches || [];
 }

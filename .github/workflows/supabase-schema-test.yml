@@ -2,7 +2,7 @@ name: Supabase schema smoke tests
 
 on:
   push:
-    branches: [feature/supabase-shared-clinic]
+    branches: [feature/supabase-shared-clinic, fix/persistent-cloud-account, feat/cloud-migration-verification-v2]
     paths:
       - 'supabase/**'
       - '.github/workflows/supabase-schema-test.yml'

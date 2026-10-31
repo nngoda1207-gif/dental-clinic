@@ -14,7 +14,7 @@ export async function signInWithUsername(username,password){
  const clean=String(username||'').trim().toLowerCase();
  if(!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(clean))throw new Error('اسم المستخدم يجب أن يكون من 3 إلى 32 حرفًا إنجليزيًا أو رقمًا.');
  const {data,error}=await getSupabaseClient().functions.invoke('clinic-auth',{body:{action:'login',username:clean,password:String(password||'')}});
- if(error){const detail=await functionError(error);throw new Error(detail==='INVALID_CREDENTIALS'?'اسم المستخدم أو كلمة المرور غير صحيحين.':detail);}
+ if(error){const detail=await functionError(error);const messages={INVALID_CREDENTIALS:'اسم المستخدم أو كلمة المرور غير صحيحين.',INVALID_USERNAME:'اسم المستخدم غير صحيح الصيغة. استخدم الاسم المسجل بدون مسافات مثل amr.amr.',INVALID_PASSWORD:'كلمة المرور يجب أن تكون من 8 إلى 128 حرفًا.'};throw new Error(messages[detail]||detail);}
  if(!data?.access_token||!data?.refresh_token)throw new Error(data?.error||'لم يرجع خادم الدخول جلسة صالحة.');
  const {data:sessionData,error:sessionError}=await getSupabaseClient().auth.setSession({access_token:data.access_token,refresh_token:data.refresh_token});
  if(sessionError)throw sessionError;return sessionData;

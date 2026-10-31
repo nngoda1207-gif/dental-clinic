@@ -77,6 +77,7 @@ const age=d=>{if(!d)return'';const a=new Date(d),n=new Date();let y=n.getFullYea
 let D=null,ME=null,view='dash',sel=null,tab='ov',q='',st='active',lim=25,br='all';
 try{const r=localStorage.getItem('dcos1');if(r)D=JSON.parse(r)}catch(e){}
 function save(){try{localStorage.setItem('dcos1',JSON.stringify(D))}catch(e){toast('تعذر الحفظ في المتصفح')}}
+window.DCOS_LOCAL_EXPORT=()=>{if(!ME||ME.role!=='owner'||!ME.cloud)throw new Error('OWNER_CLOUD_SESSION_REQUIRED');if(!D)throw new Error('LOCAL_DATABASE_EMPTY');return JSON.parse(JSON.stringify(D))};
 
 const CLOUD_PATIENT_FIELDS=['name','en','gov','so','tg','ph','ph2','em','dob','g','ad','ec','st'];
 function cloudPatientSnapshot(p){const x={};for(const k of CLOUD_PATIENT_FIELDS)x[k]=k==='tg'?(Array.isArray(p?.[k])?p[k]:[]):(p?.[k]??'');return x}

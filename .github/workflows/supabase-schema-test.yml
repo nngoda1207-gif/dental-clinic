@@ -46,6 +46,9 @@ jobs:
           node --input-type=module --check < supabase/import-preview.js
           node --input-type=module --check < supabase/clinic-context.js
           node --input-type=module --check < supabase/patient-sync-service.js
+          node --input-type=module --check < supabase/appointment-mapping.js
+          node --input-type=module --check < supabase/appointment-repository.js
+          node --input-type=module --check < supabase/appointment-sync-service.js
           node --input-type=module --check < supabase/patient-import-service.js
           node supabase/tests/realtime-publication.test.mjs
           node supabase/tests/patient-local-identity.test.mjs
@@ -80,6 +83,8 @@ jobs:
           node supabase/tests/financial-sync-service.test.mjs
           node supabase/tests/treatment-sync-service.test.mjs
           node supabase/tests/cloud-portal.test.mjs
+          node supabase/tests/appointment-mapping.test.mjs
+          node supabase/tests/appointment-repository.test.mjs
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Bootstrap minimal Supabase Auth compatibility
@@ -175,10 +180,14 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/024_private_rls_helpers.sql
       - name: Apply migration 025 generic clinic records
         run: psql -v ON_ERROR_STOP=1 -f supabase/025_generic_clinic_records.sql
+      - name: Apply migration 026 guarded appointments
+        run: psql -v ON_ERROR_STOP=1 -f supabase/026_server_guarded_appointments.sql
       - name: Verify generic clinic records schema
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/generic-clinic-records.test.sql
       - name: Verify generic clinic records module and branch RLS
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/generic-clinic-records-rls.test.sql
+      - name: Verify guarded appointment writes and overlap prevention
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/appointment-records.test.sql
       - name: Check generic cloud record modules
         run: |
           node --input-type=module --check < supabase/cloud-record-repository.js

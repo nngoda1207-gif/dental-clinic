@@ -209,7 +209,7 @@ async function loadWorkspace() {
   }
   host.innerHTML = `<p><b>الدور:</b> ${escapeHtml(membership.role)} <span class="muted">· تم التحقق من العضوية النشطة</span></p>
     <label>الفرع السحابي<select id="dcos-cloud-branch">${branches.map(b => `<option value="${escapeAttr(b.id)}">${escapeHtml(b.name)}</option>`).join('')}</select></label>
-    <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-sync-appointments" type="button">مزامنة المواعيد</button><button id="dcos-sync-inventory" type="button">مزامنة المخزون</button><button id="dcos-sync-clinical-finance" type="button">مزامنة الملفات الطبية والحسابات</button><button id="dcos-sync-labs" type="button">مزامنة المعمل</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
+    <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-sync-appointments" type="button">مزامنة المواعيد</button><button id="dcos-sync-inventory" type="button">مزامنة المخزون</button><button id="dcos-sync-clinical-finance" type="button">مزامنة الملفات الطبية والحسابات</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
     <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
   $('dcos-sync-appointments').addEventListener('click', async () => { const branchId = $('dcos-cloud-branch').value; try { await syncAppointmentsForBranch(branchId, true); startAppointmentRealtime(branchId); } catch {} });
   $('dcos-cloud-branch').addEventListener('change', () => { for (const channel of appointmentRealtimeChannels.values()) getSupabaseClient().removeChannel(channel); appointmentRealtimeChannels.clear(); });
@@ -227,7 +227,6 @@ async function loadWorkspace() {
   $('dcos-sync-appointments').addEventListener('click', () => syncAppointmentsForBranch($('dcos-cloud-branch').value, true));
   $('dcos-sync-inventory').addEventListener('click', () => syncInventoryForBranch($('dcos-cloud-branch').value, true).catch(error => status('تعذر مزامنة المخزون: ' + (error.message || 'خطأ غير معروف'))));
   $('dcos-sync-clinical-finance').addEventListener('click', () => syncClinicalAndFinanceForBranch($('dcos-cloud-branch').value, true));
-  $('dcos-sync-labs').addEventListener('click', () => syncLabsForBranch($('dcos-cloud-branch').value, true).catch(error => status('تعذر مزامنة المعمل: ' + (error.message || 'خطأ غير معروف'))));
   $('dcos-cloud-branch').addEventListener('change', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
@@ -840,7 +839,6 @@ window.addEventListener('dcos:cloud-user-ready', () => {
     const permissions = Array.isArray(activeMembership.permissions) ? activeMembership.permissions : [];
     if (activeMembership.role === 'owner' || permissions.some(code => ['im','iv'].includes(code))) syncInventoryForBranch(branch.id, false).catch(() => {});
     if (activeMembership.role === 'owner' || permissions.some(code => ['cl','mv','ex','fv'].includes(code))) syncClinicalAndFinanceForBranch(branch.id, false).catch(() => {});
-    if (activeMembership.role === 'owner' || permissions.includes('lv')) syncLabsForBranch(branch.id, false).catch(() => {});
   }
 });
 window.addEventListener('dcos:appointment-saved', event => {

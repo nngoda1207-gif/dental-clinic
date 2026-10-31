@@ -16,7 +16,7 @@ const BRANCH_MAP_KEY = 'dcos_supabase_branch_map_v1';
 const PATIENT_QUEUE_KEY = 'dcos_patient_sync_queue_v1';
 const PATIENT_CONFLICTS_KEY = 'dcos_patient_sync_conflicts_v1';
 let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null, localBackupExported = false, backupExportStarted = false;
-let recoveryListenerClient = null, patientRealtimeUnsubscribe = null, patientRefreshInFlight = false, patientQueueFlushInFlight = false, initialImportComplete = false;
+let patientRealtimeUnsubscribe = null, patientRefreshInFlight = false, patientQueueFlushInFlight = false, initialImportComplete = false;
 const el = (tag, attrs = {}, html = '') => {
   const n = document.createElement(tag);
   Object.entries(attrs).forEach(([k, v]) => k === 'class' ? n.className = v : n.setAttribute(k, v));
@@ -55,11 +55,6 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
     <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">دخول</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
     <p class="muted">الحسابات ينشئها مسؤول النظام أو مدير العيادة. لا يوجد إنشاء حساب ذاتي أو دخول بالبريد الإلكتروني.</p>
   </div>
-  <div id="dcos-password-recovery" hidden>
-    <h3>تعيين كلمة مرور جديدة</h3>
-    <label>كلمة المرور الجديدة<input id="dcos-new-password" type="password" minlength="8" autocomplete="new-password"></label>
-    <button class="primary" id="dcos-save-new-password" type="button">حفظ كلمة المرور الجديدة</button>
-  </div>
   <div id="dcos-cloud-workspace" hidden></div>
   <p id="dcos-cloud-status" class="muted" role="status" aria-live="polite"></p>
 </section>`;
@@ -70,17 +65,12 @@ const status = message => { $('dcos-cloud-status').textContent = message || ''; 
 function friendlyCloudError(error, fallback) {
   const message = String(error?.message || error || '');
   if (/Supabase URL and publishable key are required/i.test(message)) return 'إعداد الاتصال السحابي غير مكتمل. أدخل رابط المشروع والمفتاح العام أو استخدم نسخة التطبيق المجهزة بالإعدادات.';
-  if (/Invalid login credentials/i.test(message)) return 'الإيميل أو كلمة المرور غير صحيحين. راجع البيانات أو استخدم «نسيت كلمة المرور؟».';
-  if (/Email not confirmed/i.test(message)) return 'أكد بريدك الإلكتروني من الرسالة التي وصلتك، ثم سجّل الدخول مرة أخرى.';
-  if (/User already registered/i.test(message)) return 'هذا البريد لديه حساب بالفعل. استخدم زر تسجيل الدخول بدل إنشاء حساب جديد.';
+  if (/Invalid login credentials/i.test(message)) return 'اسم المستخدم أو كلمة المرور غير صحيحين.';
   if (/Failed to fetch|NetworkError|Load failed/i.test(message)) return 'تعذر الاتصال بالخادم. تأكد من الإنترنت وحاول مرة أخرى.';
   if (/does not exist|Could not find the function|schema cache|PGRST202|PGRST205/i.test(message)) return 'قاعدة بيانات Supabase تحتاج تطبيق تحديثات العيادة. يلزم تطبيق ملفات migrations وملف OWNER_STAFF_SETUP.sql في Supabase SQL Editor بواسطة مسؤول المشروع.';
-  if (/INVALID_INVITE_EMAIL/.test(message)) return 'راجع إيميل الموظف؛ يبدو أنه غير مكتوب بشكل صحيح.';
   if (/OWNER_REQUIRED/.test(message)) return 'إنشاء دعوات الموظفين متاح لحساب مالك العيادة فقط.';
   if (/BRANCH_NOT_AVAILABLE/.test(message)) return 'الفرع المحدد غير متاح. حدّث الصفحة واختر فرعًا نشطًا.';
-  if (/USER_ALREADY_MEMBER/.test(message)) return 'هذا البريد عضو بالفعل في العيادة.';
   if (/INVALID_INVITE_ROLE/.test(message)) return 'الوظيفة المحددة غير صالحة. اختر وظيفة من القائمة.';
-  if (/over_email_send_rate_limit|email rate limit/i.test(message)) return 'تم طلب رسائل كثيرة خلال وقت قصير. انتظر قليلًا ثم حاول مرة أخرى.';
   if (/Password should be at least|password.*(weak|short)/i.test(message)) return 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.';
   return message || fallback;
 }
@@ -88,35 +78,8 @@ function friendlyCloudError(error, fallback) {
 const open = () => { const embedded = window.DCOS_SUPABASE_CONFIG; if (embedded?.url && embedded?.publishableKey) $('dcos-cloud-config').hidden = true; panel.classList.add('open'); };
 window.openCloudPortal = open;
 const close = () => panel.classList.remove('open');
-function bindPasswordRecovery() {
-  const client = getSupabaseClient();
-  if (recoveryListenerClient === client) return;
-  recoveryListenerClient = client;
-  client.auth.onAuthStateChange((event) => {
-    if (event === 'PASSWORD_RECOVERY') {
-      $('dcos-password-recovery').hidden = false;
-      $('dcos-cloud-auth').hidden = true;
-      status('تم التحقق من رابط الاستعادة. أدخل كلمة مرور جديدة.');
-      open();
-    }
-  });
-}
-
 launch.addEventListener('click', () => { open(); });
 
-$('dcos-save-new-password').addEventListener('click', async () => {
-  const button = $('dcos-save-new-password');
-  try {
-    button.disabled = true;
-    await updatePassword($('dcos-new-password').value);
-    $('dcos-new-password').value = '';
-    $('dcos-password-recovery').hidden = true;
-    $('dcos-cloud-auth').hidden = false;
-    $('dcos-sb-logout').hidden = false;
-    status('تم تحديث كلمة المرور. يمكنك تسجيل الدخول بها على أجهزتك الأخرى.');
-  } catch (e) { status(e.message || 'تعذر تحديث كلمة المرور.'); }
-  finally { button.disabled = false; }
-});
 $('dcos-cloud-close').addEventListener('click', close);
 panel.addEventListener('click', e => { if (e.target === panel) close(); });
 
@@ -136,7 +99,6 @@ function configure() {
   const url = $('dcos-sb-url').value.trim();
   const publishableKey = $('dcos-sb-key').value.trim();
   configureSupabase({ url, publishableKey });
-  bindPasswordRecovery();
   localStorage.setItem(CONFIG_KEY, JSON.stringify({ url, publishableKey }));
 }
 $('dcos-save-config').addEventListener('click', () => {
@@ -151,9 +113,6 @@ $('dcos-sb-login').addEventListener('click', async () => {
     $('dcos-sb-password').value = '';
     $('dcos-sb-logout').hidden = false;
     await loadWorkspace();
-    const expectedRole = $('dcos-cloud-role').value;
-    if (activeMembership && expectedRole !== 'other' && activeMembership.role !== expectedRole) { await signOutSupabase(); $('dcos-cloud-workspace').hidden = true; $('dcos-cloud-workspace').innerHTML = ''; $('dcos-sb-logout').hidden = true; throw new Error('نوع الحساب المختار لا يطابق الدور المسجل لهذا البريد. اختر الدور الصحيح.'); }
-    if (activeMembership && expectedRole === 'other' && ['dentist','nurse','owner'].includes(activeMembership.role)) { await signOutSupabase(); $('dcos-cloud-workspace').hidden = true; $('dcos-cloud-workspace').innerHTML = ''; $('dcos-sb-logout').hidden = true; throw new Error('هذا الحساب له واجهة دخول مستقلة. اختر نوع الحساب الصحيح.'); }
     flushPatientSyncQueue();
   } catch (e) { status(friendlyCloudError(e, 'فشل تسجيل الدخول.')); }
 });
@@ -194,12 +153,10 @@ async function loadWorkspace() {
     <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
     <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
   if (membership.role === 'owner') {
-    const inviteBox = el('section', { class: 'cloud-row' });
-    inviteBox.innerHTML = '<h3>دعوة موظف أو ممرضة لاختبار المزامنة</h3><p class="muted">أدخل إيميل الشخص الذي سيستلم الدعوة، واختر وظيفته والفرع. الرابط صالح 72 ساعة ولمرة واحدة فقط.</p><label>إيميل الموظف<input id="dcos-invite-email" type="email" autocomplete="off" placeholder="staff@example.com"></label><label>الوظيفة<select id="dcos-invite-role"><option value="nurse">تمريض</option><option value="dentist">طبيب</option><option value="reception">استقبال</option><option value="accountant">حسابات</option><option value="manager">مدير</option><option value="invmgr">مسؤول مخزون</option><option value="readonly">قراءة فقط</option></select></label><label>الفرع<select id="dcos-invite-branch">' + branches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('') + '</select></label><button class="primary" id="dcos-create-staff-invite" type="button">إنشاء رابط الدعوة</button><textarea id="dcos-created-staff-invite" rows="2" readonly placeholder="رابط الدعوة سيظهر هنا بعد الإنشاء"></textarea><div class="cloud-actions"><button id="dcos-copy-staff-invite" type="button" disabled>نسخ الرابط</button><button id="dcos-share-staff-invite" type="button" disabled>مشاركة الرابط</button></div><p class="muted">أرسل الرابط للممرضة أو الموظف. يجب التسجيل بنفس الإيميل الذي أدخلته هنا.</p>';
-    host.prepend(inviteBox);
-    $('dcos-create-staff-invite').addEventListener('click', createStaffInvite);
-    $('dcos-copy-staff-invite').addEventListener('click', copyStaffInvite);
-    $('dcos-share-staff-invite').addEventListener('click', shareStaffInvite);
+    const staffBox = el('section', { class: 'cloud-row' });
+    staffBox.innerHTML = '<h3>إنشاء حساب موظف</h3><p class="muted">أنشئ اسم مستخدم وكلمة مرور لكل فرد في الفريق، وحدد وظيفته والفرع المسموح له. لا نطلب بريدًا إلكترونيًا.</p><label>اسم المستخدم<input id="dcos-staff-username" type="text" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="مثال: nurse01"></label><label>كلمة المرور<input id="dcos-staff-password" type="password" minlength="8" autocomplete="new-password" placeholder="8 أحرف على الأقل"></label><label>الوظيفة<select id="dcos-staff-role"><option value="nurse">تمريض</option><option value="dentist">طبيب</option><option value="reception">استقبال</option><option value="accountant">حسابات</option><option value="manager">مدير</option><option value="invmgr">مسؤول مخزون</option><option value="readonly">قراءة فقط</option></select></label><label>الفرع<select id="dcos-staff-branch">' + branches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('') + '</select></label><button class="primary" id="dcos-create-staff-account" type="button">إنشاء حساب الموظف</button><p id="dcos-staff-create-status" class="muted" role="status"></p>';
+    host.prepend(staffBox);
+    $('dcos-create-staff-account').addEventListener('click', createStaffAccount);
   }
   $('dcos-load-patients').addEventListener('click', loadPatients);
   $('dcos-cloud-branch').addEventListener('change', loadPatients);
@@ -208,84 +165,20 @@ async function loadWorkspace() {
   flushPatientSyncQueue();
 }
 
-async function createStaffInvite() {
-  const button = $('dcos-create-staff-invite');
-  const output = $('dcos-created-staff-invite');
-  try {
-    const email = $('dcos-invite-email').value.trim().toLowerCase();
-    const role = $('dcos-invite-role').value;
-    const branchId = $('dcos-invite-branch').value;
-    if (!email || !branchId) throw new Error('أدخل إيميل الموظف واختر الفرع.');
-    button.disabled = true;
-    status('جارٍ إنشاء دعوة الموظف…');
-    const { data, error } = await getSupabaseClient().rpc('create_clinic_invitation', {
-      p_email: email, p_role: role, p_branch_id: branchId, p_expires_hours: 72
-    });
-    if (error) throw error;
-    if (typeof data !== 'string' || !/^[0-9a-f]{64}$/i.test(data)) throw new Error('لم يرجع الخادم كود دعوة صالحًا.');
-    const inviteUrl = new URL(location.href); inviteUrl.searchParams.set('invite', data); inviteUrl.hash = '';
-    output.value = inviteUrl.toString();
-    $('dcos-copy-staff-invite').disabled = false; $('dcos-share-staff-invite').disabled = false;
-    status('تم إنشاء رابط الدعوة. استخدم نسخ الرابط أو مشاركته، ويجب أن يسجل الموظف بنفس الإيميل المحدد.');
-  } catch (e) {
-    const msg = String(e?.message || '');
-    status(/does not exist|Could not find the function|schema cache/i.test(msg)
-      ? 'ميزة دعوات الموظفين تحتاج تطبيق تحديث قاعدة البيانات رقم 022 على مشروع Supabase أولًا.'
-      : (msg || 'تعذر إنشاء دعوة الموظف.'));
-  } finally { button.disabled = false; }
-}
-
-async function copyStaffInvite() { const value = $('dcos-created-staff-invite')?.value || ''; if (!value) return; try { await navigator.clipboard.writeText(value); status('تم نسخ رابط الدعوة. أرسله للممرضة عبر واتساب أو الرسائل.'); } catch (e) { $('dcos-created-staff-invite').focus(); $('dcos-created-staff-invite').select(); status('حدد الرابط وانسخه يدويًا.'); } }
-
-async function shareStaffInvite() { const url = $('dcos-created-staff-invite')?.value || ''; if (!url) return; if (navigator.share) { try { await navigator.share({ title: 'دعوة للانضمام إلى العيادة', text: 'افتح الرابط وسجّل باستخدام الإيميل الذي استلم الدعوة عليه.', url }); } catch (e) { if (e?.name !== 'AbortError') status('تعذرت المشاركة؛ استخدم زر نسخ الرابط.'); } } else { await copyStaffInvite(); } }
-
-async function redeemStaffInvite() {
-  const button = $('dcos-redeem-staff-invite');
-  try {
-    const token = ($('dcos-staff-invite-code').value.trim() || new URLSearchParams(location.search).get('invite') || '').trim();
-    if (!/^[0-9a-f]{64}$/i.test(token)) throw new Error('كود الدعوة غير مكتمل. الصق الكود كاملًا كما وصلك.');
-    button.disabled = true;
-    status('جارٍ التحقق من الدعوة وربط حسابك بالعيادة…');
-    const { error } = await getSupabaseClient().rpc('redeem_clinic_invitation', { p_token: token });
-    if (error) throw error;
-    $('dcos-staff-invite-code').value = '';
-    status('تم قبول الدعوة وربط حسابك بالعيادة والفرع. جارٍ تحميل الصلاحيات…');
-    const cleanUrl = new URL(location.href); cleanUrl.searchParams.delete('invite'); history.replaceState({}, '', cleanUrl.toString());
-    await loadWorkspace();
-  } catch (e) {
-    const msg = String(e?.message || '');
-    const friendly = msg.includes('INVITATION_EMAIL_MISMATCH') ? 'هذا الكود مخصص لبريد مختلف. سجّل الدخول بالإيميل الذي أرسل إليه صاحب العيادة الدعوة.'
-      : msg.includes('INVITATION_EXPIRED') ? 'انتهت صلاحية الدعوة. اطلب من صاحب العيادة كودًا جديدًا.'
-      : msg.includes('INVITATION_ALREADY_USED') ? 'تم استخدام هذا الكود من قبل. اطلب دعوة جديدة.'
-      : msg.includes('INVALID_INVITATION_CODE') ? 'كود الدعوة غير صحيح.'
-      : /does not exist|Could not find the function|schema cache/i.test(msg) ? 'قاعدة بيانات العيادة تحتاج تطبيق التحديث رقم 022 أولًا.'
-      : (msg || 'تعذر قبول الدعوة.');
-    status(friendly);
-  } finally { button.disabled = false; }
-}
-
-async function createClinic() {
-  try {
-    const name = $('dcos-new-clinic').value.trim();
-    const branchName = $('dcos-new-branch').value.trim();
-    if (!name || !branchName) throw new Error('أدخل اسم العيادة والفرع.');
-    status('جارٍ إنشاء العيادة والفرع…');
-    const client = getSupabaseClient();
-    const { data: clinicId, error } = await client.rpc('create_clinic_for_current_user', { p_name: name });
-    if (error) throw error;
-    const { data: branch, error: branchError } = await client.from('clinic_branches')
-      .insert({ clinic_id: clinicId, name: branchName })
-      .select('id').single();
-    if (branchError) throw branchError;
-    const { data: userData, error: userError } = await client.auth.getUser();
-    if (userError) throw userError;
-    const { error: assignmentError } = await client.from('clinic_member_branches').insert({
-      clinic_id: clinicId, user_id: userData.user.id, branch_id: branch.id
-    });
-    if (assignmentError) throw assignmentError;
-    status('تم إنشاء العيادة والفرع السحابي. جارٍ تحميل مساحة العمل…');
-    await loadWorkspace();
-  } catch (e) { status(friendlyCloudError(e, 'تعذر إنشاء العيادة.')); }
+async function createStaffAccount() {
+ const button=$('dcos-create-staff-account'),output=$('dcos-staff-create-status');
+ try{
+  const username=$('dcos-staff-username').value.trim().toLowerCase(),password=$('dcos-staff-password').value,role=$('dcos-staff-role').value,branchId=$('dcos-staff-branch').value;
+  if(!username||!password||!branchId)throw new Error('أكمل اسم المستخدم وكلمة المرور والفرع.');
+  button.disabled=true;output.textContent='جارٍ إنشاء الحساب وربطه بالعيادة…';
+  const created=await createClinicStaffAccount({username,password,role,branchId});
+  $('dcos-staff-password').value='';
+  output.textContent='تم إنشاء حساب '+created.username+' بوظيفة '+created.role+'. سلّم الموظف بيانات الدخول بشكل آمن.';
+  status('تم إنشاء حساب الموظف وربطه بفرع العيادة.');
+ }catch(e){
+  const m=String(e?.message||'');
+  output.textContent=m.includes('OWNER_REQUIRED')?'إنشاء حسابات الفريق متاح لمالك العيادة فقط.':m.includes('INVALID_USERNAME')?'اسم المستخدم غير صالح أو مستخدم بالفعل.':m.includes('INVALID_PASSWORD')?'كلمة المرور يجب أن تكون من 8 إلى 128 حرفًا.':m.includes('BRANCH_NOT_AVAILABLE')?'الفرع المحدد غير متاح لهذه العيادة.':m||'تعذر إنشاء الحساب.';
+ }finally{button.disabled=false;}
 }
 
 function beginPatientImport() {
@@ -557,7 +450,6 @@ try {
   const configured = embeddedConfig?.url && embeddedConfig?.publishableKey ? embeddedConfig : savedConfig;
   if (configured?.url && configured?.publishableKey) {
     configureSupabase({ url: configured.url, publishableKey: configured.publishableKey });
-    bindPasswordRecovery();
     (async () => {
       try {
         const { data, error } = await getSupabaseClient().auth.getSession();

@@ -32,7 +32,7 @@ begin
   end if;
   if p_payload is null or jsonb_typeof(p_payload) <> 'object'
      or octet_length(p_payload::text) > 12000
-     or p_payload->>'kind' <> 'appointment' then
+     or coalesce(p_payload->>'kind','') <> 'appointment' then
     raise exception 'INVALID_APPOINTMENT_PAYLOAD';
   end if;
   if coalesce(p_payload->>'source_local_id','') <> p_record_key then

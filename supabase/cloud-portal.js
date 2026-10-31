@@ -398,10 +398,11 @@ async function previewPatientImportNow() {
 function enablePatientSync() {
   if (!importBranchMap || !Object.keys(importBranchMap).length) return;
   if (!initialImportComplete) { status('لا يمكن تفعيل المزامنة قبل اكتمال الاستيراد الأولي وحل التعارضات.'); return; }
-  if (!window.confirm('سيتم حفظ ربط الفروع على هذا الجهاز. بعد ذلك ستتم مزامنة بيانات المرضى الأساسية عند حفظها، مع إبقاء السجلات الطبية والمالية محلية. هل توافق؟')) return;
+  if (!window.confirm('تم أخذ النسخة الاحتياطية ومعاينة الاستيراد. بعد اعتماد ربط الفروع ستبدأ مزامنة الأقسام السحابية المدعومة: بيانات المرضى، المواعيد، الملفات الطبية، الحسابات، المعمل، المخزون، الأسعار، الموردون والإعدادات. أي تعارض سيُوقف تحديث السجل المتعارض للمراجعة. هل توافق؟')) return;
   localStorage.setItem(BRANCH_MAP_KEY, JSON.stringify({ clinicId: activeMembership.clinic_id, map: importBranchMap }));
-  status('تم اعتماد ربط الفروع. ستتم مزامنة بيانات المرضى الأساسية فقط عند الحفظ أو عودة الاتصال.');
+  status('تم اعتماد ربط الفروع. بدأت مزامنة الأقسام المدعومة تلقائيًا؛ راجع أي تعارضات قبل اعتماد النقل بالكامل.');
   flushPatientSyncQueue();
+  queueAutomaticCloudSync('branch_mapping_approved');
 }
 
 async function confirmPatientImport() {
@@ -1222,12 +1223,19 @@ window.DCOS_CLOUD_AUTH = {
       const membership = result.membership;
       const branches = await listAssignedRemoteBranches(membership.clinic_id);
       if (membership.role !== 'owner' && !branches.length) throw new Error('لا يوجد فرع مسند لهذا الحساب. راجع مالك العيادة.');
+      const hadLocalClinic = hasLocalClinicState();
       activeMembership = membership;
       activeBranches = branches;
       // First-run devices receive their clinic/branch shell from the authenticated cloud account
       // before the main login screen tries to map the user's assigned branches.
       if (branches.length) await bootstrapEmptyDevice(membership, branches);
       const savedMap = getSavedBranchMap();
+      // Existing local clinics must complete the protected backup/import/branch-mapping flow
+      // before any local records are considered eligible for cloud migration.
+      if (hadLocalClinic && !Object.keys(savedMap).length) {
+        open();
+        await loadWorkspace();
+      }
       const mappedBranches = branches.map(branch => ({ ...branch, localBranchId: Object.keys(savedMap).find(localId => savedMap[localId] === branch.id) || '' }));
       return { userId: result.session.user.id, role: membership.role, permissions: Array.isArray(membership.permissions) ? membership.permissions : [], clinicId: membership.clinic_id, branches: mappedBranches };
     } catch (error) {

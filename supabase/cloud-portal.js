@@ -181,16 +181,16 @@ async function loadWorkspace() {
     <label>الفرع السحابي<select id="dcos-cloud-branch">${branches.map(b => `<option value="${escapeAttr(b.id)}">${escapeHtml(b.name)}</option>`).join('')}</select></label>
     <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button">تحميل مرضى الفرع</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
     <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>
-    \${membership.role === 'owner' ? \`<div class="cloud-row" id="dcos-staff-manager">
+    ${membership.role === 'owner' ? `<div class="cloud-row" id="dcos-staff-manager">
       <h3>حسابات العاملين</h3><div id="dcos-staff-list" class="muted">جارٍ تحميل الحسابات…</div>
       <h4>إضافة حساب فرعي</h4>
       <label>اسم الموظف<input id="dcos-staff-name" maxlength="120"></label>
       <label>اسم المستخدم<input id="dcos-staff-username" maxlength="32" autocomplete="off"></label>
       <label>كلمة المرور (8 أحرف على الأقل)<input id="dcos-staff-password" type="password" minlength="8" autocomplete="new-password"></label>
       <label>الدور<select id="dcos-staff-role"><option value="dentist">طبيب</option><option value="nurse">ممرضة</option><option value="reception">استقبال</option><option value="manager">مدير فرع</option><option value="accountant">محاسب</option><option value="invmgr">مسؤول المخزون</option><option value="readonly">قراءة فقط</option></select></label>
-      <label>الفرع<select id="dcos-staff-branch">\${branches.map(b => \`<option value="\${escapeAttr(b.id)}">\${escapeHtml(b.name)}</option>\`).join('')}</select></label>
+      <label>الفرع<select id="dcos-staff-branch">${branches.map(b => `<option value="${escapeAttr(b.id)}">${escapeHtml(b.name)}</option>`).join('')}</select></label>
       <button class="primary" id="dcos-create-staff" type="button">إنشاء حساب الموظف</button>
-    </div>\` : ''}`;
+    </div>` : ''}`;
   $('dcos-load-patients').addEventListener('click', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   if (membership.role === 'owner') {

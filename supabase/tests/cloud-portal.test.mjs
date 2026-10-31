@@ -73,6 +73,7 @@ assert.ok(portal.includes('appointmentSyncQueuedBranches'), 'Queued appointment 
 assert.ok(portal.includes("document.addEventListener('visibilitychange'"), 'Returning to the app must resume pending cloud synchronization');
 assert.ok(portal.includes("table: 'clinic_records'"), 'Realtime updates must watch all branch cloud records, not appointments only');
 assert.ok(portal.includes('loadPatients();') && portal.includes("new CustomEvent('dcos:cloud-user-ready')"), 'Cloud login must automatically load patients and start realtime sync');
+assert.ok(portal.includes('const mappedRemoteBranchIds = new Set(Object.values(getSavedBranchMap()).map(String))'), 'Automatic startup sync must only process explicitly mapped branches');
 assert.ok(index.includes('function save(skipCloudSync=false)'), 'Local saves must notify the cloud sync coordinator');
 assert.ok(index.includes("new CustomEvent('dcos:local-data-saved')"), 'Local app changes must emit the automatic sync event');
 assert.ok(index.includes('save(true);'), 'Applying remote changes must not recursively trigger another local sync cycle');

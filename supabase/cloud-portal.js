@@ -1086,18 +1086,34 @@ async function verifyCloudMigrationForBranch(branchId, showStatus = true) {
     const localCount = module === 'audit' ? localCounts.audit : 1;
     add(module, localCount, cloudCount);
   }
+  const countMismatches = modules.filter(item => item.status === 'count_mismatch').length;
+  const truncatedModules = [];
+  // The current remote list APIs are capped at 2,000 rows. Reaching that cap
+  // cannot be treated as an exhaustive count until cursor pagination is verified.
+  if (counts[1] === 2000) truncatedModules.push('appointments');
+  for (let i = 0; i < recordModules.length; i++) {
+    if (counts[i + 2] === 2000) truncatedModules.push(recordModules[i]);
+  }
+  const countsMatch = errors.length === 0 && countMismatches === 0 &&
+    modules.length === 11 && truncatedModules.length === 0;
   const report = {
     branchId, localBranchId, verifiedAt: new Date().toISOString(), modules, errors,
-    countMismatches: modules.filter(item => item.status === 'count_mismatch').length,
-    complete: errors.length === 0 && modules.length === 11 && modules.every(item => item.status === 'count_match')
+    countMismatches, truncatedModules, countsMatch,
+    verificationLevel: 'count_only',
+    contentVerified: false,
+    requiresContentVerification: true,
+    // Never declare a migration complete from counts alone. Stable identity
+    // and canonical payload/checksum comparisons are still required.
+    complete: false
   };
   window.dispatchEvent(new CustomEvent('dcos:cloud-migration-verified', { detail: report }));
   if (showStatus) {
     const mismatches = report.countMismatches;
-    status('فحص النقل السحابي: ' + modules.length + ' أقسام تمت مراجعتها، ' +
-      (mismatches ? mismatches + ' أقسام بها اختلاف في العدد' : 'الأعداد متطابقة') +
-      (errors.length ? '، ' + errors.length + ' أقسام تعذر فحصها' : '') +
-      '. تطابق الأعداد لا يغني عن مراجعة عينة من البيانات.');
+    status('فحص النقل السحابي الأولي: ' + modules.length + ' أقسام، ' +
+      (mismatches ? mismatches + ' اختلافات في العدد' : 'الأعداد متطابقة') +
+      (errors.length ? '، ' + errors.length + ' أخطاء قراءة' : '') +
+      (truncatedModules.length ? '، توجد نتائج وصلت لحد القراءة' : '') +
+      '. لم يتم اعتماد اكتمال النقل؛ يلزم فحص هوية ومحتوى السجلات.');
   }
   return report;
 }

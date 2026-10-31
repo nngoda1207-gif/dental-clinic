@@ -684,7 +684,7 @@ function getLocalPatientModuleSnapshot(localBranchId) {
   if (!snapshot) throw new Error('تعذر قراءة بيانات المرضى المحلية للمزامنة.');
   return snapshot;
 }
-async function syncPatientModuleForBranch(branchId, module, showStatus = false) {
+async function syncPatientModuleForBranchUnlocked(branchId, module, showStatus = false) {
   const permissionCodes = module === 'treatment' ? ['cl','mv'] : ['ex','fv'];
   const permissions = Array.isArray(activeMembership?.permissions) ? activeMembership.permissions : [];
   if (!activeMembership || (activeMembership.role !== 'owner' && !permissions.some(code => permissionCodes.includes(code)))) return { synced: 0, conflicts: [], skipped: true };
@@ -742,6 +742,16 @@ async function syncPatientModuleForBranch(branchId, module, showStatus = false) 
   }));
   if (showStatus) status((module === 'treatment' ? 'مزامنة الملفات الطبية' : 'مزامنة الحسابات') + ': ' + merged.length + ' سجلًا، ' + conflicts.length + ' تعارضات تحتاج مراجعة.');
   return { synced: merged.length, conflicts };
+}
+
+const patientModuleLocks = new Map();
+async function syncPatientModuleForBranch(branchId, module, showStatus = false) {
+  const lockKey = String(branchId) + '::' + String(module);
+  if (patientModuleLocks.has(lockKey)) return patientModuleLocks.get(lockKey);
+  const task = syncPatientModuleForBranchUnlocked(branchId, module, showStatus);
+  patientModuleLocks.set(lockKey, task);
+  try { return await task; }
+  finally { if (patientModuleLocks.get(lockKey) === task) patientModuleLocks.delete(lockKey); }
 }
 async function syncClinicalAndFinanceForBranch(branchId, showStatus = false) {
   const results = [];
@@ -897,6 +907,20 @@ async function bootstrapEmptyDevice(membership, branches) {
     detail: { clinicId: membership.clinic_id, clinicName, branches, dentists }
   }));
 }
+
+
+window.addEventListener('dcos:cloud-patient-links', event => {
+  if (!activeMembership) return;
+  for (const link of event.detail?.links || []) {
+    const branchId = getSavedBranchMap()[String(link.localBranchId || '')];
+    if (branchId) syncClinicalAndFinanceForBranch(branchId, false).catch(() => {});
+  }
+});
+window.addEventListener('dcos:cloud-patients', event => {
+  if (!activeMembership) return;
+  const branchId = getSavedBranchMap()[String(event.detail?.localBranchId || '')];
+  if (branchId) syncClinicalAndFinanceForBranch(branchId, false).catch(() => {});
+});
 
 window.addEventListener('dcos:patient-saved', event => {
   const patient = event.detail;

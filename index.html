@@ -183,6 +183,32 @@ window.addEventListener('dcos:get-local-appointments',event=>{
     chairs:(D.chairs||[]).filter(item=>item.br===branchId).map(item=>({...item}))
   });
 });
+
+window.addEventListener('dcos:get-local-inventory',event=>{
+  if(!D||!ME)return;
+  const detail=event.detail||{};
+  if(typeof detail.respond!=='function')return;
+  const branchId=String(detail.localBranchId||'');
+  detail.respond({items:(D.items||[]).filter(item=>item.br===branchId).map(item=>({...item,mv:Array.isArray(item.mv)?item.mv.map(m=>({...m})):[]}))});
+});
+window.addEventListener('dcos:cloud-inventory',event=>{
+  if(!D||!ME)return;
+  const {localBranchId,items=[],conflicts=[]}=event.detail||{};
+  if(!localBranchId||!myBr().some(branch=>branch.id===localBranchId))return;
+  D.items=D.items||[];
+  for(const incoming of items){
+    const local=D.items.find(item=>item.br===localBranchId&&String(item.id)===String(incoming.id));
+    if(local)Object.assign(local,incoming,{id:local.id,br:localBranchId});
+    else D.items.push({...incoming,br:localBranchId});
+  }
+  for(const conflict of conflicts){
+    const local=D.items.find(item=>item.br===localBranchId&&String(item.id)===String(conflict.localId));
+    if(local)local.cloudConflict=conflict.reason||'sync_conflict';
+  }
+  if(items.length||conflicts.length){save();if(view==='stk'&&!$('#dlg')?.open&&!$('#dlg2')?.open)stkV();}
+  if(conflicts.length)toast('يوجد '+conflicts.length+' تعارضات في المخزون؛ لم يتم استبدال البيانات المتعارضة.');
+});
+
 window.addEventListener('dcos:cloud-appointments',event=>{
   if(!D||!ME)return;
   const {localBranchId,appointments=[],conflicts=[]}=event.detail||{};

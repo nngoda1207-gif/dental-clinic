@@ -49,6 +49,17 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
     <button class="primary" id="dcos-save-config" type="button">حفظ إعداد الاتصال</button>
     <p class="muted">لا تضع Service Role أو Secret Key هنا. الإعدادات تحفظ على هذا الجهاز فقط.</p>
   </div>
+  <details class="cloud-row" id="dcos-system-provisioning">
+    <summary><b>إدارة النظام — إنشاء حساب عيادة</b></summary>
+    <p class="muted">هذا القسم لمسؤول النظام فقط. أدخل مفتاح التهيئة المحفوظ في Supabase Secrets لإنشاء حساب مالك مستقل وعيادته والفرع الرئيسي. لا يتم حفظ المفتاح على الجهاز.</p>
+    <label>اسم العيادة<input id="dcos-provision-clinic-name" type="text" maxlength="160" autocomplete="off"></label>
+    <label>اسم الفرع الرئيسي<input id="dcos-provision-branch-name" type="text" maxlength="160" value="الفرع الرئيسي" autocomplete="off"></label>
+    <label>اسم مستخدم مالك العيادة<input id="dcos-provision-username" type="text" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+    <label>كلمة مرور المالك<input id="dcos-provision-password" type="password" minlength="8" autocomplete="new-password"></label>
+    <label>مفتاح مسؤول النظام<input id="dcos-provision-key" type="password" autocomplete="off"></label>
+    <button class="primary" id="dcos-provision-clinic" type="button">إنشاء حساب العيادة</button>
+    <p id="dcos-provision-status" class="muted" role="status"></p>
+  </details>
   <div id="dcos-cloud-auth">
     <label>اسم المستخدم<input id="dcos-sb-username" type="text" maxlength="32" placeholder="اسم المستخدم" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
     <label>كلمة المرور<input id="dcos-sb-password" type="password" autocomplete="current-password" placeholder="كلمة المرور"></label>
@@ -104,6 +115,35 @@ function configure() {
 $('dcos-save-config').addEventListener('click', () => {
   try { configure(); status('تم حفظ إعداد الاتصال على هذا الجهاز.'); }
   catch (e) { status(e.message || 'تعذر إعداد الاتصال.'); }
+});
+$('dcos-provision-clinic').addEventListener('click', async () => {
+  const button = $('dcos-provision-clinic'), output = $('dcos-provision-status');
+  try {
+    configure();
+    const clinic_name = $('dcos-provision-clinic-name').value.trim();
+    const branch_name = $('dcos-provision-branch-name').value.trim();
+    const username = $('dcos-provision-username').value.trim().toLowerCase();
+    const password = $('dcos-provision-password').value;
+    const key = $('dcos-provision-key').value;
+    if (!clinic_name || !branch_name || !username || !password || !key) throw new Error('أكمل بيانات العيادة والحساب ومفتاح مسؤول النظام.');
+    button.disabled = true; output.textContent = 'جارٍ إنشاء حساب المالك والعيادة والفرع…';
+    const { data, error } = await getSupabaseClient().functions.invoke('clinic-auth', {
+      body: { action: 'provision_clinic', clinic_name, branch_name, username, password },
+      headers: { 'x-clinic-provisioning-key': key }
+    });
+    if (error) throw error;
+    if (!data?.ok) throw new Error(data?.error || 'تعذر إنشاء حساب العيادة.');
+    $('dcos-provision-password').value = ''; $('dcos-provision-key').value = '';
+    output.textContent = 'تم إنشاء العيادة. اسم المستخدم الأساسي: ' + data.username + '. احفظ كلمة المرور التي أدخلتها في مكان آمن.';
+    status('تم إنشاء حساب مالك العيادة بنجاح. يمكنك الآن تسجيل الدخول من الشاشة الرئيسية.');
+  } catch (e) {
+    const m = String(e?.message || '');
+    output.textContent = m.includes('PROVISIONING_NOT_CONFIGURED') ? 'لم يتم ضبط CLINIC_PROVISIONING_KEY في Supabase Edge Function Secrets بعد.' :
+      m.includes('FORBIDDEN') ? 'مفتاح مسؤول النظام غير صحيح.' :
+      m.includes('INVALID_USERNAME') ? 'اسم المستخدم يجب أن يكون 3–32 حرفًا/رقمًا إنجليزيًا دون مسافات.' :
+      m.includes('INVALID_PASSWORD') ? 'كلمة المرور يجب أن تكون من 8 إلى 128 حرفًا.' :
+      m || 'تعذر إنشاء حساب العيادة.';
+  } finally { button.disabled = false; }
 });
 $('dcos-sb-login').addEventListener('click', async () => {
   try {

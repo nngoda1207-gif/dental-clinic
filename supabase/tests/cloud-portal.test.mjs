@@ -53,6 +53,18 @@ assert.ok(portal.includes('inventoryPayloadEqual'), 'Inventory sync must detect 
 assert.ok(portal.includes("permissions.some(code => ['im','iv'].includes(code))"), 'Automatic inventory sync must respect the signed-in user inventory permissions');
 assert.ok(portal.includes('dcos:get-local-inventory') && portal.includes('dcos:cloud-inventory'), 'Inventory sync must cross the app boundary through explicit events');
 assert.ok(portal.includes('syncLabsForBranch'), 'Lab cases must synchronize through the guarded labs module');
+assert.ok(portal.includes('function canonicalCloudValue'), 'Cloud payload comparisons must be independent of JSON object key order');
+assert.ok(portal.includes('function cloudPayloadEqual'), 'Cloud modules must share a canonical payload equality check');
+assert.ok(portal.includes('cloudPayloadEqual(a,b)'), 'Patient and lab payloads must use canonical equality');
+assert.ok(portal.includes('function appointmentPayloadEqual') && portal.includes('cloudPayloadEqual(a?.[key], b?.[key])'), 'Appointment conflict checks must use canonical field comparisons');
+assert.ok(portal.includes('function inventoryPayloadEqual(a,b) { return cloudPayloadEqual(a,b); }'), 'Inventory conflict checks must use canonical payload comparisons');
+assert.ok(portal.includes('syncClinicalFinanceAndLabsForBranch'), 'Clinical, finance and lab sync must be grouped for manual and automatic use');
+assert.ok(portal.includes("module: 'treatment'") && portal.includes("module: 'finance'"), 'Patient treatment and finance must use separate cloud modules');
+assert.ok(index.includes('dcos:get-local-cloud-data') && index.includes('cloudModules'), 'The app must expose branch-scoped clinical and financial snapshots');
+assert.ok(index.includes("window.addEventListener('dcos:cloud-patient-modules'"), 'The app must merge treatment and finance modules into the matching patient');
+assert.ok(index.includes("window.addEventListener('dcos:get-local-cloud-data'") && index.includes('labCases'), 'The app must expose branch-scoped lab cases to the cloud portal');
+assert.ok(index.includes("window.addEventListener('dcos:cloud-labs'"), 'The app must merge lab cases received from the cloud');
+assert.ok(index.includes("window.dispatchEvent(new CustomEvent('dcos:lab-saved'"), 'Lab case edits and payments must notify the cloud sync layer');
 assert.ok(portal.includes("module: 'labs'"), 'Lab cases must use the guarded generic labs module');
 assert.ok(portal.includes('dcos:cloud-labs'), 'Lab sync must return cloud records to the local app');
 assert.ok(portal.includes("window.addEventListener('dcos:lab-saved'"), 'Lab edits and payments must trigger cloud sync');

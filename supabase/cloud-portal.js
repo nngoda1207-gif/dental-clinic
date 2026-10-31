@@ -492,6 +492,31 @@ async function flushPatientSyncQueue() {
   }
 }
 
+// Main-app username login bridge. Keep credentials in Supabase Auth only; never persist them locally.
+window.DCOS_CLOUD_AUTH = {
+  async login(username, password) {
+    await signInWithUsername(username, password);
+    try {
+      const result = await getCurrentClinicMembership();
+      if (!result?.membership) throw new Error('الحساب غير مرتبط بعضوية عيادة نشطة.');
+      const membership = result.membership;
+      const branches = await listAssignedRemoteBranches(membership.clinic_id);
+      if (membership.role !== 'owner' && !branches.length) throw new Error('لا يوجد فرع مسند لهذا الحساب. راجع مالك العيادة.');
+      activeMembership = membership;
+      activeBranches = branches;
+      return { userId: result.session.user.id, role: membership.role, clinicId: membership.clinic_id, branches };
+    } catch (error) {
+      await signOutSupabase().catch(() => {});
+      throw error;
+    }
+  },
+  async logout() {
+    activeMembership = null;
+    activeBranches = [];
+    await signOutSupabase();
+  }
+};
+
 restoreConfig();
 try {
   const savedConfig = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');

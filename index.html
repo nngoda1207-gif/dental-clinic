@@ -184,6 +184,48 @@ window.addEventListener('dcos:get-local-appointments',event=>{
   });
 });
 
+
+window.addEventListener('dcos:get-local-cloud-data',event=>{
+  if(!D||!ME)return;
+  const detail=event.detail||{};
+  if(typeof detail.respond!=='function')return;
+  const branchId=String(detail.localBranchId||'');
+  const patients=(D.patients||[]).filter(patient=>patient.br===branchId).map(patient=>({
+    id:patient.id,no:patient.no,cloudModules:patient.cloudModules?JSON.parse(JSON.stringify(patient.cloudModules)):{},
+    mh:patient.mh||{c:[]},teeth:patient.teeth||{},plan:patient.plan||[],visits:patient.visits||[],
+    rx:patient.rx||[],cons:patient.cons||[],perio:patient.perio||[],pdisc:patient.pdisc||0,
+    appr:patient.appr||null,notes:patient.notes||[],pay:patient.pay||[]
+  }));
+  detail.respond({patients});
+});
+window.addEventListener('dcos:cloud-patient-modules',event=>{
+  if(!D||!ME)return;
+  const {localBranchId,module,records=[],conflicts=[]}=event.detail||{};
+  if(!localBranchId||!myBr().some(branch=>branch.id===localBranchId))return;
+  let changed=false;
+  for(const record of records){
+    const patient=(D.patients||[]).find(item=>item.br===localBranchId&&String(item.no)===String(record.patientNo));
+    if(!patient)continue;
+    const payload=record.payload||{};
+    if(module==='treatment'){
+      for(const key of ['mh','teeth','plan','visits','rx','cons','perio','pdisc','appr','notes']){
+        if(Object.prototype.hasOwnProperty.call(payload,key))patient[key]=payload[key];
+      }
+    }else if(module==='finance'){
+      if(Array.isArray(payload.pay))patient.pay=payload.pay;
+    }
+    patient.cloudModules=patient.cloudModules||{};
+    patient.cloudModules[module]={revision:record.revision,snapshot:JSON.parse(JSON.stringify(payload))};
+    changed=true;
+  }
+  for(const conflict of conflicts){
+    const patient=(D.patients||[]).find(item=>item.br===localBranchId&&String(item.no)===String(conflict.patientNo));
+    if(patient){patient.cloudModuleConflicts=patient.cloudModuleConflicts||{};patient.cloudModuleConflicts[module]=conflict.reason||'sync_conflict';}
+  }
+  if(changed||conflicts.length){save();if(view==='pat'&&sel&&!$('#dlg')?.open&&!$('#dlg2')?.open)detV();}
+  if(conflicts.length)toast('يوجد '+conflicts.length+' تعارضات في '+(module==='treatment'?'الملفات الطبية':'الحسابات')+'؛ لم يتم استبدال البيانات المتعارضة.');
+});
+
 window.addEventListener('dcos:get-local-inventory',event=>{
   if(!D||!ME)return;
   const detail=event.detail||{};

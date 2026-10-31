@@ -54,22 +54,22 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
     <button class="primary" id="dcos-save-config" type="button">حفظ إعداد الاتصال</button>
     <p class="muted">لا تضع Service Role أو Secret Key هنا. الإعدادات تحفظ على هذا الجهاز فقط.</p>
   </div>
-  <details class="cloud-row" id="dcos-system-provisioning">
-    <summary><b>إدارة النظام — إنشاء حساب عيادة</b></summary>
-    <p class="muted">هذا القسم لمسؤول النظام فقط. أدخل مفتاح التهيئة المحفوظ في Supabase Secrets لإنشاء حساب مالك مستقل وعيادته والفرع الرئيسي. لا يتم حفظ المفتاح على الجهاز.</p>
-    <label>اسم العيادة<input id="dcos-provision-clinic-name" type="text" maxlength="160" autocomplete="off"></label>
+  <details class="cloud-row" id="dcos-system-provisioning" open style="border:2px solid var(--ac,#1f8a80);border-radius:12px;padding:14px;margin:14px 0">
+    <summary style="font-weight:700;cursor:pointer;font-size:16px">① إنشاء حساب عيادة جديد — مسؤول النظام</summary>
+    <p class="muted">استخدم هذا القسم لإنشاء الحساب الأساسي للعيادة لأول مرة. لا تكتب اسم المستخدم في خانة اسم العيادة. بعد الإنشاء، سجّل الدخول من قسم الدخول أسفل هذه الشاشة. أدخل قيمة المفتاح المحفوظة في Supabase Secrets؛ لن يتم حفظها على الجهاز.</p>
+    <label>اسم العيادة (الاسم الظاهر)<input id="dcos-provision-clinic-name" type="text" maxlength="160" autocomplete="off" placeholder="Elsharkawy Dental Clinic"></label>
     <label>اسم الفرع الرئيسي<input id="dcos-provision-branch-name" type="text" maxlength="160" value="الفرع الرئيسي" autocomplete="off"></label>
-    <label>اسم مستخدم مالك العيادة<input id="dcos-provision-username" type="text" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
-    <label>كلمة مرور المالك<input id="dcos-provision-password" type="password" minlength="8" autocomplete="new-password"></label>
-    <label>مفتاح مسؤول النظام<input id="dcos-provision-key" type="password" autocomplete="off"></label>
+    <label>اسم مستخدم مالك العيادة (للدخول لاحقًا)<input id="dcos-provision-username" type="text" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="amr.atef"></label>
+    <label>كلمة مرور مالك العيادة<input id="dcos-provision-password" type="password" minlength="8" autocomplete="new-password" placeholder="8 أحرف على الأقل"></label>
+    <label>مفتاح مسؤول النظام (قيمة Secret المحفوظة في Supabase)<input id="dcos-provision-key" type="password" autocomplete="off" placeholder="CLINIC_PROVISIONING_KEY value"></label>
     <button class="primary" id="dcos-provision-clinic" type="button">إنشاء حساب العيادة</button>
     <p id="dcos-provision-status" class="muted" role="status"></p>
   </details>
   <div id="dcos-cloud-auth">
-    <label>اسم المستخدم<input id="dcos-sb-username" type="text" maxlength="32" placeholder="اسم المستخدم" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+    <label>اسم مستخدم العيادة<input id="dcos-sb-username" type="text" maxlength="32" placeholder="اسم المستخدم" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
     <label>كلمة المرور<input id="dcos-sb-password" type="password" autocomplete="current-password" placeholder="كلمة المرور"></label>
     <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">دخول</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
-    <p class="muted">الحسابات ينشئها مسؤول النظام أو مدير العيادة. لا يوجد إنشاء حساب ذاتي أو دخول بالبريد الإلكتروني.</p>
+    <p class="muted">هذا القسم للدخول فقط بعد إنشاء العيادة. حسابات الموظفين ينشئها مالك العيادة من داخل التطبيق.</p>
   </div>
   <div id="dcos-cloud-workspace" hidden></div>
   <p id="dcos-cloud-status" class="muted" role="status" aria-live="polite"></p>

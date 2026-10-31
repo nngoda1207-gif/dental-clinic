@@ -85,7 +85,8 @@ Deno.serve(async req=>{
    if(!branchIds.length)return json({ok:true,dentists:[]});
    const {data:assignments,error:e2}=await admin.from("clinic_member_branches").select("user_id,branch_id").eq("clinic_id",membership.clinic_id).in("branch_id",branchIds);
    if(e2)throw e2;
-   const assigned=(assignments||[]).reduce((acc,x)=>{(acc[x.user_id]??=[]).push(x.branch_id);return acc;},{});
+   const assigned:Record<string,string[]>={};
+   for(const item of assignments||[]){(assigned[item.user_id]??=[]).push(item.branch_id);}
    const ids=Object.keys(assigned);
    if(!ids.length)return json({ok:true,dentists:[]});
    const {data:staff,error:e3}=await admin.from("clinic_members").select("user_id,role,active").eq("clinic_id",membership.clinic_id).eq("active",true).in("user_id",ids).in("role",["owner","manager","dentist"]);

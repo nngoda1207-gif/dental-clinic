@@ -6,13 +6,14 @@ on:
   pull_request:
     paths:
       - 'index.html'
+      - 'scripts/build-web.js'
       - 'supabase/**'
       - 'package.json'
       - 'package-lock.json'
       - 'capacitor.config.json'
       - '.github/workflows/android-apk.yml'
   push:
-    branches: [feature/supabase-shared-clinic, fix/persistent-cloud-account]
+    branches: [feature/supabase-shared-clinic, fix/persistent-cloud-account, recovery/working-build-388]
     paths:
       - 'index.html'
       - 'supabase/**'

@@ -212,7 +212,6 @@ async function loadWorkspace() {
     <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-sync-appointments" type="button">مزامنة المواعيد</button><button id="dcos-sync-inventory" type="button">مزامنة المخزون</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
     <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
   $('dcos-sync-appointments').addEventListener('click', async () => { const branchId = $('dcos-cloud-branch').value; try { await syncAppointmentsForBranch(branchId, true); startAppointmentRealtime(branchId); } catch {} });
-  $('dcos-sync-inventory').addEventListener('click', async () => { try { await syncInventoryForBranch($('dcos-cloud-branch').value, true); } catch {} });
   $('dcos-cloud-branch').addEventListener('change', () => { for (const channel of appointmentRealtimeChannels.values()) getSupabaseClient().removeChannel(channel); appointmentRealtimeChannels.clear(); });
   if (membership.role === 'owner') {
     const staffBox = el('section', { class: 'cloud-row' });

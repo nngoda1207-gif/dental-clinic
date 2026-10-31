@@ -232,6 +232,54 @@ window.addEventListener('dcos:cloud-patient-modules',event=>{
   if(conflicts.length)toast('يوجد '+conflicts.length+' تعارضات في '+(module==='treatment'?'الملفات الطبية':'الحسابات')+'؛ لم يتم استبدال البيانات المتعارضة.');
 });
 
+
+window.addEventListener('dcos:get-local-aux',event=>{
+  if(!D||!ME)return;
+  const detail=event.detail||{};
+  if(typeof detail.respond!=='function')return;
+  const branchId=String(detail.localBranchId||''),module=String(detail.module||'');
+  D.cloudAuxState=D.cloudAuxState||{};
+  const baseline=D.cloudAuxState[module]?.[branchId]?.snapshot||null;
+  let payload={},isEmpty=false;
+  if(module==='prices'){payload={items:(D.procs||[]).map(item=>({...item}))};isEmpty=!payload.items.length;}
+  else if(module==='suppliers'){payload={items:(D.sups||[]).map(item=>({...item}))};isEmpty=!payload.items.length;}
+  else if(module==='settings'){payload={settings:{...(D.settings||{})}};isEmpty=!Object.keys(payload.settings).length;}
+  else if(module==='branches'){
+    const branch=(D.branches||[]).find(item=>String(item.id)===branchId)||{};
+    payload={branch:{name:branch.name||'',address:branch.address||'',phone:branch.phone||'',hours:branch.hours||''},
+      chairs:(D.chairs||[]).filter(item=>String(item.br)===branchId).map(item=>({id:item.id,name:item.name,act:item.act!==false}))};
+    isEmpty=!payload.branch.name&&!payload.chairs.length;
+  }else return;
+  detail.respond({payload,baseline,isEmpty});
+});
+window.addEventListener('dcos:cloud-aux',event=>{
+  if(!D||!ME)return;
+  const {localBranchId,module,records=[],conflicts=[]}=event.detail||{};
+  if(!localBranchId||!myBr().some(branch=>String(branch.id)===String(localBranchId)))return;
+  D.cloudAuxState=D.cloudAuxState||{};
+  D.cloudAuxState[module]=D.cloudAuxState[module]||{};
+  for(const entry of records){
+    const payload=entry.payload||{};
+    if(module==='prices')D.procs=Array.isArray(payload.items)?payload.items:[];
+    else if(module==='suppliers')D.sups=Array.isArray(payload.items)?payload.items:[];
+    else if(module==='settings')D.settings={...(D.settings||{}),...(payload.settings||{})};
+    else if(module==='branches'){
+      const branch=(D.branches||[]).find(item=>String(item.id)===String(localBranchId));
+      if(branch&&payload.branch)Object.assign(branch,payload.branch);
+      const incoming=Array.isArray(payload.chairs)?payload.chairs:[];
+      D.chairs=(D.chairs||[]).filter(item=>String(item.br)!==String(localBranchId));
+      for(const chair of incoming)D.chairs.push({id:uid(),name:String(chair.name||''),act:chair.act!==false,br:localBranchId});
+    }
+    D.cloudAuxState[module][localBranchId]={revision:entry.revision,snapshot:JSON.parse(JSON.stringify(payload))};
+  }
+  for(const conflict of conflicts){
+    D.cloudAuxState[module][localBranchId]=D.cloudAuxState[module][localBranchId]||{};
+    D.cloudAuxState[module][localBranchId].conflict=conflict.reason||'sync_conflict';
+  }
+  if(records.length||conflicts.length){save(true);if(['prices','suppliers','settings','branches'].includes(module))render();}
+  if(conflicts.length)toast('يوجد تعارض في قسم '+module+'؛ لم نستبدل البيانات المتعارضة.');
+});
+
 window.addEventListener('dcos:get-local-inventory',event=>{
   if(!D||!ME)return;
   const detail=event.detail||{};

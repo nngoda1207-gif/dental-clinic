@@ -207,8 +207,8 @@ async function loadWorkspace() {
     <label>الفرع السحابي<select id="dcos-cloud-branch">${branches.map(b => `<option value="${escapeAttr(b.id)}">${escapeHtml(b.name)}</option>`).join('')}</select></label>
     <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-sync-appointments" type="button">مزامنة المواعيد</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
     <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
-  $('dcos-sync-appointments').addEventListener('click', () => syncAppointmentsForBranch($('dcos-cloud-branch').value, true));
-  $('dcos-cloud-branch').addEventListener('change', event => { if (appointmentRealtimeChannel) getSupabaseClient().removeChannel(appointmentRealtimeChannel); });
+  $('dcos-sync-appointments').addEventListener('click', async () => { const branchId = $('dcos-cloud-branch').value; try { await syncAppointmentsForBranch(branchId, true); startAppointmentRealtime(branchId); } catch {} });
+  $('dcos-cloud-branch').addEventListener('change', event => { if (appointmentRealtimeChannel) { getSupabaseClient().removeChannel(appointmentRealtimeChannel); appointmentRealtimeChannel = null; } });
   if (membership.role === 'owner') {
     const staffBox = el('section', { class: 'cloud-row' });
     staffBox.innerHTML = '<h3>إنشاء حساب موظف</h3><p class="muted">أنشئ اسم مستخدم وكلمة مرور لكل فرد في الفريق، وحدد وظيفته والفرع المسموح له. لا نطلب بريدًا إلكترونيًا.</p><label>اسم المستخدم<input id="dcos-staff-username" type="text" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="مثال: nurse01"></label><label>كلمة المرور<input id="dcos-staff-password" type="password" minlength="8" autocomplete="new-password" placeholder="8 أحرف على الأقل"></label><label>الوظيفة<select id="dcos-staff-role"><option value="nurse">تمريض</option><option value="dentist">طبيب</option><option value="reception">استقبال</option><option value="accountant">حسابات</option><option value="manager">مدير</option><option value="invmgr">مسؤول مخزون</option><option value="readonly">قراءة فقط</option></select></label><label>الفرع<select id="dcos-staff-branch">' + branches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('') + '</select></label><button class="primary" id="dcos-create-staff-account" type="button">إنشاء حساب الموظف</button><p id="dcos-staff-create-status" class="muted" role="status"></p>';
@@ -601,11 +601,17 @@ function startAppointmentRealtime(branchId) {
       if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') status('المتابعة اللحظية للمواعيد غير متاحة؛ استخدم زر مزامنة المواعيد.');
     });
 }
+window.addEventListener('dcos:cloud-user-ready', () => {
+  if (!activeMembership) return;
+  for (const branch of activeBranches) {
+    syncAppointmentsForBranch(branch.id, false).then(() => startAppointmentRealtime(branch.id)).catch(() => {});
+  }
+});
 window.addEventListener('dcos:appointment-saved', event => {
   const branchId = event.detail?.branchId;
   const map = getSavedBranchMap();
   const remoteBranchId = map[String(branchId)];
-  if (remoteBranchId && activeMembership) syncAppointmentsForBranch(remoteBranchId, false).catch(() => {});
+  if (remoteBranchId && activeMembership) syncAppointmentsForBranch(remoteBranchId, false).then(() => startAppointmentRealtime(remoteBranchId)).catch(() => {});
 });
 
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }

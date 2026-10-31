@@ -1221,6 +1221,9 @@ window.DCOS_CLOUD_AUTH = {
       if (membership.role !== 'owner' && !branches.length) throw new Error('لا يوجد فرع مسند لهذا الحساب. راجع مالك العيادة.');
       activeMembership = membership;
       activeBranches = branches;
+      // First-run devices receive their clinic/branch shell from the authenticated cloud account
+      // before the main login screen tries to map the user's assigned branches.
+      if (branches.length) await bootstrapEmptyDevice(membership, branches);
       const savedMap = getSavedBranchMap();
       const mappedBranches = branches.map(branch => ({ ...branch, localBranchId: Object.keys(savedMap).find(localId => savedMap[localId] === branch.id) || '' }));
       return { userId: result.session.user.id, role: membership.role, permissions: Array.isArray(membership.permissions) ? membership.permissions : [], clinicId: membership.clinic_id, branches: mappedBranches };

@@ -146,7 +146,7 @@ function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';cl
 function audit(act,ref,det){D.audit.unshift({id:uid(),t:now(),u:ME?ME.name:'—',r:ME?ME.role:'',act,ref:ref||'',det:det||''});D.audit.length=Math.min(D.audit.length,2000)}
 async function hp(p,s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s+':'+p));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 const R={owner:'مالك العيادة',manager:'مدير فرع',dentist:'طبيب',nurse:'تمريض',reception:'استقبال',accountant:'محاسب',invmgr:'مسؤول المخزون',readonly:'قراءة فقط'};
-const P={owner:['*'],manager:['pv','pa','pe','pr','ex','au','br'],dentist:['pv','pa','pe'],nurse:['pv','pa','pe'],reception:['pv','pa','pe'],accountant:['pv','ex'],invmgr:['im','iv'],readonly:['pv']};
+const P={owner:['*'],manager:['pv','pa','pe','pr','ex','au','br'],dentist:['pv','pa','pe'],nurse:['pv','pa','pe'],reception:['pv','pa','pe'],accountant:['pv','ex'],invmgr:['pv','im','iv'],readonly:['pv']};
 const can=p=>!!ME&&(ME.role==='owner'||(ME.cloud&&Array.isArray(ME.permissions)?ME.permissions.includes(p):!!P[ME.role]&&(P[ME.role].includes('*')||P[ME.role].includes(p))));
 const myBr=()=>ME.role==='owner'?D.branches:D.branches.filter(b=>ME.branches.includes(b.id));
 const vis=()=>{const ids=myBr().map(b=>b.id);return D.patients.filter(p=>ids.includes(p.br)&&(br==='all'||p.br===br))};

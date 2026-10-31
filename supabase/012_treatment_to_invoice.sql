@@ -92,8 +92,8 @@ begin
 
   select clinic_id into v_clinic_id from public.clinic_branches where id=p_branch_id;
   if v_clinic_id is null then raise exception 'Branch not found' using errcode='P0002'; end if;
-  if not public.has_clinic_role(v_clinic_id,array['owner','manager','accountant'])
-     or not public.can_access_clinic_branch(v_clinic_id,p_branch_id) then
+  if not private.has_clinic_role(v_clinic_id,array['owner','manager','accountant'])
+     or not private.can_access_clinic_branch(v_clinic_id,p_branch_id) then
     raise exception 'Not allowed to create invoices in this branch' using errcode='42501';
   end if;
   if not exists (

@@ -247,7 +247,7 @@ window.addEventListener('dcos:get-local-aux',event=>{
   else if(module==='branches'){
     const branch=(D.branches||[]).find(item=>String(item.id)===branchId)||{};
     payload={branch:{name:branch.name||'',address:branch.address||'',phone:branch.phone||'',hours:branch.hours||''},
-      chairs:(D.chairs||[]).filter(item=>String(item.br)===branchId).map(item=>({id:item.id,name:item.name,act:item.act!==false}))};
+      chairs:(D.chairs||[]).filter(item=>String(item.br)===branchId).map(item=>({name:item.name,act:item.act!==false}))};
     isEmpty=!payload.branch.name&&!payload.chairs.length;
   }else return;
   detail.respond({payload,baseline,isEmpty});

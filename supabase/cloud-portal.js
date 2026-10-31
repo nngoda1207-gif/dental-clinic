@@ -209,7 +209,7 @@ async function loadWorkspace() {
   }
   host.innerHTML = `<p><b>الدور:</b> ${escapeHtml(membership.role)} <span class="muted">· تم التحقق من العضوية النشطة</span></p>
     <label>الفرع السحابي<select id="dcos-cloud-branch">${branches.map(b => `<option value="${escapeAttr(b.id)}">${escapeHtml(b.name)}</option>`).join('')}</select></label>
-    <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-sync-appointments" type="button">مزامنة المواعيد</button><button id="dcos-sync-inventory" type="button">مزامنة المخزون</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
+    <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-sync-appointments" type="button">مزامنة المواعيد</button><button id="dcos-sync-inventory" type="button">مزامنة المخزون</button><button id="dcos-sync-clinical-finance" type="button">مزامنة الملفات الطبية والحسابات</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
     <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
   $('dcos-sync-appointments').addEventListener('click', async () => { const branchId = $('dcos-cloud-branch').value; try { await syncAppointmentsForBranch(branchId, true); startAppointmentRealtime(branchId); } catch {} });
   $('dcos-cloud-branch').addEventListener('change', () => { for (const channel of appointmentRealtimeChannels.values()) getSupabaseClient().removeChannel(channel); appointmentRealtimeChannels.clear(); });
@@ -226,6 +226,7 @@ async function loadWorkspace() {
   $('dcos-load-patients').addEventListener('click', loadPatients);
   $('dcos-sync-appointments').addEventListener('click', () => syncAppointmentsForBranch($('dcos-cloud-branch').value, true));
   $('dcos-sync-inventory').addEventListener('click', () => syncInventoryForBranch($('dcos-cloud-branch').value, true).catch(error => status('تعذر مزامنة المخزون: ' + (error.message || 'خطأ غير معروف'))));
+  $('dcos-sync-clinical-finance').addEventListener('click', () => syncClinicalAndFinanceForBranch($('dcos-cloud-branch').value, true));
   $('dcos-cloud-branch').addEventListener('change', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
@@ -658,6 +659,103 @@ async function syncInventoryForBranch(branchId, showStatus = false) {
   return { synced: merged.length, conflicts };
 }
 
+
+function patientModulePayload(patient, module) {
+  if (module === 'treatment') return {
+    patientNo: String(patient.no || ''),
+    mh: patient.mh || { c: [] }, teeth: patient.teeth || {},
+    plan: patient.plan || [], visits: patient.visits || [],
+    rx: patient.rx || [], cons: patient.cons || [], perio: patient.perio || [],
+    pdisc: Number(patient.pdisc || 0), appr: patient.appr || null,
+    notes: patient.notes || []
+  };
+  if (module === 'finance') return {
+    patientNo: String(patient.no || ''),
+    pay: patient.pay || []
+  };
+  throw new Error('Unsupported patient data module.');
+}
+function patientModuleEqual(a,b) { return JSON.stringify(a ?? null) === JSON.stringify(b ?? null); }
+function getLocalPatientModuleSnapshot(localBranchId) {
+  let snapshot = null;
+  window.dispatchEvent(new CustomEvent('dcos:get-local-cloud-data', { detail: {
+    localBranchId, respond(value) { snapshot = value; }
+  }}));
+  if (!snapshot) throw new Error('تعذر قراءة بيانات المرضى المحلية للمزامنة.');
+  return snapshot;
+}
+async function syncPatientModuleForBranch(branchId, module, showStatus = false) {
+  const permissionCodes = module === 'treatment' ? ['cl','mv'] : ['ex','fv'];
+  const permissions = Array.isArray(activeMembership?.permissions) ? activeMembership.permissions : [];
+  if (!activeMembership || (activeMembership.role !== 'owner' && !permissions.some(code => permissionCodes.includes(code)))) return { synced: 0, conflicts: [], skipped: true };
+  const branchMap = getSavedBranchMap();
+  const localBranchId = Object.keys(branchMap).find(id => branchMap[id] === branchId);
+  if (!localBranchId) throw new Error('اربط الفرع المحلي بالفرع السحابي أولًا.');
+  const local = getLocalPatientModuleSnapshot(localBranchId);
+  const remoteRows = await listRecordsForAssignedBranch({ branchId, module, limit: 2000 });
+  const remoteByKey = new Map(remoteRows.map(row => [String(row.record_key), row]));
+  const merged = [], conflicts = [];
+  for (const patient of local.patients || []) {
+    const patientNo = String(patient.no || '');
+    if (!patientNo) continue;
+    const key = 'patient:' + patientNo;
+    const payload = patientModulePayload(patient, module);
+    const remote = remoteByKey.get(key);
+    const baseline = patient.cloudModules?.[module]?.snapshot || null;
+    if (!remote) {
+      try {
+        const created = await createRecordInAssignedBranch({ branchId, module, recordKey: key, payload });
+        merged.push({ patientNo, module, payload: created.payload, revision: created.revision });
+      } catch (error) { conflicts.push({ patientNo, module, reason: error.message }); }
+      continue;
+    }
+    if (!baseline) {
+      if (patientModuleEqual(payload, remote.payload)) {
+        merged.push({ patientNo, module, payload: remote.payload, revision: remote.revision });
+      } else {
+        conflicts.push({ patientNo, module, reason: 'السجل موجود على السحابة دون بصمة محلية؛ لم نستبدل أي بيانات.' });
+      }
+      continue;
+    }
+    const localChanged = !patientModuleEqual(payload, baseline);
+    const remoteChanged = !patientModuleEqual(remote.payload, baseline);
+    if (localChanged && remoteChanged && !patientModuleEqual(payload, remote.payload)) {
+      conflicts.push({ patientNo, module, reason: 'تم تعديل بيانات المريض على الجهاز والسحابة؛ يلزم مراجعة التعارض.' });
+      continue;
+    }
+    if (localChanged && !remoteChanged) {
+      try {
+        const updated = await updateRecordInAssignedBranch({ branchId, module, recordKey: key, payload, expectedRevision: remote.revision });
+        merged.push({ patientNo, module, payload: updated.payload, revision: updated.revision });
+      } catch (error) { conflicts.push({ patientNo, module, reason: error.message }); }
+    } else {
+      merged.push({ patientNo, module, payload: remote.payload, revision: remote.revision });
+    }
+  }
+  const localNos = new Set((local.patients || []).map(patient => String(patient.no || '')));
+  for (const remote of remoteRows) {
+    const patientNo = String(remote.payload?.patientNo || remote.record_key.replace(/^patient:/,''));
+    if (!localNos.has(patientNo)) conflicts.push({ patientNo, module, reason: 'السجل الطبي السحابي لا يرتبط بملف مريض محلي؛ استورد ملف المريض أولًا.' });
+  }
+  window.dispatchEvent(new CustomEvent('dcos:cloud-patient-modules', {
+    detail: { localBranchId, module, records: merged, conflicts }
+  }));
+  if (showStatus) status((module === 'treatment' ? 'مزامنة الملفات الطبية' : 'مزامنة الحسابات') + ': ' + merged.length + ' سجلًا، ' + conflicts.length + ' تعارضات تحتاج مراجعة.');
+  return { synced: merged.length, conflicts };
+}
+async function syncClinicalAndFinanceForBranch(branchId, showStatus = false) {
+  const results = [];
+  for (const module of ['treatment','finance']) {
+    try { results.push(await syncPatientModuleForBranch(branchId, module, false)); }
+    catch (error) { results.push({ module, error }); }
+  }
+  const failed = results.filter(result => result.error);
+  const conflicts = results.reduce((sum,result) => sum + (result.conflicts?.length || 0), 0);
+  const synced = results.reduce((sum,result) => sum + (result.synced || 0), 0);
+  if (showStatus) status('مزامنة البيانات الطبية والمالية: ' + synced + ' سجلًا، ' + conflicts + ' تعارضات.' + (failed.length ? ' تعذر إكمال بعض الأقسام: ' + failed.map(x => x.error.message).join('؛ ') : ''));
+  return { synced, conflicts, failed };
+}
+
 function startAppointmentRealtime(branchId) {
   if (appointmentRealtimeChannels.has(branchId)) getSupabaseClient().removeChannel(appointmentRealtimeChannels.get(branchId));
   const channel = getSupabaseClient().channel('dcos-appointments-' + branchId)
@@ -677,6 +775,7 @@ window.addEventListener('dcos:cloud-user-ready', () => {
     syncAppointmentsForBranch(branch.id, false).then(() => startAppointmentRealtime(branch.id)).catch(() => {});
     const permissions = Array.isArray(activeMembership.permissions) ? activeMembership.permissions : [];
     if (activeMembership.role === 'owner' || permissions.some(code => ['im','iv'].includes(code))) syncInventoryForBranch(branch.id, false).catch(() => {});
+    if (activeMembership.role === 'owner' || permissions.some(code => ['cl','mv','ex','fv'].includes(code))) syncClinicalAndFinanceForBranch(branch.id, false).catch(() => {});
   }
 });
 window.addEventListener('dcos:appointment-saved', event => {

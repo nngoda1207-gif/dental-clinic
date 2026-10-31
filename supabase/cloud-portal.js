@@ -504,7 +504,9 @@ window.DCOS_CLOUD_AUTH = {
       if (membership.role !== 'owner' && !branches.length) throw new Error('لا يوجد فرع مسند لهذا الحساب. راجع مالك العيادة.');
       activeMembership = membership;
       activeBranches = branches;
-      return { userId: result.session.user.id, role: membership.role, clinicId: membership.clinic_id, branches };
+      const savedMap = getSavedBranchMap();
+      const mappedBranches = branches.map(branch => ({ ...branch, localBranchId: Object.keys(savedMap).find(localId => savedMap[localId] === branch.id) || '' }));
+      return { userId: result.session.user.id, role: membership.role, clinicId: membership.clinic_id, branches: mappedBranches };
     } catch (error) {
       await signOutSupabase().catch(() => {});
       throw error;

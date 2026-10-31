@@ -976,9 +976,16 @@ async function syncAllCloudModulesForBranch(branchId, showStatus = false) {
       await flushPatientSyncQueue();
     } while (state.queued && activeMembership && navigator.onLine);
     const failures = last.filter(item => item.status === 'rejected').map(item => item.reason?.message || 'sync_error');
-    for (const item of last) if (item.status === 'fulfilled' && Array.isArray(item.value?.failed)) failures.push(...item.value.failed.map(failure => failure.module + ': ' + (failure.error?.message || 'sync_error')));
-    if (showStatus) status('المزامنة التلقائية: ' + (failures.length ? failures.length + ' أقسام تحتاج إعادة محاولة.' : 'اكتملت الأقسام المسموح بها.'));
-    return { failures };
+    let synced = 0, conflicts = 0;
+    for (const item of last) {
+      if (item.status !== 'fulfilled') continue;
+      const value = item.value || {};
+      synced += Number(value.synced) || 0;
+      conflicts += Array.isArray(value.conflicts) ? value.conflicts.length : (Number(value.conflicts) || 0);
+      if (Array.isArray(value.failed)) failures.push(...value.failed.map(failure => failure.module + ': ' + (failure.error?.message || 'sync_error')));
+    }
+    if (showStatus) status('نتيجة المزامنة السحابية: ' + synced + ' سجلًا تمت مراجعته/مزامنته، ' + conflicts + ' تعارضات تحتاج مراجعة، ' + failures.length + ' أخطاء.');
+    return { failures, synced, conflicts };
   })();
   cloudBranchSyncLocks.set(branchId, state);
   try { return await state.promise; }
@@ -994,7 +1001,7 @@ function queueAutomaticCloudSync(reason = 'local_change') {
     cloudAutoSyncTimers.set(branch.id, setTimeout(async () => {
       cloudAutoSyncTimers.delete(branch.id);
       try {
-        const outcome = await syncAllCloudModulesForBranch(branch.id, false);
+        const outcome = await syncAllCloudModulesForBranch(branch.id, reason === 'branch_mapping_approved');
         if (outcome?.failures?.length && navigator.onLine) {
           const attempt = (cloudAutoSyncAttempts.get(branch.id) || 0) + 1;
           cloudAutoSyncAttempts.set(branch.id, attempt);

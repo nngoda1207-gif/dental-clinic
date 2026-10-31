@@ -143,59 +143,11 @@ $('dcos-save-config').addEventListener('click', () => {
   try { configure(); status('تم حفظ إعداد الاتصال على هذا الجهاز.'); }
   catch (e) { status(e.message || 'تعذر إعداد الاتصال.'); }
 });
-window.addEventListener('dcos-oauth-authenticated', async () => {
-  try {
-    status('تم الرجوع من GitHub. جارٍ التحقق من حسابك وعضوية العيادة…');
-    $('dcos-sb-logout').hidden = false;
-    await loadWorkspace();
-    flushPatientSyncQueue();
-    status('تم تسجيل الدخول باستخدام GitHub بنجاح.');
-  } catch (e) { status(friendlyCloudError(e, 'تم الدخول لكن تعذر تحميل بيانات العيادة.')); }
-});
-window.addEventListener('dcos-oauth-error', e => status(e.detail || 'تعذر إكمال تسجيل الدخول باستخدام GitHub.'));
-async function startGitHubSignIn() {
-  const button = $('dcos-sb-github');
-  if (button.dataset.busy === '1') return;
-  button.dataset.busy = '1';
-  button.disabled = true;
-  status('تم الضغط على GitHub. جارٍ تجهيز الاتصال…');
-  try {
-    configure();
-    status('جارٍ فتح GitHub لتأكيد هويتك…');
-    await signInWithGitHub();
-    if (!window.Capacitor?.isNativePlatform?.()) {
-      status('جارٍ تحويلك إلى GitHub. بعد الموافقة ستعود إلى التطبيق تلقائيًا.');
-    }
-  } catch (e) {
-    status(friendlyCloudError(e, 'تعذر بدء تسجيل الدخول باستخدام GitHub.'));
-  } finally {
-    button.disabled = false;
-    button.dataset.busy = '0';
-  }
-}
-// Use a direct DOM property handler plus delegated pointer/click fallbacks.
-// Some Android WebView builds fail to dispatch listeners attached to dynamically
-// inserted controls after a view transition; the capture handler keeps the
-// cloud auth action reachable and gives immediate visible feedback.
-$('dcos-sb-github').onclick = startGitHubSignIn;
-panel.addEventListener('click', event => {
-  const target = event.target?.closest?.('#dcos-sb-github');
-  if (target && target.dataset.busy !== '1') startGitHubSignIn();
-}, true);
-panel.addEventListener('pointerup', event => {
-  const target = event.target?.closest?.('#dcos-sb-github');
-  if (target && target.dataset.busy !== '1') {
-    // Android WebView may deliver pointer events without a reliable click.
-    // Start OAuth directly on pointer release; startGitHubSignIn guards
-    // against the subsequent click event invoking the flow a second time.
-    startGitHubSignIn();
-  }
-}, true);
 $('dcos-sb-login').addEventListener('click', async () => {
   try {
     configure();
     status('جارٍ تسجيل الدخول والتحقق من عضوية العيادة…');
-    await signInWithPassword($('dcos-sb-email').value, $('dcos-sb-password').value);
+    await signInWithUsername($('dcos-sb-username').value, $('dcos-sb-password').value);
     $('dcos-sb-password').value = '';
     $('dcos-sb-logout').hidden = false;
     await loadWorkspace();
@@ -204,28 +156,6 @@ $('dcos-sb-login').addEventListener('click', async () => {
     if (activeMembership && expectedRole === 'other' && ['dentist','nurse','owner'].includes(activeMembership.role)) { await signOutSupabase(); $('dcos-cloud-workspace').hidden = true; $('dcos-cloud-workspace').innerHTML = ''; $('dcos-sb-logout').hidden = true; throw new Error('هذا الحساب له واجهة دخول مستقلة. اختر نوع الحساب الصحيح.'); }
     flushPatientSyncQueue();
   } catch (e) { status(friendlyCloudError(e, 'فشل تسجيل الدخول.')); }
-});
-$('dcos-sb-signup').addEventListener('click', async () => {
-  try {
-    configure();
-    status('جارٍ إنشاء الحساب السحابي…');
-    const data = await signUpWithPassword($('dcos-sb-email').value, $('dcos-sb-password').value);
-    $('dcos-sb-password').value = '';
-    if (data.session) {
-      $('dcos-sb-logout').hidden = false;
-      await loadWorkspace();
-      status('تم إنشاء حسابك. إذا ظهرت رسالة تأكيد، افتح بريدك ثم ارجع وسجّل الدخول. بعد الدخول اختر إعداد العيادة إذا كنت المالك، أو أدخل كود الدعوة إذا كنت موظفًا.');
-    } else {
-      status('تم إرسال رسالة تأكيد إذا كان التحقق بالبريد مفعّلًا. افتح الرسالة، ثم ارجع وسجّل الدخول بإيميلك الشخصي وكلمة المرور التي أنشأتها. بعد الدخول أكمل إعداد المالك أو قبول دعوة الموظف. لم تُرفع بيانات المرضى في هذه الخطوة.');
-    }
-  } catch (e) { status(friendlyCloudError(e, 'تعذر إنشاء الحساب.')); }
-});
-$('dcos-sb-reset').addEventListener('click', async () => {
-  try {
-    configure();
-    await requestPasswordReset($('dcos-sb-email').value);
-    status('إذا كان البريد مسجلًا، ستصلك رسالة لإعادة تعيين كلمة المرور. افحص البريد الوارد والرسائل غير المرغوب فيها.');
-  } catch (e) { status(friendlyCloudError(e, 'تعذر إرسال رسالة استعادة كلمة المرور.')); }
 });
 $('dcos-sb-logout').addEventListener('click', async () => {
   try {

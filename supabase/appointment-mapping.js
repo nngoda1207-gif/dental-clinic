@@ -1,6 +1,7 @@
 /*
- * Pure mapping helpers for local-first appointment data.
- * No ID is guessed: patients, dentists, chairs and branches must be explicitly linked.
+ * Pure mapping helpers for local-first appointments stored as one module-scoped
+ * clinic_records row each. Local patient/user/chair IDs are never treated as
+ * cloud IDs; the caller must supply explicit stable links.
  */
 const LOCAL_TO_REMOTE_STATUS = Object.freeze({
   new: 'scheduled', confirmed: 'confirmed',
@@ -33,63 +34,79 @@ export function remoteAppointmentStatusToLocal(status, existingLocalStatus = '')
   if (status === 'cancelled' && ['cp','cc'].includes(existingLocalStatus)) return existingLocalStatus;
   const mapped = REMOTE_TO_LOCAL_STATUS[status];
   if (!mapped && status !== 'cancelled') throw new Error('Unsupported remote appointment status: ' + status);
-  // A new cloud cancellation has no trustworthy patient/clinic cancellation actor.
   if (status === 'cancelled') throw new Error('Cloud cancellation needs manual review because the remote schema does not record who cancelled.');
   return mapped;
 }
+
+/** Map local IDs to stable patient file number, cloud dentist username and chair name. */
 export function mapLocalAppointmentToRemote(local, maps = {}) {
   if (!local || typeof local !== 'object') throw new Error('A local appointment is required.');
-  const patient = (maps.patients || []).find(p => String(p.id) === String(local.pid) && p.br === local.br && p.remoteId);
+  const patient = (maps.patients || []).find(p =>
+    String(p.id) === String(local.pid) && p.br === local.br && p.remoteId && p.no
+  );
   if (!patient) throw new Error('Appointment patient is not linked to a cloud patient.');
-  const dentistId = validRemoteUuid((maps.dentists || {})[local.dr], 'dentist user');
-  const chairId = local.ch ? validRemoteUuid((maps.chairs || {})[local.ch], 'chair') : null;
+  const dentistUsername = String(required((maps.dentists || {})[local.dr], 'dentist username')).trim().toLowerCase();
+  const chairName = local.ch ? String(required((maps.chairs || {})[local.ch], 'chair name')).trim() : '';
   const branchId = validRemoteUuid((maps.branches || {})[local.br], 'branch');
   const start = new Date(local.start);
   const duration = Number(local.dur);
   if (Number.isNaN(start.getTime()) || !Number.isFinite(duration) || duration < 5 || duration > 480) {
     throw new Error('Local appointment date or duration is invalid.');
   }
+  const recordKey = String(required(local.cloudRecordKey || local.id, 'stable local appointment ID'));
+  const payload = {
+    kind: 'appointment',
+    source_local_id: recordKey,
+    patient_record_id: validRemoteUuid(patient.remoteId, 'patient record'),
+    patient_file_no: String(patient.no),
+    dentist_username: dentistUsername,
+    chair_name: chairName,
+    starts_at: start.toISOString(),
+    ends_at: new Date(start.getTime() + duration * 60000).toISOString(),
+    status: localAppointmentStatusToRemote(local.st),
+    source: String(local.src || ''),
+    reason: String(local.type || ''),
+    notes: String(local.note || ''),
+    history: Array.isArray(local.hist) ? local.hist.slice(-100) : []
+  };
   return {
-    branchId, patientId: validRemoteUuid(patient.remoteId, 'patient'),
-    localId: String(required(local.id, 'local appointment ID')),
-    expectedUpdatedAt: local.cloudUpdatedAt || undefined,
-    appointment: {
-      starts_at: start.toISOString(),
-      ends_at: new Date(start.getTime() + duration * 60000).toISOString(),
-      status: localAppointmentStatusToRemote(local.st),
-      dentist_user_id: dentistId,
-      chair_id: chairId,
-      source: String(local.src || ''),
-      reason: String(local.type || ''),
-      notes: String(local.note || '')
-    }
+    branchId, recordKey, expectedRevision: Number.isSafeInteger(local.cloudRevision) ? local.cloudRevision : null,
+    payload
   };
 }
+
+/** Rebuild local references by stable file number, username and chair name. */
 export function mapRemoteAppointmentToLocal(remote, maps = {}, existing = null) {
-  if (!remote || typeof remote !== 'object') throw new Error('A remote appointment is required.');
+  if (!remote || typeof remote !== 'object' || !remote.payload) throw new Error('A remote appointment record is required.');
+  const payload = remote.payload;
   const localBranchId = Object.keys(maps.branches || {}).find(id => maps.branches[id] === remote.branch_id);
-  const patient = (maps.patients || []).find(p => p.remoteId === remote.patient_id && p.br === localBranchId);
-  const localDentistId = Object.keys(maps.dentists || {}).find(id => maps.dentists[id] === remote.dentist_user_id);
-  const localChairId = remote.chair_id
-    ? Object.keys(maps.chairs || {}).find(id => maps.chairs[id] === remote.chair_id)
+  const patient = (maps.patients || []).find(p =>
+    p.br === localBranchId && (p.remoteId === payload.patient_record_id || String(p.no) === String(payload.patient_file_no))
+  );
+  const localDentistId = Object.keys(maps.dentists || {}).find(id =>
+    String(maps.dentists[id]).toLowerCase() === String(payload.dentist_username || '').toLowerCase()
+  );
+  const localChairId = payload.chair_name
+    ? Object.keys(maps.chairs || {}).find(id => maps.chairs[id] === payload.chair_name)
     : '';
-  if (!localBranchId || !patient || !localDentistId || (remote.chair_id && !localChairId)) {
+  if (!localBranchId || !patient || !localDentistId || (payload.chair_name && !localChairId)) {
     throw new Error('Remote appointment is missing an explicit local branch, patient, dentist or chair mapping.');
   }
-  const localId = String(required(remote.source_local_id, 'stable local appointment identity'));
-  const status = remoteAppointmentStatusToLocal(remote.status, existing?.st);
-  const start = new Date(remote.starts_at);
-  const end = new Date(remote.ends_at);
+  const localId = String(required(existing?.id || payload.source_local_id || remote.record_key, 'stable local appointment identity'));
+  const status = remoteAppointmentStatusToLocal(payload.status, existing?.st);
+  const start = new Date(payload.starts_at);
+  const end = new Date(payload.ends_at);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
     throw new Error('Remote appointment time range is invalid.');
   }
   return {
     ...(existing || {}),
-    id: localId, remoteId: remote.id, cloudUpdatedAt: remote.updated_at,
+    id: localId, cloudRecordKey: remote.record_key, remoteId: remote.id,
+    cloudRevision: remote.revision, cloudUpdatedAt: remote.updated_at,
     pid: patient.id, br: localBranchId, dr: localDentistId, ch: localChairId || '',
     start: new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString().slice(0,16),
     dur: Math.round((end - start) / 60000),
-    st: status, type: remote.reason || '', note: remote.notes || '', src: remote.source || '',
-    hist: Array.isArray(existing?.hist) ? existing.hist : []
+    st: status, type: payload.reason || '', note: payload.notes || '', src: payload.source || '',
+    hist: Array.isArray(payload.history) ? payload.history : (Array.isArray(existing?.hist) ? existing.hist : [])
   };
 }

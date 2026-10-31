@@ -62,6 +62,8 @@ assert.ok(portal.includes('syncClinicalFinanceAndLabsForBranch'), 'Clinical, fin
 assert.ok(portal.includes('function syncAllCloudModulesForBranch'), 'All supported cloud modules must share one automatic sync coordinator');
 assert.ok(portal.includes("new CustomEvent('dcos:cloud-sync-complete'"), 'Cloud sync must publish a structured completion report for migration verification');
 assert.ok(portal.includes('pendingPatientWrites'), 'Cloud sync completion must expose pending patient writes');
+const queueFlush = portal.slice(portal.indexOf('async function flushPatientSyncQueue'), portal.indexOf('// Main-app username login bridge'));
+assert.ok(queueFlush.indexOf("if (synced || blocked) status(") < queueFlush.indexOf("return { synced, blocked, pending: finalQueueByKey.size"), 'Patient sync result must be reported before returning');
 assert.ok(portal.includes('modules.push({ module: names[index]'), 'Cloud sync completion must report each module independently');
 assert.ok(portal.includes("module: 'patients', synced: Number(patientQueue.synced || 0)"), 'Cloud sync completion must include patient migration counts');
 assert.ok(portal.includes('completedAt: new Date().toISOString()'), 'Cloud sync completion must be timestamped for migration verification');

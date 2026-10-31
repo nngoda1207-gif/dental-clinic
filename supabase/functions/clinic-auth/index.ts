@@ -8,6 +8,18 @@ const authClient=createClient(url,anonKey,{auth:{persistSession:false,autoRefres
 function usernameOf(v:unknown){const u=String(v??"").trim().toLowerCase();if(!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(u))throw new Error("INVALID_USERNAME");return u;}
 async function emailFor(u:string){const h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(u));return "u-"+[...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,"0")).join("")+"@accounts.dentalclinic.invalid";}
 function passwordOf(v:unknown){const p=String(v??"");if(p.length<8||p.length>128)throw new Error("INVALID_PASSWORD");return p;}
+function permissionsForRole(role:string):string[]{
+ const map:Record<string,string[]> = {
+  manager:["pv","pa","pe","pr","ex","au","br"],
+  dentist:["pv","pa","pe"],
+  nurse:["pv","pa","pe"],
+  reception:["pv","pa","pe"],
+  accountant:["pv","ex"],
+  readonly:["pv"],
+  invmgr:["im","iv"]
+ };
+ return map[role]||[];
+}
 async function createIdentity(u:string,p:string){const {data,error}=await admin.auth.admin.createUser({email:await emailFor(u),password:p,email_confirm:true,user_metadata:{username:u}});if(error)throw new Error(error.message);const {error:mapError}=await admin.from("clinic_usernames").insert({user_id:data.user.id,username:u});if(mapError){await admin.auth.admin.deleteUser(data.user.id);throw mapError;}return data.user;}
 Deno.serve(async req=>{
  if(req.method==="OPTIONS")return new Response("ok",{headers:cors});
@@ -35,7 +47,7 @@ Deno.serve(async req=>{
    if(branchError||!branch)return json({error:"BRANCH_NOT_AVAILABLE"},400);
    const newUser=await createIdentity(u,p);
    try{
-    const {error:e1}=await admin.from("clinic_members").insert({clinic_id:owner.clinic_id,user_id:newUser.id,role,active:true});if(e1)throw e1;
+    const {error:e1}=await admin.from("clinic_members").insert({clinic_id:owner.clinic_id,user_id:newUser.id,role,active:true,permissions:permissionsForRole(role)});if(e1)throw e1;
     const {error:e2}=await admin.from("clinic_member_branches").insert({clinic_id:owner.clinic_id,user_id:newUser.id,branch_id:branch.id});if(e2)throw e2;
    }catch(e){await admin.auth.admin.deleteUser(newUser.id);throw e;}
    return json({ok:true,user_id:newUser.id,username:u,role,branch_id:branch.id});

@@ -30,13 +30,13 @@ Deno.serve(async req=>{
    const {data:members,error:memberError}=await admin.from("clinic_members").select("clinic_id,role").eq("user_id",caller.user.id).eq("active",true);
    if(memberError)throw memberError;
    const owner=(members||[]).find(x=>x.role==="owner");if(!owner)return json({error:"OWNER_REQUIRED"},403);
-   const u=usernameOf(b.username),p=passwordOf(b.password),role=String(b.role||"");
+   const u=usernameOf(b.username),p=passwordOf(b.password),role=String(b.role||""),displayName=String(b.display_name||"").trim().slice(0,120);
    if(!["manager","dentist","reception","accountant","readonly","invmgr","nurse"].includes(role))return json({error:"INVALID_ROLE"},400);
    const {data:branch,error:branchError}=await admin.from("clinic_branches").select("id").eq("id",String(b.branch_id||"")).eq("clinic_id",owner.clinic_id).eq("active",true).maybeSingle();
    if(branchError||!branch)return json({error:"BRANCH_NOT_AVAILABLE"},400);
    const newUser=await createIdentity(u,p);
    try{
-    const {error:e1}=await admin.from("clinic_members").insert({clinic_id:owner.clinic_id,user_id:newUser.id,role,active:true,permissions:DEFAULT_PERMISSIONS[role]||[]});if(e1)throw e1;
+    const {error:e1}=await admin.from("clinic_members").insert({clinic_id:owner.clinic_id,user_id:newUser.id,role,active:true,permissions:DEFAULT_PERMISSIONS[role]||[],display_name:displayName});if(e1)throw e1;
     const {error:e2}=await admin.from("clinic_member_branches").insert({clinic_id:owner.clinic_id,user_id:newUser.id,branch_id:branch.id});if(e2)throw e2;
    }catch(e){await admin.auth.admin.deleteUser(newUser.id);throw e;}
    return json({ok:true,user_id:newUser.id,username:u,role,branch_id:branch.id});

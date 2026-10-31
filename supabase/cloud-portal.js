@@ -1022,7 +1022,7 @@ function queueAutomaticCloudSync(reason = 'local_change') {
       cloudAutoSyncTimers.delete(branch.id);
       try {
         const outcome = await syncAllCloudModulesForBranch(branch.id, reason === 'branch_mapping_approved');
-        if (outcome?.failures?.length && navigator.onLine) {
+        if ((outcome?.failures?.length || outcome?.pendingPatientWrites) && navigator.onLine) {
           const attempt = (cloudAutoSyncAttempts.get(branch.id) || 0) + 1;
           cloudAutoSyncAttempts.set(branch.id, attempt);
           if (attempt <= 3) {
@@ -1174,7 +1174,10 @@ window.addEventListener('dcos:patient-saved', event => {
   if (!branchMap[String(patient.localBranchId)]) return; // no outbox until this local branch is linked to the signed-in clinic
   enqueueLocalPatientForSync({ ...patient, clinicId: activeMembership.clinic_id });
 });
-window.addEventListener('online', () => flushPatientSyncQueue());
+window.addEventListener('online', () => {
+  flushPatientSyncQueue();
+  queueAutomaticCloudSync('online_restore');
+});
 function readPatientQueue() {
   try {
     const queue = JSON.parse(localStorage.getItem(PATIENT_QUEUE_KEY) || '[]');

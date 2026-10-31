@@ -862,6 +862,68 @@ async function syncLabsForBranch(branchId, showStatus = false) {
   return { synced: merged.length, conflicts };
 }
 
+
+function getLocalAuxSnapshot(localBranchId, module) {
+  let snapshot = null;
+  window.dispatchEvent(new CustomEvent('dcos:get-local-aux', { detail: {
+    localBranchId, module, respond(value) { snapshot = value; }
+  }}));
+  if (!snapshot) throw new Error('تعذر قراءة بيانات القسم المحلي للمزامنة.');
+  return snapshot;
+}
+const AUX_MODULE_PERMISSIONS = {
+  prices: ['pl','pr'], suppliers: ['im'], settings: ['st'], branches: ['br','st']
+};
+async function syncAuxModuleForBranch(branchId, module) {
+  const permissions = Array.isArray(activeMembership?.permissions) ? activeMembership.permissions : [];
+  const allowed = activeMembership?.role === 'owner' || (AUX_MODULE_PERMISSIONS[module] || []).some(code => permissions.includes(code));
+  if (!activeMembership || !allowed) return { synced: 0, conflicts: [], skipped: true };
+  const branchMap = getSavedBranchMap();
+  const localBranchId = Object.keys(branchMap).find(id => branchMap[id] === branchId);
+  if (!localBranchId) throw new Error('اربط الفرع المحلي بالفرع السحابي أولًا.');
+  const local = getLocalAuxSnapshot(localBranchId, module);
+  const payload = local.payload || {};
+  const key = 'app:' + module;
+  const rows = await listRecordsForAssignedBranch({ branchId, module, limit: 100 });
+  const remote = rows.find(row => String(row.record_key) === key);
+  const baseline = local.baseline || null;
+  let result, conflict = null;
+  if (!remote) {
+    const created = await createRecordInAssignedBranch({ branchId, module, recordKey: key, payload });
+    result = created;
+  } else if (!baseline) {
+    if (cloudPayloadEqual(payload, remote.payload) || local.isEmpty) result = remote;
+    else conflict = 'البيانات موجودة على السحابة دون بصمة محلية؛ لم نستبدل أي نسخة.';
+  } else {
+    const localChanged = !cloudPayloadEqual(payload, baseline);
+    const remoteChanged = !cloudPayloadEqual(remote.payload, baseline);
+    if (localChanged && remoteChanged && !cloudPayloadEqual(payload, remote.payload)) {
+      conflict = 'تم تعديل هذا القسم على الجهاز والسحابة؛ احتفظنا بالنسختين لحين المراجعة.';
+    } else if (localChanged && !remoteChanged) {
+      result = await updateRecordInAssignedBranch({
+        branchId, module, recordKey: key, payload, expectedRevision: remote.revision
+      });
+    } else result = remote;
+  }
+  const records = result ? [{ module, payload: result.payload, revision: result.revision }] : [];
+  window.dispatchEvent(new CustomEvent('dcos:cloud-aux', {
+    detail: { localBranchId, module, records, conflicts: conflict ? [{ reason: conflict }] : [] }
+  }));
+  return { synced: records.length, conflicts: conflict ? [{ reason: conflict }] : [] };
+}
+async function syncAuxModulesForBranch(branchId) {
+  const results = [];
+  for (const module of ['prices','suppliers','settings','branches']) {
+    try { results.push({ module, ...(await syncAuxModuleForBranch(branchId, module)) }); }
+    catch (error) { results.push({ module, error }); }
+  }
+  return {
+    synced: results.reduce((sum,item) => sum + (item.synced || 0), 0),
+    conflicts: results.reduce((sum,item) => sum + (item.conflicts?.length || 0), 0),
+    failed: results.filter(item => item.error)
+  };
+}
+
 async function syncAllCloudModulesForBranch(branchId, showStatus = false) {
   if (!activeMembership || !branchId) return { skipped: true };
   const existing = cloudBranchSyncLocks.get(branchId);
@@ -874,7 +936,8 @@ async function syncAllCloudModulesForBranch(branchId, showStatus = false) {
       last = await Promise.allSettled([
         syncAppointmentsForBranch(branchId, false),
         syncInventoryForBranch(branchId, false),
-        syncClinicalFinanceAndLabsForBranch(branchId, false)
+        syncClinicalFinanceAndLabsForBranch(branchId, false),
+        syncAuxModulesForBranch(branchId)
       ]);
       await flushPatientSyncQueue();
     } while (state.queued && activeMembership && navigator.onLine);
@@ -934,6 +997,7 @@ window.addEventListener('dcos:cloud-user-ready', () => {
   }
 });
 window.addEventListener('dcos:local-data-saved', () => queueAutomaticCloudSync('local_save'));
+window.addEventListener('dcos:aux-data-saved', () => queueAutomaticCloudSync('aux_local_save'));
 window.addEventListener('dcos:patient-saved', () => {
   flushPatientSyncQueue();
   queueAutomaticCloudSync('patient_save');

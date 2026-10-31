@@ -14,7 +14,7 @@ create table if not exists public.clinic_invitations (
   expires_at timestamptz not null,
   redeemed_at timestamptz,
   redeemed_by uuid references auth.users(id) on delete set null,
-  created_by uuid not null references auth.users(id) on delete restrict default auth.uid(),
+  created_by uuid not null default auth.uid() references auth.users(id) on delete restrict,
   created_at timestamptz not null default now(),
   foreign key (clinic_id, branch_id)
     references public.clinic_branches(clinic_id, id) on delete cascade
@@ -67,10 +67,14 @@ begin
   if v_role not in ('manager','dentist','reception','accountant','readonly','invmgr','nurse') then raise exception 'INVALID_INVITE_ROLE'; end if;
   if p_expires_hours is null or p_expires_hours < 1 or p_expires_hours > 168 then raise exception 'INVALID_EXPIRY'; end if;
 
-  select count(*), min(m.clinic_id) into v_owner_count, v_clinic_id
+  select count(*) into v_owner_count
   from public.clinic_members m
   where m.user_id = v_user_id and m.active = true and m.role = 'owner';
   if v_owner_count <> 1 then raise exception 'OWNER_REQUIRED'; end if;
+  select m.clinic_id into v_clinic_id
+  from public.clinic_members m
+  where m.user_id = v_user_id and m.active = true and m.role = 'owner'
+  limit 1;
 
   if not exists (
     select 1 from public.clinic_branches b

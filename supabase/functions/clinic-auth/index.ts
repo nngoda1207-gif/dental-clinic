@@ -5,7 +5,7 @@ const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,
 const url=Deno.env.get("SUPABASE_URL")!,serviceKey=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,anonKey=Deno.env.get("SUPABASE_ANON_KEY")||"";
 const admin=createClient(url,serviceKey,{auth:{persistSession:false,autoRefreshToken:false}});
 const authClient=createClient(url,anonKey,{auth:{persistSession:false,autoRefreshToken:false}});
-const DEFAULT_PERMISSIONS:Record<string,string[]>={manager:["pv","pa","pe","pr","ex","au","br"],dentist:["pv","pa","pe"],nurse:["pv","pa","pe"],reception:["pv","pa","pe"],accountant:["pv","ex"],readonly:["pv"],invmgr:["pv","im","iv"]};
+const DEFAULT_PERMISSIONS:Record<string,string[]>={manager:["pv","pa","pe","pr","ex","au","br","aw"],dentist:["pv","pa","pe","aw"],nurse:["pv","pa","pe"],reception:["pv","pa","pe","aw"],accountant:["pv","ex"],readonly:["pv"],invmgr:["pv","im","iv"]};
 function usernameOf(v:unknown){const u=String(v??"").trim().toLowerCase();if(!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(u))throw new Error("INVALID_USERNAME");return u;}
 async function emailFor(u:string){const h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(u));return "u-"+[...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,"0")).join("")+"@accounts.dentalclinic.invalid";}
 function passwordOf(v:unknown){const p=String(v??"");if(p.length<8||p.length>128)throw new Error("INVALID_PASSWORD");return p;}

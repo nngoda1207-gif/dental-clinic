@@ -138,6 +138,8 @@ window.addEventListener('dcos:cloud-patients',event=>{
   if(!localBranchId||!myBr().some(b=>b.id===localBranchId))return;
   let changed=false,conflicts=0;
   for(const remote of patients){
+    const remoteSequence=/^P-(\\d+)$/.exec(String(remote.no||''));
+    if(remoteSequence){const nextSequence=Math.max(Number(D.seq)||0,Number(remoteSequence[1]));if(nextSequence!==(Number(D.seq)||0)){D.seq=nextSequence;changed=true}}
     const incoming=cloudPatientSnapshot(remote);
     let local=D.patients.find(p=>p.remoteId&&p.remoteId===remote.remoteId);
     if(!local)local=D.patients.find(p=>p.br===localBranchId&&String(p.no)===String(remote.no));

@@ -209,7 +209,7 @@ async function loadWorkspace() {
   }
   host.innerHTML = `<p><b>الدور:</b> ${escapeHtml(membership.role)} <span class="muted">· تم التحقق من العضوية النشطة</span></p>
     <label>الفرع السحابي<select id="dcos-cloud-branch">${branches.map(b => `<option value="${escapeAttr(b.id)}">${escapeHtml(b.name)}</option>`).join('')}</select></label>
-    <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-sync-appointments" type="button">مزامنة المواعيد</button><button id="dcos-sync-inventory" type="button">مزامنة المخزون</button><button id="dcos-sync-clinical-finance" type="button">مزامنة الملفات الطبية والحسابات</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
+    <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-sync-appointments" type="button">مزامنة المواعيد</button><button id="dcos-sync-inventory" type="button">مزامنة المخزون</button><button id="dcos-sync-clinical-finance" type="button">مزامنة الملفات الطبية والحسابات</button><button id="dcos-sync-labs" type="button">مزامنة المعمل</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
     <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
   $('dcos-sync-appointments').addEventListener('click', async () => { const branchId = $('dcos-cloud-branch').value; try { await syncAppointmentsForBranch(branchId, true); startAppointmentRealtime(branchId); } catch {} });
   $('dcos-cloud-branch').addEventListener('change', () => { for (const channel of appointmentRealtimeChannels.values()) getSupabaseClient().removeChannel(channel); appointmentRealtimeChannels.clear(); });
@@ -227,6 +227,7 @@ async function loadWorkspace() {
   $('dcos-sync-appointments').addEventListener('click', () => syncAppointmentsForBranch($('dcos-cloud-branch').value, true));
   $('dcos-sync-inventory').addEventListener('click', () => syncInventoryForBranch($('dcos-cloud-branch').value, true).catch(error => status('تعذر مزامنة المخزون: ' + (error.message || 'خطأ غير معروف'))));
   $('dcos-sync-clinical-finance').addEventListener('click', () => syncClinicalAndFinanceForBranch($('dcos-cloud-branch').value, true));
+  $('dcos-sync-labs').addEventListener('click', () => syncLabsForBranch($('dcos-cloud-branch').value, true).catch(error => status('تعذر مزامنة المعمل: ' + (error.message || 'خطأ غير معروف'))));
   $('dcos-cloud-branch').addEventListener('change', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
@@ -756,6 +757,69 @@ async function syncClinicalAndFinanceForBranch(branchId, showStatus = false) {
   return { synced, conflicts, failed };
 }
 
+
+function labCloudPayload(item, localPatients, localLabs) {
+  const patient = (localPatients || []).find(row => String(row.id) === String(item.pid));
+  const lab = (localLabs || []).find(row => String(row.id) === String(item.lab));
+  if (!patient?.no) throw new Error('اربط حالة المعمل بملف مريض مستورد قبل المزامنة.');
+  if (!lab?.name) throw new Error('اسم المعمل غير موجود؛ راجع بيانات المعمل قبل المزامنة.');
+  const record = { ...item };
+  for (const key of ['id','pid','lab','br','cloudRevision','cloudSnapshot','cloudConflict']) delete record[key];
+  return { labNo: String(item.no || ''), patientNo: String(patient.no), labName: String(lab.name), record };
+}
+function labCloudEqual(a,b) { return JSON.stringify(a ?? null) === JSON.stringify(b ?? null); }
+async function syncLabsForBranch(branchId, showStatus = false) {
+  const permissions = Array.isArray(activeMembership?.permissions) ? activeMembership.permissions : [];
+  if (!activeMembership || (activeMembership.role !== 'owner' && !permissions.includes('lv'))) return { synced: 0, conflicts: [], skipped: true };
+  const branchMap = getSavedBranchMap();
+  const localBranchId = Object.keys(branchMap).find(id => branchMap[id] === branchId);
+  if (!localBranchId) throw new Error('اربط الفرع المحلي بالفرع السحابي أولًا.');
+  const local = getLocalPatientModuleSnapshot(localBranchId);
+  const localLabs = local.labs || [];
+  const remoteRows = await listRecordsForAssignedBranch({ branchId, module: 'labs', limit: 2000 });
+  const remoteByKey = new Map(remoteRows.map(row => [String(row.record_key), row]));
+  const merged = [], conflicts = [];
+  for (const item of local.labCases || []) {
+    let payload;
+    try { payload = labCloudPayload(item, local.patients || [], localLabs); }
+    catch (error) { conflicts.push({ labNo: item.no, reason: error.message }); continue; }
+    if (!payload.labNo) { conflicts.push({ reason: 'حالة معمل بلا رقم سجل.' }); continue; }
+    const key = 'lab:' + payload.labNo;
+    const remote = remoteByKey.get(key);
+    const baseline = item.cloudSnapshot || null;
+    if (!remote) {
+      try {
+        const created = await createRecordInAssignedBranch({ branchId, module: 'labs', recordKey: key, payload });
+        merged.push({ payload: created.payload, revision: created.revision });
+      } catch (error) { conflicts.push({ labNo: payload.labNo, reason: error.message }); }
+      continue;
+    }
+    if (!baseline) {
+      if (labCloudEqual(payload, remote.payload)) merged.push({ payload: remote.payload, revision: remote.revision });
+      else conflicts.push({ labNo: payload.labNo, reason: 'حالة المعمل موجودة سحابيًا دون بصمة محلية؛ لم نستبدل أي نسخة.' });
+      continue;
+    }
+    const localChanged = !labCloudEqual(payload, baseline);
+    const remoteChanged = !labCloudEqual(remote.payload, baseline);
+    if (localChanged && remoteChanged && !labCloudEqual(payload, remote.payload)) {
+      conflicts.push({ labNo: payload.labNo, reason: 'تم تعديل حالة المعمل على الجهاز والسحابة؛ يلزم مراجعة التعارض.' });
+    } else if (localChanged && !remoteChanged) {
+      try {
+        const updated = await updateRecordInAssignedBranch({ branchId, module: 'labs', recordKey: key, payload, expectedRevision: remote.revision });
+        merged.push({ payload: updated.payload, revision: updated.revision });
+      } catch (error) { conflicts.push({ labNo: payload.labNo, reason: error.message }); }
+    } else merged.push({ payload: remote.payload, revision: remote.revision });
+  }
+  const localNos = new Set((local.labCases || []).map(item => String(item.no || '')));
+  for (const remote of remoteRows) {
+    const labNo = String(remote.payload?.labNo || remote.record_key.replace(/^lab:/,''));
+    if (!localNos.has(labNo)) merged.push({ payload: remote.payload, revision: remote.revision });
+  }
+  window.dispatchEvent(new CustomEvent('dcos:cloud-labs', { detail: { localBranchId, records: merged, conflicts } }));
+  if (showStatus) status('مزامنة المعمل: ' + merged.length + ' حالة، ' + conflicts.length + ' تعارضات تحتاج مراجعة.');
+  return { synced: merged.length, conflicts };
+}
+
 function startAppointmentRealtime(branchId) {
   if (appointmentRealtimeChannels.has(branchId)) getSupabaseClient().removeChannel(appointmentRealtimeChannels.get(branchId));
   const channel = getSupabaseClient().channel('dcos-appointments-' + branchId)
@@ -776,6 +840,7 @@ window.addEventListener('dcos:cloud-user-ready', () => {
     const permissions = Array.isArray(activeMembership.permissions) ? activeMembership.permissions : [];
     if (activeMembership.role === 'owner' || permissions.some(code => ['im','iv'].includes(code))) syncInventoryForBranch(branch.id, false).catch(() => {});
     if (activeMembership.role === 'owner' || permissions.some(code => ['cl','mv','ex','fv'].includes(code))) syncClinicalAndFinanceForBranch(branch.id, false).catch(() => {});
+    if (activeMembership.role === 'owner' || permissions.includes('lv')) syncLabsForBranch(branch.id, false).catch(() => {});
   }
 });
 window.addEventListener('dcos:appointment-saved', event => {

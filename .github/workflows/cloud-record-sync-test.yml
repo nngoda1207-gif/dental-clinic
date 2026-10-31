@@ -52,7 +52,7 @@ jobs:
           node --input-type=module --check < supabase/appointment-repository.js
           node --input-type=module --check < supabase/appointment-sync-service.js
           node --input-type=module --check < supabase/cloud-portal.js
-          node --input-type=module -e "const fs=require('node:fs'); const html=fs.readFileSync('index.html','utf8'); const scripts=[...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)]; if(!scripts.length) throw new Error('Main app script missing'); for(const script of scripts) new Function(script[1]);"
+          node --input-type=module -e "import fs from 'node:fs'; const html=fs.readFileSync('index.html','utf8'); const scripts=[...html.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)]; if(!scripts.length) throw new Error('Main app script missing'); for(const script of scripts) new Function(script[1]);"
           node supabase/tests/cloud-record-sync-service.test.mjs
           node supabase/tests/cloud-staff-permissions.test.mjs
           node supabase/tests/patient-repository.test.mjs

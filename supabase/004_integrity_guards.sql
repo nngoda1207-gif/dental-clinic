@@ -95,8 +95,8 @@ on public.clinic_appointment_events
 for insert to authenticated
 with check (
   actor_user_id = auth.uid()
-  and public.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  and private.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 );
 
 -- Appointment events are immutable to authenticated clients. The trigger below

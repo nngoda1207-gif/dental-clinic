@@ -116,46 +116,7 @@ grant execute on function public.is_clinic_member(uuid) to authenticated;
 grant execute on function public.has_clinic_role(uuid, text[]) to authenticated;
 grant execute on function public.can_access_clinic_branch(uuid, uuid) to authenticated;
 
--- A signed-in user creates their clinic and is made its first owner atomically.
-create or replace function public.create_clinic_for_current_user(p_name text)
-returns uuid
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_user_id uuid := auth.uid();
-  v_clinic_id uuid;
-begin
-  if v_user_id is null then
-    raise exception 'Authentication required';
-  end if;
-
-  if p_name is null or length(trim(p_name)) < 1 or length(trim(p_name)) > 160 then
-    raise exception 'Clinic name must be between 1 and 160 characters';
-  end if;
-
-  if exists (
-    select 1 from public.clinic_members m
-    where m.user_id = v_user_id and m.active = true and m.role = 'owner'
-  ) then
-    raise exception 'This user already owns a clinic';
-  end if;
-
-  insert into public.clinics(name, created_by)
-  values (trim(p_name), v_user_id)
-  returning id into v_clinic_id;
-
-  insert into public.clinic_members(clinic_id, user_id, role)
-  values (v_clinic_id, v_user_id, 'owner');
-
-  return v_clinic_id;
-end;
-$$;
-
-revoke all on function public.create_clinic_for_current_user(text) from public;
-grant execute on function public.create_clinic_for_current_user(text) to authenticated;
-
+-- Clinic creation is reserved for the trusted system provisioning flow.
 alter table public.clinics enable row level security;
 alter table public.clinic_members enable row level security;
 alter table public.clinic_branches enable row level security;

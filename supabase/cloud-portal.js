@@ -5,7 +5,7 @@
  * only after backup, explicit branch mapping and owner opt-in; other D modules stay local.
  */
 import {
-  configureSupabase, getSupabaseClient, signInWithPassword, signInWithGitHub, signUpWithPassword, requestPasswordReset, updatePassword,
+  configureSupabase, getSupabaseClient, signInWithUsername, createClinicStaffAccount,
   signOutSupabase, getCurrentClinicMembership, listAssignedRemoteBranches
 } from './auth-adapter.js';
 import { listAllPatientsForAssignedBranch, watchPatientsForAssignedBranch, upsertPatientInAssignedBranch, updatePatientInAssignedBranch } from './patient-sync-service.js';
@@ -42,7 +42,7 @@ const launch = el('button', { id: 'dcos-cloud-launch', type: 'button' }, '☁ ا
 const panel = el('div', { id: 'dcos-cloud-panel' });
 panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true" aria-labelledby="dcos-cloud-title">
   <div style="display:flex;align-items:center;gap:10px;justify-content:space-between"><h2 id="dcos-cloud-title" style="margin:0">حساب العيادة</h2><button id="dcos-cloud-close" type="button">إغلاق</button></div>
-  <div class="cloud-row"><b>حساب مستقل لكل شخص — بدون مشاركة كلمة المرور.</b><p class="muted">صاحب العيادة ينشئ حسابه ويجهّز العيادة. بعد ذلك يرسل دعوة إلى إيميل كل موظف ويحدد وظيفته والفرع. الموظف ينشئ حسابه بإيميله الشخصي ويقبل الدعوة بالكود.</p><p class="muted">كل مستخدم يرى بيانات العيادة المشتركة وفق دوره والفرع المخصص له. لا تستخدم إيميل أو كلمة مرور المالك على أجهزة الموظفين.</p></div>
+  <div class="cloud-row"><b>دخول مستقل لكل عيادة ولكل موظف.</b><p class="muted">استخدم اسم المستخدم وكلمة المرور اللذين سلّمهما لك مسؤول العيادة. لا تحتاج إلى بريد إلكتروني.</p><p class="muted">كل مستخدم يرى بيانات العيادة المشتركة وفق دوره والفرع المخصص له. لا تستخدم إيميل أو كلمة مرور المالك على أجهزة الموظفين.</p></div>
   <div id="dcos-cloud-config">
     <label>رابط مشروع Supabase<input id="dcos-sb-url" type="url" placeholder="https://xxxx.supabase.co" autocomplete="url"></label>
     <label>Publishable / anon key<input id="dcos-sb-key" type="password" placeholder="المفتاح العام للمشروع فقط" autocomplete="off"></label>
@@ -50,10 +50,10 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
     <p class="muted">لا تضع Service Role أو Secret Key هنا. الإعدادات تحفظ على هذا الجهاز فقط.</p>
   </div>
   <div id="dcos-cloud-auth">
-    <label>البريد الإلكتروني<input id="dcos-sb-email" type="email" placeholder="البريد الإلكتروني" autocomplete="username"></label>
-    <label>كلمة المرور<input id="dcos-sb-password" type="password" placeholder="كلمة المرور" autocomplete="current-password"></label>
-    <label>نوع الدخول المباشر<select id="dcos-cloud-role"><option value="dentist">طبيب</option><option value="nurse">تمريض</option><option value="owner">مالك العيادة</option><option value="other">باقي الفريق</option></select></label><div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">دخول مباشر</button><button id="dcos-sb-github" type="button">الدخول باستخدام GitHub</button><button id="dcos-sb-signup" type="button">إنشاء حساب / قبول دعوة</button><button id="dcos-sb-reset" type="button">نسيت كلمة المرور؟</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
-    <p class="muted">استخدم إيميلك الشخصي. صاحب العيادة ينشئ حسابه أولًا، والموظف ينشئ حسابًا بإيميله الذي استلم عليه الدعوة. لا تنشئ حسابًا ثانيًا إذا كان لديك حساب بالفعل؛ استخدم تسجيل الدخول.</p>
+    <label>اسم المستخدم<input id="dcos-sb-username" type="text" maxlength="32" placeholder="اسم المستخدم" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+    <label>كلمة المرور<input id="dcos-sb-password" type="password" autocomplete="current-password" placeholder="كلمة المرور"></label>
+    <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">دخول</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
+    <p class="muted">الحسابات ينشئها مسؤول النظام أو مدير العيادة. لا يوجد إنشاء حساب ذاتي أو دخول بالبريد الإلكتروني.</p>
   </div>
   <div id="dcos-password-recovery" hidden>
     <h3>تعيين كلمة مرور جديدة</h3>

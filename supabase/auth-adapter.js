@@ -98,35 +98,6 @@ export async function signInWithGitHub() {
   return data;
 }
 
-export async function signInWithUsername(username, password) {
-  const client = getSupabaseClient();
-  const response = await fetch(clientConfig.url + '/functions/v1/clinic-auth', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: clientConfig.publishableKey },
-    body: JSON.stringify({ action: 'login', username: String(username || '').trim().toLowerCase(), password: String(password || '') })
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok || !result.session?.access_token || !result.session?.refresh_token) throw new Error(result.error || 'اسم المستخدم أو كلمة المرور غير صحيحة.');
-  const { data, error } = await client.auth.setSession({ access_token: result.session.access_token, refresh_token: result.session.refresh_token });
-  if (error) throw error;
-  return data;
-}
-
-export async function createClinicStaffAccount({ username, password, role, branchId }) {
-  const client = getSupabaseClient();
-  const { data: current, error: sessionError } = await client.auth.getSession();
-  if (sessionError) throw sessionError;
-  if (!current.session?.access_token) throw new Error('سجّل الدخول بحساب العيادة أولًا.');
-  const response = await fetch(clientConfig.url + '/functions/v1/clinic-auth', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: clientConfig.publishableKey, Authorization: 'Bearer ' + current.session.access_token },
-    body: JSON.stringify({ action: 'create_staff', username, password, role, branchId })
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok || !result.ok) throw new Error(result.error || 'تعذر إنشاء حساب الموظف.');
-  return result;
-}
-
 export async function signInWithPassword(email, password) {
   const { data, error } = await getSupabaseClient().auth.signInWithPassword({
     email: String(email || '').trim(),

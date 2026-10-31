@@ -89,6 +89,22 @@ document.body.append(launch, panel);
 
 const $ = id => document.getElementById(id);
 const status = message => { $('dcos-cloud-status').textContent = message || ''; };
+window.addEventListener('dcos:cloud-sync-complete', event => {
+  const report = event.detail || {};
+  const modules = Array.isArray(report.modules) ? report.modules : [];
+  const lines = modules.map(item => {
+    const parts = [item.module + ': ' + (Number(item.synced) || 0) + ' سجل'];
+    if (Number(item.conflicts)) parts.push(Number(item.conflicts) + ' تعارض');
+    if (Number(item.pending)) parts.push(Number(item.pending) + ' معلّق');
+    if (Array.isArray(item.failures) && item.failures.length) parts.push(item.failures.length + ' خطأ');
+    return parts.join('، ');
+  });
+  const summary = 'اكتملت دورة المزامنة — ' + lines.join(' | ') +
+    (report.failures?.length ? ' | إجمالي الأخطاء: ' + report.failures.length : '') +
+    (report.pendingPatientWrites ? ' | عمليات مرضى معلّقة: ' + report.pendingPatientWrites : '');
+  status(summary);
+});
+
 function friendlyCloudError(error, fallback) {
   const message = String(error?.message || error || '');
   if (/Supabase URL and publishable key are required/i.test(message)) return 'إعداد الاتصال السحابي غير مكتمل. أدخل رابط المشروع والمفتاح العام أو استخدم نسخة التطبيق المجهزة بالإعدادات.';

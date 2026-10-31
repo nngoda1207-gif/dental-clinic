@@ -10,9 +10,9 @@ const index = readFileSync('index.html', 'utf8');
 
 assert.match(migration, /add column if not exists source_local_id text/i);
 assert.match(migration, /unique \(clinic_id, branch_id, source_local_id\)/i);
-assert.match(repository, /source_local_id/);
+assert.match(repository, /sourceLocalId/, 'generic record payload must retain the source local identity');
 assert.match(repository, /upsertRemotePatientFromLocal/);
-assert.match(repository, /\.eq\('source_local_id', stableLocalId\)/);
+assert.match(repository, /\.eq\('record_key', key\)/, 'file number must be the stable generic record key');
 assert.match(repository, /expectedUpdatedAt/);
 assert.match(repository, /\.eq\('updated_at', expectedUpdatedAt\)/);
 assert.match(repository, /if \(!expectedUpdatedAt\) throw new Error/);

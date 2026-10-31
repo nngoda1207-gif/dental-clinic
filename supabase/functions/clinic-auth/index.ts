@@ -49,13 +49,15 @@ Deno.serve(async req=>{
    const u=usernameOf(b.username),p=passwordOf(b.password),clinicName=String(b.clinic_name||"").trim(),branchName=String(b.branch_name||"الفرع الرئيسي").trim();
    if(!clinicName||clinicName.length>160||!branchName||branchName.length>160)return json({error:"INVALID_CLINIC"},400);
    const owner=await createIdentity(u,p);
+   let createdClinicId:string|null=null;
    try{
     const {data:clinic,error:e1}=await admin.from("clinics").insert({name:clinicName,created_by:owner.id}).select("id").single();if(e1)throw e1;
+    createdClinicId=clinic.id;
     const {error:e2}=await admin.from("clinic_members").insert({clinic_id:clinic.id,user_id:owner.id,role:"owner",active:true});if(e2)throw e2;
     const {data:branch,error:e3}=await admin.from("clinic_branches").insert({clinic_id:clinic.id,name:branchName}).select("id").single();if(e3)throw e3;
     const {error:e4}=await admin.from("clinic_member_branches").insert({clinic_id:clinic.id,user_id:owner.id,branch_id:branch.id});if(e4)throw e4;
     return json({ok:true,clinic_id:clinic.id,owner_id:owner.id,username:u,branch_id:branch.id});
-   }catch(e){await admin.auth.admin.deleteUser(owner.id);throw e;}
+   }catch(e){if(createdClinicId)await admin.from("clinics").delete().eq("id",createdClinicId);await admin.auth.admin.deleteUser(owner.id);throw e;}
   }
   return json({error:"UNKNOWN_ACTION"},400);
  }catch(e){const m=e instanceof Error?e.message:"INTERNAL_ERROR";return json({error:m},m==="INVALID_USERNAME"||m==="INVALID_PASSWORD"?400:500);}

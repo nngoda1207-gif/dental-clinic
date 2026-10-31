@@ -524,19 +524,26 @@ try {
   const savedConfig = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
   const embeddedConfig = window.DCOS_SUPABASE_CONFIG;
   const configured = embeddedConfig?.url && embeddedConfig?.publishableKey ? embeddedConfig : savedConfig;
-  if (configured?.url && configured?.publishableKey) {
-    configureSupabase({ url: configured.url, publishableKey: configured.publishableKey });
-    (async () => {
-      try {
-        const { data, error } = await getSupabaseClient().auth.getSession();
-        if (error) throw error;
-        if (data?.session) {
-          await loadWorkspace();
-          flushPatientSyncQueue();
-        }
-      } catch (e) {
-        status(e.message || 'تعذر استعادة جلسة المزامنة السحابية.');
+  if (!configured?.url || !configured?.publishableKey) throw new Error('إعداد الاتصال السحابي غير موجود في هذه النسخة.');
+  configureSupabase({ url: configured.url, publishableKey: configured.publishableKey });
+  window.DCOS_CLOUD_AUTH_STATE = 'ready';
+  window.DCOS_CLOUD_AUTH_ERROR = '';
+  window.dispatchEvent(new CustomEvent('dcos:cloud-auth-ready'));
+  (async () => {
+    try {
+      const { data, error } = await getSupabaseClient().auth.getSession();
+      if (error) throw error;
+      if (data?.session) {
+        await loadWorkspace();
+        flushPatientSyncQueue();
       }
-    })();
-  }
-} catch (e) { status(e.message || 'تعذر تهيئة الاتصال السحابي.'); }
+    } catch (e) {
+      status(e.message || 'تعذر استعادة جلسة المزامنة السحابية.');
+    }
+  })();
+} catch (e) {
+  window.DCOS_CLOUD_AUTH_STATE = 'error';
+  window.DCOS_CLOUD_AUTH_ERROR = String(e?.message || 'تعذر تهيئة الاتصال السحابي.');
+  window.dispatchEvent(new CustomEvent('dcos:cloud-auth-error', { detail: { message: window.DCOS_CLOUD_AUTH_ERROR } }));
+  status(window.DCOS_CLOUD_AUTH_ERROR);
+}

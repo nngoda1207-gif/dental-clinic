@@ -983,11 +983,15 @@ async function syncAllCloudModulesForBranch(branchId, showStatus = false) {
       if (item.status !== 'fulfilled') return;
       const value = item.value || {};
       synced += Number(value.synced || 0);
-      for (const conflict of value.conflicts || []) conflicts.push({ module: names[index], ...conflict });
+      if (Array.isArray(value.conflicts)) {
+        for (const conflict of value.conflicts) conflicts.push({ ...conflict, module: names[index] });
+      } else if (Number(value.conflicts) > 0) {
+        conflicts.push({ module: names[index], count: Number(value.conflicts) });
+      }
       for (const failure of value.failed || []) failures.push(failure.module + ': ' + (failure.error?.message || 'sync_error'));
     });
     const report = {
-      branchId, synced, conflicts, conflictCount: conflicts.length + Number(patientQueue.blocked || 0) + Number(patientQueue.conflicts || 0),
+      branchId, synced, conflicts, conflictCount: conflicts.reduce((sum, item) => sum + Number(item.count || 1), 0) + Math.max(Number(patientQueue.blocked || 0), Number(patientQueue.conflicts || 0)),
       failures, pendingPatientWrites: Number(patientQueue.pending || 0), patientWritesBlocked: Number(patientQueue.blocked || 0)
     };
     window.dispatchEvent(new CustomEvent('dcos:cloud-sync-complete', { detail: report }));

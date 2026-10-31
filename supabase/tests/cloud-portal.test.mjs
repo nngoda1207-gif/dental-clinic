@@ -65,6 +65,8 @@ assert.ok(portal.includes('pendingPatientWrites'), 'Cloud sync completion must e
 assert.ok(portal.includes('async function verifyCloudMigrationForBranch'), 'Migration verification must compare local and cloud module counts without writing data');
 assert.ok(portal.includes("status: local === cloud ? 'count_match' : 'count_mismatch'"), 'Migration verification must expose explicit count mismatches');
 assert.ok(portal.includes("new CustomEvent('dcos:cloud-migration-verified'"), 'Migration verification must publish a structured report');
+assert.ok(portal.includes("await verifyCloudMigrationForBranch(branch.id, true)"), 'Migration verification must run after the initial cloud load');
+assert.ok(portal.includes("reason === 'branch_mapping_approved'"), 'Migration verification must run after the initial import and branch mapping');
 const queueFlush = portal.slice(portal.indexOf('async function flushPatientSyncQueue'), portal.indexOf('// Main-app username login bridge'));
 assert.ok(queueFlush.indexOf("if (synced || blocked) status(") < queueFlush.indexOf("return { synced, blocked, pending: finalQueueByKey.size"), 'Patient sync result must be reported before returning');
 assert.ok(portal.includes('modules.push({ module: names[index]'), 'Cloud sync completion must report each module independently');

@@ -1112,6 +1112,10 @@ function queueAutomaticCloudSync(reason = 'local_change') {
       cloudAutoSyncTimers.delete(branch.id);
       try {
         const outcome = await syncAllCloudModulesForBranch(branch.id, reason === 'branch_mapping_approved');
+        if (reason === 'branch_mapping_approved') {
+          try { await verifyCloudMigrationForBranch(branch.id, true); }
+          catch (error) { status('تعذر فحص اكتمال النقل بعد ربط الفروع: ' + (error.message || 'خطأ')); }
+        }
         if ((outcome?.failures?.length || outcome?.pendingPatientWrites) && navigator.onLine) {
           const attempt = (cloudAutoSyncAttempts.get(branch.id) || 0) + 1;
           cloudAutoSyncAttempts.set(branch.id, attempt);

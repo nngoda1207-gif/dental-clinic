@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - 'index.html'
+      - 'scripts/build-web.js'
       - 'supabase/**'
       - 'package.json'
       - 'package-lock.json'
@@ -15,6 +16,7 @@ on:
     branches: [feature/supabase-shared-clinic, fix/persistent-cloud-account, recovery/stable-build-496]
     paths:
       - 'index.html'
+      - 'scripts/build-web.js'
       - 'supabase/**'
       - 'package.json'
       - 'package-lock.json'

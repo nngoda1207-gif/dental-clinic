@@ -7,6 +7,9 @@
 -- Run only after reviewing this file. The app integration is a separate step.
 
 create extension if not exists pgcrypto;
+create schema if not exists private;
+revoke all on schema private from public, anon;
+grant usage on schema private to authenticated;
 
 create table if not exists public.clinics (
   id uuid primary key default gen_random_uuid(),
@@ -55,7 +58,7 @@ create index if not exists clinic_member_branches_user_idx
   on public.clinic_member_branches(clinic_id, user_id);
 
 -- Security-definer helpers avoid recursive RLS checks on clinic_members.
-create or replace function public.is_clinic_member(p_clinic_id uuid)
+create or replace function private.is_clinic_member(p_clinic_id uuid)
 returns boolean
 language sql
 stable
@@ -71,7 +74,7 @@ as $$
   );
 $$;
 
-create or replace function public.has_clinic_role(p_clinic_id uuid, p_roles text[])
+create or replace function private.has_clinic_role(p_clinic_id uuid, p_roles text[])
 returns boolean
 language sql
 stable
@@ -88,7 +91,7 @@ as $$
   );
 $$;
 
-create or replace function public.can_access_clinic_branch(p_clinic_id uuid, p_branch_id uuid)
+create or replace function private.can_access_clinic_branch(p_clinic_id uuid, p_branch_id uuid)
 returns boolean
 language sql
 stable
@@ -96,7 +99,7 @@ security definer
 set search_path = ''
 as $$
   select
-    public.has_clinic_role(p_clinic_id, array['owner'])
+    private.has_clinic_role(p_clinic_id, array['owner'])
     or exists (
       select 1
       from public.clinic_member_branches mb
@@ -109,12 +112,12 @@ as $$
     );
 $$;
 
-revoke all on function public.is_clinic_member(uuid) from public;
-revoke all on function public.has_clinic_role(uuid, text[]) from public;
-revoke all on function public.can_access_clinic_branch(uuid, uuid) from public;
-grant execute on function public.is_clinic_member(uuid) to authenticated;
-grant execute on function public.has_clinic_role(uuid, text[]) to authenticated;
-grant execute on function public.can_access_clinic_branch(uuid, uuid) to authenticated;
+revoke all on function private.is_clinic_member(uuid) from public, anon;
+revoke all on function private.has_clinic_role(uuid, text[]) from public, anon;
+revoke all on function private.can_access_clinic_branch(uuid, uuid) from public, anon;
+grant execute on function private.is_clinic_member(uuid) to authenticated;
+grant execute on function private.has_clinic_role(uuid, text[]) to authenticated;
+grant execute on function private.can_access_clinic_branch(uuid, uuid) to authenticated;
 
 -- Clinic creation is reserved for the trusted system provisioning flow.
 alter table public.clinics enable row level security;
@@ -125,18 +128,18 @@ alter table public.clinic_member_branches enable row level security;
 drop policy if exists clinics_read_member on public.clinics;
 create policy clinics_read_member on public.clinics
 for select to authenticated
-using (public.is_clinic_member(id));
+using (private.is_clinic_member(id));
 
 drop policy if exists clinic_members_read_self_or_owner on public.clinic_members;
 create policy clinic_members_read_self_or_owner on public.clinic_members
 for select to authenticated
-using (user_id = auth.uid() or public.has_clinic_role(clinic_id, array['owner']));
+using (user_id = auth.uid() or private.has_clinic_role(clinic_id, array['owner']));
 
 drop policy if exists clinic_members_insert_owner on public.clinic_members;
 create policy clinic_members_insert_owner on public.clinic_members
 for insert to authenticated
 with check (
-  public.has_clinic_role(clinic_id, array['owner'])
+  private.has_clinic_role(clinic_id, array['owner'])
   and user_id <> auth.uid()
   and role <> 'owner'
 );
@@ -144,48 +147,48 @@ with check (
 drop policy if exists clinic_members_update_owner on public.clinic_members;
 create policy clinic_members_update_owner on public.clinic_members
 for update to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']) and user_id <> auth.uid())
-with check (public.has_clinic_role(clinic_id, array['owner']) and role <> 'owner');
+using (private.has_clinic_role(clinic_id, array['owner']) and user_id <> auth.uid())
+with check (private.has_clinic_role(clinic_id, array['owner']) and role <> 'owner');
 
 drop policy if exists clinic_members_delete_owner on public.clinic_members;
 create policy clinic_members_delete_owner on public.clinic_members
 for delete to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']) and user_id <> auth.uid());
+using (private.has_clinic_role(clinic_id, array['owner']) and user_id <> auth.uid());
 
 drop policy if exists clinic_branches_read_member on public.clinic_branches;
 create policy clinic_branches_read_member on public.clinic_branches
 for select to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner'])
-  or public.can_access_clinic_branch(clinic_id, id)
+  private.has_clinic_role(clinic_id, array['owner'])
+  or private.can_access_clinic_branch(clinic_id, id)
 );
 
 drop policy if exists clinic_branches_insert_owner_manager on public.clinic_branches;
 create policy clinic_branches_insert_owner on public.clinic_branches
 for insert to authenticated
-with check (public.has_clinic_role(clinic_id, array['owner']));
+with check (private.has_clinic_role(clinic_id, array['owner']));
 
 drop policy if exists clinic_branches_update_owner_manager on public.clinic_branches;
 create policy clinic_branches_update_owner on public.clinic_branches
 for update to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']))
-with check (public.has_clinic_role(clinic_id, array['owner']));
+using (private.has_clinic_role(clinic_id, array['owner']))
+with check (private.has_clinic_role(clinic_id, array['owner']));
 
 drop policy if exists clinic_branches_delete_owner on public.clinic_branches;
 create policy clinic_branches_delete_owner on public.clinic_branches
 for delete to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']));
+using (private.has_clinic_role(clinic_id, array['owner']));
 
 drop policy if exists clinic_member_branches_read_self_or_owner on public.clinic_member_branches;
 create policy clinic_member_branches_read_self_or_owner on public.clinic_member_branches
 for select to authenticated
-using (user_id = auth.uid() or public.has_clinic_role(clinic_id, array['owner']));
+using (user_id = auth.uid() or private.has_clinic_role(clinic_id, array['owner']));
 
 drop policy if exists clinic_member_branches_manage_owner on public.clinic_member_branches;
 create policy clinic_member_branches_manage_owner on public.clinic_member_branches
 for all to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']))
-with check (public.has_clinic_role(clinic_id, array['owner']));
+using (private.has_clinic_role(clinic_id, array['owner']))
+with check (private.has_clinic_role(clinic_id, array['owner']));
 
 grant select on public.clinics to authenticated;
 grant select, insert, update, delete on public.clinic_members to authenticated;

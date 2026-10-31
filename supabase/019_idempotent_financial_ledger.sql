@@ -22,8 +22,8 @@ begin
  if p_method not in ('cash','card','transfer','wallet','other') then raise exception 'Unsupported payment method' using errcode='22023';end if;
  select * into v_invoice from public.clinic_invoices where id=p_invoice_id for update;
  if not found then raise exception 'Invoice not found' using errcode='P0002';end if;
- if not public.has_clinic_role(v_invoice.clinic_id,array['owner','manager','accountant'])
-    or not public.can_access_clinic_branch(v_invoice.clinic_id,v_invoice.branch_id) then
+ if not private.has_clinic_role(v_invoice.clinic_id,array['owner','manager','accountant'])
+    or not private.can_access_clinic_branch(v_invoice.clinic_id,v_invoice.branch_id) then
    raise exception 'Not allowed to post invoice payments' using errcode='42501';
  end if;
  select * into v_entry from public.clinic_invoice_payments
@@ -70,8 +70,8 @@ begin
  if not found then raise exception 'Original payment not found' using errcode='P0002';end if;
  select * into v_invoice from public.clinic_invoices where id=v_original.invoice_id and clinic_id=v_original.clinic_id for update;
  if not found then raise exception 'Invoice not found' using errcode='P0002';end if;
- if not public.has_clinic_role(v_invoice.clinic_id,array['owner','manager','accountant'])
-    or not public.can_access_clinic_branch(v_invoice.clinic_id,v_invoice.branch_id) then
+ if not private.has_clinic_role(v_invoice.clinic_id,array['owner','manager','accountant'])
+    or not private.can_access_clinic_branch(v_invoice.clinic_id,v_invoice.branch_id) then
    raise exception 'Not allowed to refund invoice payments' using errcode='42501';
  end if;
  select * into v_entry from public.clinic_invoice_payments

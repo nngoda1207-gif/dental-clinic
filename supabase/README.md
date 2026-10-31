@@ -16,6 +16,13 @@
 - `013_patient_realtime_publication.sql` adds `clinic_patients` to the Supabase Realtime publication when it exists, enabling branch-scoped live refresh notifications; it does not write local app data.
 - `014_patient_local_identity.sql` adds a stable local patient ID to the cloud patient row so demographic updates from the same device can be retried idempotently without creating duplicates.
 - `015_patient_updated_at_trigger.sql` advances the patient version timestamp on every update so optimistic concurrency checks can detect changes made by any client.
+- `025_generic_clinic_records.sql` creates the module-scoped `clinic_records` store, role/branch-aware RLS policies, and the `clinic_members.permissions` field. It is additive and does not touch legacy `clinic_state`.
+- `cloud-record-repository.js` / `cloud-record-sync-service.js` provide branch-validated, revision-checked generic record CRUD with soft deletion. They are the shared foundation for the next module adapters; they do not upload the complete local `D` object.
+- `patient-repository.js` now uses the deployed `clinic_records` table for demographics only, keyed by branch + file number, with stable local identity, optimistic revision checks, and Realtime filtering. It deliberately excludes nested clinical notes, visits, treatment plans, prescriptions and financial history.
+- New staff accounts created through `clinic-auth` receive the default permission codes corresponding to their assigned app role. Existing staff permissions are not silently broadened by this code change; an owner must review any pre-existing empty permission set before enabling their cloud access.
+- The cloud portal owner workspace now lists existing staff and lets the owner save module permission codes through the protected `list_staff` / `manage_permissions` Edge Function actions. Cloud app feature gates now use the authenticated membership's saved permissions rather than assuming every member of the same role has identical access.
+- `022_staff_invitations.sql` is now present in the migration chain: it stores only hashed, single-use invitation tokens, binds redemption to the invited email, assigns the selected branch, and initializes the same role permission defaults as the username-based staff flow.
+- `.github/workflows/cloud-record-sync-test.yml` runs focused JS safety checks and applies migrations 001, 023, 024 and 025 to a disposable PostgreSQL database before checking the generic record schema.
 
 - `020_lab_sync_identity.sql` adds stable local IDs for lab directories, cases and lab payments, plus optimistic case versioning and an idempotent lab-payment RPC. Repeated identical offline payment submissions return the original ledger row; changed payloads are rejected. This is database groundwork; lab case import/reconciliation and live UI integration remain disabled.
 - `019_idempotent_financial_ledger.sql` adds stable local IDs to payment/refund ledger entries and retry-safe RPCs. Repeating the same local transaction ID and identical payload returns the original ledger row; reusing it with changed data is rejected. The financial repository now calls these RPCs and requires local IDs. Invoice creation still needs an idempotent import path before invoice sync can be enabled.
@@ -35,7 +42,7 @@
 - Clinical-record updates now require the caller's last-seen `updated_at` token; missing/stale versions are rejected. Creation can carry a stable local ID. This prevents blind last-write-wins, but a full clinical import preview, detail-child identity reconciliation and UI integration remain required.
 - `clinical-record-repository.js` / `clinical-record-sync-service.js` provide branch-scoped clinical visit records; `clinical-details-repository.js` / `clinical-details-sync-service.js` cover medical history, odontogram, and periodontal measurements; `prescription-consent-repository.js` / `prescription-consent-sync-service.js` cover prescription items and consent metadata. These modules are isolated prototypes and are **not wired into the live UI**.
 - Prescription-item inserts are subject to the existing database policy requiring the parent prescription record to have been created by the current authenticated user. Consent rows currently store metadata and a document path only; secure file upload and a verified signature workflow remain future work.
-- `patient-repository.js` is the first branch-scoped data-access slice (read/create/update/archive) for normalized patients. It is not wired into the app and its field mapping is incomplete; do not treat it as production sync.
+- Patient demographic sync is wired through the isolated cloud portal and the existing patient outbox. It remains a limited first slice, not full clinic synchronization; verify it on two devices before production use.
 - `connection-check.html` is a standalone diagnostic that checks the project Auth endpoint, signs in a synthetic test user, reads that user's active membership under RLS, and signs out. It performs no clinic-data writes and is not part of the production app.
 - The current app in `index.html` still uses local storage for its full `D` state and its custom local login.
 - Migration 009 improves patient field coverage, but patient repository still is not wired into the UI. This migration does **not** turn on app sync and does **not** migrate existing local users.
@@ -43,8 +50,8 @@
 
 ## Before running the migration
 
-1. The GitHub Actions PostgreSQL smoke test should pass, then test in a separate Supabase project using synthetic data only.
-2. Apply all twenty SQL files in numerical order (`001` through `020`) in a separate disposable Supabase project.
+1. Both GitHub Actions PostgreSQL workflows should pass, then test in a separate Supabase project using synthetic data only.
+2. Apply all SQL migrations in numerical order (`001` through `025`) in a separate disposable Supabase project.
 3. Follow `TEST_PLAN.md`; do not treat a successful SQL run alone as proof that role/branch security is correct.
 4. Confirm the project has a recent backup.
 5. Review the SQL and confirm the desired owner/member workflow.
@@ -54,7 +61,7 @@
 
 Open the **المزامنة السحابية** button in the app, enter the Supabase project URL and the public publishable/anon key, then sign in with a Supabase Auth email/password. A first-time owner can create a clinic and its primary branch. Existing members can view patient records only from branches assigned to their authenticated account. These settings are stored locally on that device; configure the second device separately. Never use a service-role/secret key in the browser or APK.
 
-The portal never copies local users, clinical notes, financial records, or the complete `D` object to Supabase. Only explicitly mapped patient demographics are synchronized; the local merge layer never replaces clinical, appointment, or financial history. Patient demographic writes require a manually verified backup, explicit branch mapping, and owner opt-in. The local demographic outbox is retryable, but conflict handling for pre-existing legacy rows remains manual; broader writes and inbound local-database merging are not enabled.
+The portal never copies local users, clinical notes, financial records, or the complete `D` object to Supabase. Only explicitly mapped patient demographics are synchronized through the generic `clinic_records` table; the local merge layer never replaces clinical, appointment, or financial history. Patient demographic writes require a manually verified backup, explicit branch mapping, and owner opt-in. The local demographic outbox is retryable, but conflict handling for pre-existing legacy rows remains manual; broader writes and inbound local-database merging are not enabled.
 
 ## Why full sync is not enabled yet
 
@@ -66,7 +73,7 @@ Supabase Auth must also be integrated with the current local login carefully. Th
 
 ## Planned implementation order
 
-1. Review and test all twelve SQL migrations in a separate Supabase project.
+1. Review and test the complete migration chain (`001`–`025`) in a separate Supabase project.
 2. Audit the policies against the clinic's exact role/branch workflow; these are an initial draft and need security testing.
 3. Integrate and test the Auth prototype through a controlled onboarding/invitation flow; do not migrate local password hashes.
 4. Add a controlled migration path for existing local accounts.

@@ -31,10 +31,10 @@ drop policy if exists clinic_invoice_items_select on public.clinic_invoice_items
 create policy clinic_invoice_items_select on public.clinic_invoice_items
 for select to authenticated
 using (
-  public.has_clinic_role(clinic_id,array['owner'])
+  private.has_clinic_role(clinic_id,array['owner'])
   or (
-    public.has_clinic_role(clinic_id,array['manager','accountant','reception','readonly'])
-    and public.can_access_clinic_branch(clinic_id,branch_id)
+    private.has_clinic_role(clinic_id,array['manager','accountant','reception','readonly'])
+    and private.can_access_clinic_branch(clinic_id,branch_id)
   )
 );
 
@@ -78,8 +78,8 @@ begin
 
   select clinic_id into v_clinic_id from public.clinic_branches where id=p_branch_id;
   if v_clinic_id is null then raise exception 'Branch not found' using errcode='P0002'; end if;
-  if not public.has_clinic_role(v_clinic_id,array['owner','manager','accountant'])
-     or not public.can_access_clinic_branch(v_clinic_id,p_branch_id) then
+  if not private.has_clinic_role(v_clinic_id,array['owner','manager','accountant'])
+     or not private.can_access_clinic_branch(v_clinic_id,p_branch_id) then
     raise exception 'Not allowed to create invoices in this branch' using errcode='42501';
   end if;
   if not exists (

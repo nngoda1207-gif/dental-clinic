@@ -37,8 +37,8 @@ begin
  if p_method not in ('cash','card','transfer','wallet','other') then raise exception 'Unsupported payment method' using errcode='22023';end if;
  select * into v_case from public.clinic_lab_cases where id=p_lab_case_id for update;
  if not found then raise exception 'Lab case not found' using errcode='P0002';end if;
- if not public.has_clinic_role(v_case.clinic_id,array['owner','manager','accountant'])
-    or not public.can_access_clinic_branch(v_case.clinic_id,v_case.branch_id) then
+ if not private.has_clinic_role(v_case.clinic_id,array['owner','manager','accountant'])
+    or not private.can_access_clinic_branch(v_case.clinic_id,v_case.branch_id) then
   raise exception 'Not allowed to post lab payments' using errcode='42501';
  end if;
  select * into v_entry from public.clinic_lab_payments

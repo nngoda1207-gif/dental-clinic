@@ -1,0 +1,71 @@
+name: Cloud record sync safety tests
+
+on:
+  push:
+    branches: [feature/cloud-record-sync-foundation]
+    paths:
+      - 'supabase/**'
+      - 'index.html'
+      - '.github/workflows/cloud-record-sync-test.yml'
+  pull_request:
+    paths:
+      - 'supabase/**'
+      - 'index.html'
+      - '.github/workflows/cloud-record-sync-test.yml'
+  workflow_dispatch:
+
+jobs:
+  javascript-and-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: clinic_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d clinic_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: clinic_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check cloud modules
+        run: |
+          node --input-type=module --check < supabase/cloud-record-repository.js
+          node --input-type=module --check < supabase/cloud-record-sync-service.js
+          node --input-type=module --check < supabase/patient-repository.js
+          node --input-type=module --check < supabase/patient-sync-service.js
+          node supabase/tests/cloud-record-sync-service.test.mjs
+          node supabase/tests/cloud-staff-permissions.test.mjs
+          node supabase/tests/patient-repository.test.mjs
+          node supabase/tests/cloud-portal.test.mjs
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Bootstrap Supabase Auth compatibility
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap.sql
+      - name: Apply clinic identity and cloud record migrations
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/001_clinic_membership.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/022_staff_invitations.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/023_username_accounts.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/024_private_rls_helpers.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/025_generic_clinic_records.sql
+      - name: Verify staff invitation redemption and single-use tokens
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/staff-invitations.test.sql
+      - name: Verify generic cloud records schema
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/generic-clinic-records.test.sql
+      - name: Verify module and branch RLS isolation
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/generic-clinic-records-rls.test.sql

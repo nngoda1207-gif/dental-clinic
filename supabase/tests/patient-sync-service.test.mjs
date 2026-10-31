@@ -22,7 +22,7 @@ assert.ok(service.includes('if (write && !WRITE_ROLES.has(context.role))'), 'rea
 assert.ok(service.includes('listRemotePatients({ clinicId: scope.clinicId, branchId: scope.branchId, limit })'), 'list must use validated clinic and branch scope');
 assert.ok(service.includes('patientId,\n    patient') || service.includes('patientId,\n    patient\n'), 'update must pass only a selected patient ID and patient fields');
 assert.ok(context.includes('The list must come from the remote clinic_member_branches query'), 'branch assignment source must be explicit');
-assert.ok(schema.includes("public.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])"), 'database remains responsible for patient write role enforcement');
+assert.ok(schema.includes("private.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])"), 'database remains responsible for patient write role enforcement');
 assert.doesNotMatch(service, /localStorage|dcos1|service_role|secret key/i, 'service must not access local blob or embed privileged credentials');
 
 console.log('Patient sync service safety checks passed.');

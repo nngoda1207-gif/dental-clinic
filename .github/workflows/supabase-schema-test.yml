@@ -169,3 +169,22 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/022_staff_invitations.sql
       - name: Verify owner-issued single-use staff invitations
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/staff-invitations.test.sql
+      - name: Apply migration 023 username accounts
+        run: psql -v ON_ERROR_STOP=1 -f supabase/023_username_accounts.sql
+      - name: Apply migration 024 private RLS helpers
+        run: psql -v ON_ERROR_STOP=1 -f supabase/024_private_rls_helpers.sql
+      - name: Apply migration 025 generic clinic records
+        run: psql -v ON_ERROR_STOP=1 -f supabase/025_generic_clinic_records.sql
+      - name: Verify generic clinic records schema
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/generic-clinic-records.test.sql
+      - name: Verify generic clinic records module and branch RLS
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/generic-clinic-records-rls.test.sql
+      - name: Check generic cloud record modules
+        run: |
+          node --input-type=module --check < supabase/cloud-record-repository.js
+          node --input-type=module --check < supabase/cloud-record-sync-service.js
+          node --input-type=module --check < supabase/patient-repository.js
+          node --input-type=module --check < supabase/cloud-portal.js
+          node supabase/tests/cloud-record-sync-service.test.mjs
+          node supabase/tests/cloud-staff-permissions.test.mjs
+          node supabase/tests/patient-repository.test.mjs

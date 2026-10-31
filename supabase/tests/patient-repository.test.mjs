@@ -20,6 +20,11 @@ for (const method of [
 
 assert.match(repo, /\.eq\('clinic_id', clinicId\)/, 'reads/writes must be clinic-scoped');
 assert.match(repo, /\.eq\('branch_id', branchId\)/, 'reads/writes must be branch-scoped');
+assert.match(repo, /\.from\('clinic_records'\)/, 'patient demographics must use the deployed generic clinic_records table');
+assert.match(repo, /\.eq\('module', MODULE\)/, 'patient queries must be restricted to the patients module');
+assert.match(repo, /sourceLocalId/, 'stable local patient identity must be retained in the payload');
+assert.match(repo, /record_key: key/, 'file number must remain the per-branch duplicate key');
+assert.doesNotMatch(repo, /\.from\('clinic_patients'\)/, 'live patient sync must not depend on unapplied normalized tables');
 assert.match(repo, /\.range\(offset, offset \+ pageSize - 1\)/, 'full import comparison must paginate through all remote patients');
 assert.match(repo, /if \(page\.length < pageSize\) break/, 'pagination must stop only after the final partial page');
 assert.match(repo, /created_by: userId/, 'creator must come from the authenticated session');
@@ -30,11 +35,11 @@ assert.match(validation, /Sex must be male, female, other, or empty/, 'unknown s
 assert.match(validation, /Patient email address is invalid/, 'malformed email must be rejected');
 assert.match(validation, /One or more patient profile fields are too long/, 'oversized patient profile fields must be rejected');
 assert.doesNotMatch(repo, /localStorage|dcos1|\.from\(['"]clinic_state['"]\)/, 'repository must not sync the local D blob');
-assert.match(auth, /storageKey: 'dcos_supabase_auth_v1'/, 'Supabase auth storage must be isolated from the app dataset');
+assert.match(auth, /storageKey:\s*'dcos_supabase_auth_v1'/, 'Supabase auth storage must be isolated from the app dataset');
 assert.ok(auth.includes('export async function listAssignedRemoteBranches(clinicId)'), 'assigned branch listing must be explicit');
-assert.ok(auth.includes(".eq('user_id', session.user.id)"), 'branch assignments must be scoped to the authenticated user');
-assert.ok(auth.includes(".eq('active', true)"), 'inactive branches must not be returned');
-assert.ok(auth.includes(".in('id', ids)"), 'branch details must be limited to assigned branch IDs');
+assert.match(auth, /\.eq\('user_id',\s*session\.user\.id\)/, 'branch assignments must be scoped to the authenticated user');
+assert.match(auth, /\.eq\('active',\s*true\)/, 'inactive branches must not be returned');
+assert.match(auth, /\.in\('id',\s*ids\)/, 'branch details must be limited to assigned branch IDs');
 
 for (const policy of [
   'clinic_patients_select',

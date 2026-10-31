@@ -291,377 +291,377 @@ drop policy if exists clinic_patients_select on public.clinic_patients;
 create policy clinic_patients_select on public.clinic_patients
 for select to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner'])
+  private.has_clinic_role(clinic_id, array['owner'])
   or (
-    public.has_clinic_role(clinic_id, array['manager','dentist','reception','nurse','readonly'])
-    and public.can_access_clinic_branch(clinic_id, branch_id)
+    private.has_clinic_role(clinic_id, array['manager','dentist','reception','nurse','readonly'])
+    and private.can_access_clinic_branch(clinic_id, branch_id)
   )
 );
 drop policy if exists clinic_patients_insert on public.clinic_patients;
 create policy clinic_patients_insert on public.clinic_patients
 for insert to authenticated
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
   and created_by = auth.uid()
 );
 drop policy if exists clinic_patients_update on public.clinic_patients;
 create policy clinic_patients_update on public.clinic_patients
 for update to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 )
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 );
 drop policy if exists clinic_patients_delete on public.clinic_patients;
 create policy clinic_patients_delete on public.clinic_patients
 for delete to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']) and public.can_access_clinic_branch(clinic_id, branch_id));
+using (private.has_clinic_role(clinic_id, array['owner']) and private.can_access_clinic_branch(clinic_id, branch_id));
 
 -- Appointments.
 drop policy if exists clinic_appointments_select on public.clinic_appointments;
 create policy clinic_appointments_select on public.clinic_appointments
 for select to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner'])
+  private.has_clinic_role(clinic_id, array['owner'])
   or (
-    public.has_clinic_role(clinic_id, array['manager','dentist','reception','nurse','readonly'])
-    and public.can_access_clinic_branch(clinic_id, branch_id)
+    private.has_clinic_role(clinic_id, array['manager','dentist','reception','nurse','readonly'])
+    and private.can_access_clinic_branch(clinic_id, branch_id)
   )
 );
 drop policy if exists clinic_appointments_insert on public.clinic_appointments;
 create policy clinic_appointments_insert on public.clinic_appointments
 for insert to authenticated
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
   and created_by = auth.uid()
 );
 drop policy if exists clinic_appointments_update on public.clinic_appointments;
 create policy clinic_appointments_update on public.clinic_appointments
 for update to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 )
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','reception','dentist'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 );
 drop policy if exists clinic_appointments_delete on public.clinic_appointments;
 create policy clinic_appointments_delete on public.clinic_appointments
 for delete to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']) and public.can_access_clinic_branch(clinic_id, branch_id));
+using (private.has_clinic_role(clinic_id, array['owner']) and private.can_access_clinic_branch(clinic_id, branch_id));
 
 -- Clinical records: only owner/manager/dentist/nurse; reception and accounting cannot read notes/diagnoses.
 drop policy if exists clinic_clinical_select on public.clinic_clinical_records;
 create policy clinic_clinical_select on public.clinic_clinical_records
 for select to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner'])
+  private.has_clinic_role(clinic_id, array['owner'])
   or (
-    public.has_clinic_role(clinic_id, array['manager','dentist','nurse'])
-    and public.can_access_clinic_branch(clinic_id, branch_id)
+    private.has_clinic_role(clinic_id, array['manager','dentist','nurse'])
+    and private.can_access_clinic_branch(clinic_id, branch_id)
   )
 );
 drop policy if exists clinic_clinical_insert on public.clinic_clinical_records;
 create policy clinic_clinical_insert on public.clinic_clinical_records
 for insert to authenticated
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','dentist','nurse'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','dentist','nurse'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
   and created_by = auth.uid()
 );
 drop policy if exists clinic_clinical_update on public.clinic_clinical_records;
 create policy clinic_clinical_update on public.clinic_clinical_records
 for update to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner','manager','dentist','nurse'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','dentist','nurse'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 )
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','dentist','nurse'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','dentist','nurse'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 );
 drop policy if exists clinic_clinical_delete on public.clinic_clinical_records;
 create policy clinic_clinical_delete on public.clinic_clinical_records
 for delete to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']) and public.can_access_clinic_branch(clinic_id, branch_id));
+using (private.has_clinic_role(clinic_id, array['owner']) and private.can_access_clinic_branch(clinic_id, branch_id));
 
 -- Treatment plans are clinical data.
 drop policy if exists clinic_treatment_select on public.clinic_treatment_items;
 create policy clinic_treatment_select on public.clinic_treatment_items
 for select to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner'])
+  private.has_clinic_role(clinic_id, array['owner'])
   or (
-    public.has_clinic_role(clinic_id, array['manager','dentist','nurse','readonly'])
-    and public.can_access_clinic_branch(clinic_id, branch_id)
+    private.has_clinic_role(clinic_id, array['manager','dentist','nurse','readonly'])
+    and private.can_access_clinic_branch(clinic_id, branch_id)
   )
 );
 drop policy if exists clinic_treatment_insert on public.clinic_treatment_items;
 create policy clinic_treatment_insert on public.clinic_treatment_items
 for insert to authenticated
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','dentist'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','dentist'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
   and created_by = auth.uid()
 );
 drop policy if exists clinic_treatment_update on public.clinic_treatment_items;
 create policy clinic_treatment_update on public.clinic_treatment_items
 for update to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner','manager','dentist'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','dentist'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 )
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','dentist'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','dentist'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 );
 drop policy if exists clinic_treatment_delete on public.clinic_treatment_items;
 create policy clinic_treatment_delete on public.clinic_treatment_items
 for delete to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']) and public.can_access_clinic_branch(clinic_id, branch_id));
+using (private.has_clinic_role(clinic_id, array['owner']) and private.can_access_clinic_branch(clinic_id, branch_id));
 
 -- Financial records: accountant has access; reception can read but not alter invoices/payments.
 drop policy if exists clinic_invoices_select on public.clinic_invoices;
 create policy clinic_invoices_select on public.clinic_invoices
 for select to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner'])
+  private.has_clinic_role(clinic_id, array['owner'])
   or (
-    public.has_clinic_role(clinic_id, array['manager','accountant','reception','readonly'])
-    and public.can_access_clinic_branch(clinic_id, branch_id)
+    private.has_clinic_role(clinic_id, array['manager','accountant','reception','readonly'])
+    and private.can_access_clinic_branch(clinic_id, branch_id)
   )
 );
 drop policy if exists clinic_invoices_insert on public.clinic_invoices;
 create policy clinic_invoices_insert on public.clinic_invoices
 for insert to authenticated
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','accountant'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','accountant'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
   and created_by = auth.uid()
 );
 drop policy if exists clinic_invoices_update on public.clinic_invoices;
 create policy clinic_invoices_update on public.clinic_invoices
 for update to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner','manager','accountant'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','accountant'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 )
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','accountant'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','accountant'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 );
 drop policy if exists clinic_invoices_delete on public.clinic_invoices;
 create policy clinic_invoices_delete on public.clinic_invoices
 for delete to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']) and public.can_access_clinic_branch(clinic_id, branch_id));
+using (private.has_clinic_role(clinic_id, array['owner']) and private.can_access_clinic_branch(clinic_id, branch_id));
 
 drop policy if exists clinic_payments_select on public.clinic_invoice_payments;
 create policy clinic_payments_select on public.clinic_invoice_payments
 for select to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner'])
+  private.has_clinic_role(clinic_id, array['owner'])
   or (
-    public.has_clinic_role(clinic_id, array['manager','accountant','reception','readonly'])
-    and public.can_access_clinic_branch(clinic_id, branch_id)
+    private.has_clinic_role(clinic_id, array['manager','accountant','reception','readonly'])
+    and private.can_access_clinic_branch(clinic_id, branch_id)
   )
 );
 drop policy if exists clinic_payments_insert on public.clinic_invoice_payments;
 create policy clinic_payments_insert on public.clinic_invoice_payments
 for insert to authenticated
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','accountant'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','accountant'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
   and created_by = auth.uid()
 );
 drop policy if exists clinic_payments_update on public.clinic_invoice_payments;
 create policy clinic_payments_update on public.clinic_invoice_payments
 for update to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner','manager','accountant'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','accountant'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 )
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','accountant'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','accountant'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 );
 drop policy if exists clinic_payments_delete on public.clinic_invoice_payments;
 create policy clinic_payments_delete on public.clinic_invoice_payments
 for delete to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']) and public.can_access_clinic_branch(clinic_id, branch_id));
+using (private.has_clinic_role(clinic_id, array['owner']) and private.can_access_clinic_branch(clinic_id, branch_id));
 
 -- Shared service catalog.
 drop policy if exists clinic_services_select on public.clinic_services;
 create policy clinic_services_select on public.clinic_services
 for select to authenticated
-using (public.is_clinic_member(clinic_id));
+using (private.is_clinic_member(clinic_id));
 drop policy if exists clinic_services_insert on public.clinic_services;
 create policy clinic_services_insert on public.clinic_services
 for insert to authenticated
-with check (public.has_clinic_role(clinic_id, array['owner','manager']));
+with check (private.has_clinic_role(clinic_id, array['owner','manager']));
 drop policy if exists clinic_services_update on public.clinic_services;
 create policy clinic_services_update on public.clinic_services
 for update to authenticated
-using (public.has_clinic_role(clinic_id, array['owner','manager']))
-with check (public.has_clinic_role(clinic_id, array['owner','manager']));
+using (private.has_clinic_role(clinic_id, array['owner','manager']))
+with check (private.has_clinic_role(clinic_id, array['owner','manager']));
 drop policy if exists clinic_services_delete on public.clinic_services;
 create policy clinic_services_delete on public.clinic_services
 for delete to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']));
+using (private.has_clinic_role(clinic_id, array['owner']));
 
 -- Suppliers and inventory are restricted to owner/manager/inventory manager/accountant.
 drop policy if exists clinic_suppliers_select on public.clinic_suppliers;
 create policy clinic_suppliers_select on public.clinic_suppliers
 for select to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner'])
+  private.has_clinic_role(clinic_id, array['owner'])
   or (
-    public.has_clinic_role(clinic_id, array['manager','invmgr','accountant'])
-    and public.can_access_clinic_branch(clinic_id, branch_id)
+    private.has_clinic_role(clinic_id, array['manager','invmgr','accountant'])
+    and private.can_access_clinic_branch(clinic_id, branch_id)
   )
 );
 drop policy if exists clinic_suppliers_insert on public.clinic_suppliers;
 create policy clinic_suppliers_insert on public.clinic_suppliers
 for insert to authenticated
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','invmgr'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','invmgr'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
   and created_by = auth.uid()
 );
 drop policy if exists clinic_suppliers_update on public.clinic_suppliers;
 create policy clinic_suppliers_update on public.clinic_suppliers
 for update to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner','manager','invmgr'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','invmgr'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 )
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','invmgr'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','invmgr'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 );
 drop policy if exists clinic_suppliers_delete on public.clinic_suppliers;
 create policy clinic_suppliers_delete on public.clinic_suppliers
 for delete to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']) and public.can_access_clinic_branch(clinic_id, branch_id));
+using (private.has_clinic_role(clinic_id, array['owner']) and private.can_access_clinic_branch(clinic_id, branch_id));
 
 drop policy if exists clinic_inventory_select on public.clinic_inventory_items;
 create policy clinic_inventory_select on public.clinic_inventory_items
 for select to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner'])
+  private.has_clinic_role(clinic_id, array['owner'])
   or (
-    public.has_clinic_role(clinic_id, array['manager','invmgr','accountant','dentist','nurse','readonly'])
-    and public.can_access_clinic_branch(clinic_id, branch_id)
+    private.has_clinic_role(clinic_id, array['manager','invmgr','accountant','dentist','nurse','readonly'])
+    and private.can_access_clinic_branch(clinic_id, branch_id)
   )
 );
 drop policy if exists clinic_inventory_insert on public.clinic_inventory_items;
 create policy clinic_inventory_insert on public.clinic_inventory_items
 for insert to authenticated
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','invmgr'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','invmgr'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
   and created_by = auth.uid()
 );
 drop policy if exists clinic_inventory_update on public.clinic_inventory_items;
 create policy clinic_inventory_update on public.clinic_inventory_items
 for update to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner','manager','invmgr'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','invmgr'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 )
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','invmgr'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','invmgr'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 );
 drop policy if exists clinic_inventory_delete on public.clinic_inventory_items;
 create policy clinic_inventory_delete on public.clinic_inventory_items
 for delete to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']) and public.can_access_clinic_branch(clinic_id, branch_id));
+using (private.has_clinic_role(clinic_id, array['owner']) and private.can_access_clinic_branch(clinic_id, branch_id));
 
 drop policy if exists clinic_inventory_movements_select on public.clinic_inventory_movements;
 create policy clinic_inventory_movements_select on public.clinic_inventory_movements
 for select to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner'])
+  private.has_clinic_role(clinic_id, array['owner'])
   or (
-    public.has_clinic_role(clinic_id, array['manager','invmgr','accountant','dentist','nurse','readonly'])
-    and public.can_access_clinic_branch(clinic_id, branch_id)
+    private.has_clinic_role(clinic_id, array['manager','invmgr','accountant','dentist','nurse','readonly'])
+    and private.can_access_clinic_branch(clinic_id, branch_id)
   )
 );
 drop policy if exists clinic_inventory_movements_insert on public.clinic_inventory_movements;
 create policy clinic_inventory_movements_insert on public.clinic_inventory_movements
 for insert to authenticated
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','invmgr','dentist','nurse'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','invmgr','dentist','nurse'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
   and created_by = auth.uid()
 );
 drop policy if exists clinic_inventory_movements_update on public.clinic_inventory_movements;
 create policy clinic_inventory_movements_update on public.clinic_inventory_movements
 for update to authenticated
-using (public.has_clinic_role(clinic_id, array['owner','manager','invmgr']) and public.can_access_clinic_branch(clinic_id, branch_id))
-with check (public.has_clinic_role(clinic_id, array['owner','manager','invmgr']) and public.can_access_clinic_branch(clinic_id, branch_id));
+using (private.has_clinic_role(clinic_id, array['owner','manager','invmgr']) and private.can_access_clinic_branch(clinic_id, branch_id))
+with check (private.has_clinic_role(clinic_id, array['owner','manager','invmgr']) and private.can_access_clinic_branch(clinic_id, branch_id));
 drop policy if exists clinic_inventory_movements_delete on public.clinic_inventory_movements;
 create policy clinic_inventory_movements_delete on public.clinic_inventory_movements
 for delete to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']) and public.can_access_clinic_branch(clinic_id, branch_id));
+using (private.has_clinic_role(clinic_id, array['owner']) and private.can_access_clinic_branch(clinic_id, branch_id));
 
 -- Lab cases may contain treatment details; restrict to clinical staff and owner/manager.
 drop policy if exists clinic_lab_select on public.clinic_lab_cases;
 create policy clinic_lab_select on public.clinic_lab_cases
 for select to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner'])
+  private.has_clinic_role(clinic_id, array['owner'])
   or (
-    public.has_clinic_role(clinic_id, array['manager','dentist','nurse','readonly'])
-    and public.can_access_clinic_branch(clinic_id, branch_id)
+    private.has_clinic_role(clinic_id, array['manager','dentist','nurse','readonly'])
+    and private.can_access_clinic_branch(clinic_id, branch_id)
   )
 );
 drop policy if exists clinic_lab_insert on public.clinic_lab_cases;
 create policy clinic_lab_insert on public.clinic_lab_cases
 for insert to authenticated
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','dentist','nurse'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','dentist','nurse'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
   and created_by = auth.uid()
 );
 drop policy if exists clinic_lab_update on public.clinic_lab_cases;
 create policy clinic_lab_update on public.clinic_lab_cases
 for update to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner','manager','dentist','nurse'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','dentist','nurse'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 )
 with check (
-  public.has_clinic_role(clinic_id, array['owner','manager','dentist','nurse'])
-  and public.can_access_clinic_branch(clinic_id, branch_id)
+  private.has_clinic_role(clinic_id, array['owner','manager','dentist','nurse'])
+  and private.can_access_clinic_branch(clinic_id, branch_id)
 );
 drop policy if exists clinic_lab_delete on public.clinic_lab_cases;
 create policy clinic_lab_delete on public.clinic_lab_cases
 for delete to authenticated
-using (public.has_clinic_role(clinic_id, array['owner']) and public.can_access_clinic_branch(clinic_id, branch_id));
+using (private.has_clinic_role(clinic_id, array['owner']) and private.can_access_clinic_branch(clinic_id, branch_id));
 
 -- Audit is append-only for normal users; owner can read all clinic audit entries.
 drop policy if exists clinic_audit_select on public.clinic_audit_events;
 create policy clinic_audit_select on public.clinic_audit_events
 for select to authenticated
 using (
-  public.has_clinic_role(clinic_id, array['owner'])
+  private.has_clinic_role(clinic_id, array['owner'])
   or (
-    public.has_clinic_role(clinic_id, array['manager'])
-    and (branch_id is null or public.can_access_clinic_branch(clinic_id, branch_id))
+    private.has_clinic_role(clinic_id, array['manager'])
+    and (branch_id is null or private.can_access_clinic_branch(clinic_id, branch_id))
   )
 );
 drop policy if exists clinic_audit_insert on public.clinic_audit_events;
 create policy clinic_audit_insert on public.clinic_audit_events
 for insert to authenticated
 with check (
-  public.is_clinic_member(clinic_id)
+  private.is_clinic_member(clinic_id)
   and actor_user_id = auth.uid()
-  and (branch_id is null or public.can_access_clinic_branch(clinic_id, branch_id))
+  and (branch_id is null or private.can_access_clinic_branch(clinic_id, branch_id))
 );

@@ -76,6 +76,7 @@ assert.ok(portal.includes('cloudAutoSyncAttempts') && portal.includes('[2000, 50
 assert.ok(portal.includes('appointmentSyncQueuedBranches'), 'Queued appointment sync must preserve every affected branch');
 assert.ok(portal.includes("document.addEventListener('visibilitychange'"), 'Returning to the app must resume pending cloud synchronization');
 assert.ok(portal.includes("table: 'clinic_records'"), 'Realtime updates must watch all branch cloud records, not appointments only');
+assert.ok(portal.includes("if (module === 'patients') refreshCloudPatientsForBranch(branchId)"), 'Patient demographics must refresh automatically when another device changes a patient');
 assert.ok(portal.includes('loadPatients();') && portal.includes("new CustomEvent('dcos:cloud-user-ready')"), 'Cloud login must automatically load patients and start realtime sync');
 assert.ok(portal.includes('const mappedRemoteBranchIds = new Set(Object.values(getSavedBranchMap()).map(String))'), 'Automatic startup sync must only process explicitly mapped branches');
 assert.ok(portal.includes("if (!branchMap[String(patient.localBranchId)]) return"), 'Patient demographic saves must use the active branch map, including automatically bootstrapped devices');

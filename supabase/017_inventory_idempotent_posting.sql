@@ -84,8 +84,8 @@ begin
   end if;
 
   if not (
-    public.has_clinic_role(v_item.clinic_id, array['owner','manager','invmgr','dentist','nurse'])
-    and public.can_access_clinic_branch(v_item.clinic_id, v_item.branch_id)
+    private.has_clinic_role(v_item.clinic_id, array['owner','manager','invmgr','dentist','nurse'])
+    and private.can_access_clinic_branch(v_item.clinic_id, v_item.branch_id)
   ) then
     raise exception 'Not allowed to post inventory movement for this item' using errcode = '42501';
   end if;

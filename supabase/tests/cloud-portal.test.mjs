@@ -61,6 +61,10 @@ assert.ok(portal.includes('function inventoryPayloadEqual(a,b) { return cloudPay
 assert.ok(portal.includes('syncClinicalFinanceAndLabsForBranch'), 'Clinical, finance and lab sync must be grouped for manual and automatic use');
 assert.ok(portal.includes('function syncAllCloudModulesForBranch'), 'All supported cloud modules must share one automatic sync coordinator');
 assert.ok(portal.includes('function syncAuxModulesForBranch'), 'Prices, suppliers, settings and branch configuration must be included in cloud sync');
+assert.ok(portal.includes('async function syncAuditForBranch'), 'Audit events must synchronize as append-only branch records');
+assert.ok(index.includes("window.addEventListener('dcos:cloud-audit'"), 'The app must merge remote audit events without duplicating local entries');
+assert.ok(index.includes('br:branchId,t:now()'), 'New audit events must carry a local branch scope');
+assert.ok(portal.includes("permissions.includes('au')"), 'Audit synchronization must respect audit permissions');
 assert.ok(portal.includes("'prices','suppliers','settings','branches'"), 'Auxiliary cloud modules must be synchronized automatically');
 assert.ok(index.includes("window.addEventListener('dcos:get-local-aux'"), 'The app must expose local auxiliary module snapshots');
 assert.ok(index.includes("window.addEventListener('dcos:cloud-aux'"), 'The app must safely apply remote auxiliary module snapshots');

@@ -17,7 +17,9 @@ const maps = {
 assert.equal(localAppointmentStatusToRemote('wait'),'arrived');
 assert.equal(localAppointmentStatusToRemote('done'),'completed');
 assert.equal(remoteAppointmentStatusToLocal('cancelled','cp'),'cp');
-assert.throws(()=>remoteAppointmentStatusToLocal('cancelled'),/manual review/);
+assert.equal(remoteAppointmentStatusToLocal('cancelled'),'cc');
+assert.equal(localAppointmentStatusToRemote('conf'),'confirmed');
+assert.equal(remoteAppointmentStatusToLocal('confirmed'),'conf');
 const local = {
   id:'local-appt-1',pid:patient.id,br:patient.br,dr:'local-dentist-1',
   ch:'local-chair-1',start:'2032-03-04T09:30',dur:45,st:'confirmed',

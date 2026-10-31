@@ -12,7 +12,7 @@ on:
       - 'capacitor.config.json'
       - '.github/workflows/android-apk.yml'
   push:
-    branches: [feature/supabase-shared-clinic, fix/persistent-cloud-account]
+    branches: [feature/supabase-shared-clinic, fix/persistent-cloud-account, recovery/noon-1203-stable]
     paths:
       - 'index.html'
       - 'supabase/**'

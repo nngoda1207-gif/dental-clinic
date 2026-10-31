@@ -35,6 +35,7 @@ style.textContent = `
 #dcos-cloud-panel.open{display:flex}
 #dcos-cloud-card{background:var(--cd,#fff);color:var(--tx,#14262e);width:min(680px,100%);max-height:92vh;overflow:auto;border-radius:14px;padding:18px;border:1px solid var(--bd,#d8e2e0);direction:rtl}
 #dcos-cloud-card input,#dcos-cloud-card select,#dcos-cloud-card textarea{width:100%;padding:9px;margin:4px 0 10px;border:1px solid var(--bd,#d8e2e0);border-radius:8px;background:var(--bg,#f3f6f5);color:inherit;font:inherit}
+#dcos-cloud-card input[type="checkbox"]{width:auto;margin:0;flex:0 0 auto}
 #dcos-cloud-card button{font:inherit;border-radius:8px;padding:8px 13px;margin:3px;cursor:pointer;border:1px solid var(--ac,#1f8a80)}
 #dcos-cloud-card .primary{background:var(--ac,#1f8a80);color:white}
 #dcos-cloud-card .muted{color:var(--mu,#5b6f77);font-size:13px}

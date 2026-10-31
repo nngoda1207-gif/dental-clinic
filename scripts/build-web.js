@@ -16,10 +16,11 @@ if (url && publishableKey) {
   }
   const htmlPath = path.join(out, 'index.html');
   let html = fs.readFileSync(htmlPath, 'utf8');
-  const moduleTag = '<script type="module" src="./supabase/cloud-portal.js"></script>';
-  if (!html.includes(moduleTag)) throw new Error('Cloud portal module tag was not found in index.html');
+  const moduleTagMatch = html.match(/<script type="module" src="\\.\\/supabase\\/cloud-portal\\.js"[^>]*><\\/script>/);
+  if (!moduleTagMatch) throw new Error('Cloud portal module tag was not found in index.html');
+  const moduleTag = moduleTagMatch[0];
   const config = JSON.stringify({ url, publishableKey }).replace(/</g, '\\u003c');
-  html = html.replace(moduleTag, '<script>window.DCOS_SUPABASE_CONFIG=' + config + ';</script>\n' + moduleTag);
+  html = html.replace(moduleTag, '<script>window.DCOS_SUPABASE_CONFIG=' + config + ';</script>\\n' + moduleTag);
   fs.writeFileSync(htmlPath, html);
   console.log('Built-in public Supabase config injected into Android web assets.');
 } else {

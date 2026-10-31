@@ -52,6 +52,10 @@ assert.ok(portal.includes("module: 'inventory'"), 'Inventory sync must use the g
 assert.ok(portal.includes('inventoryPayloadEqual'), 'Inventory sync must detect concurrent edits before writing');
 assert.ok(portal.includes("permissions.some(code => ['im','iv'].includes(code))"), 'Automatic inventory sync must respect the signed-in user inventory permissions');
 assert.ok(portal.includes('dcos:get-local-inventory') && portal.includes('dcos:cloud-inventory'), 'Inventory sync must cross the app boundary through explicit events');
+assert.ok(portal.includes('syncLabsForBranch'), 'Lab cases must synchronize through the guarded labs module');
+assert.ok(portal.includes("module: 'labs'"), 'Lab cases must use the guarded generic labs module');
+assert.ok(portal.includes('dcos:cloud-labs'), 'Lab sync must return cloud records to the local app');
+assert.ok(index.includes('dcos:cloud-labs') && index.includes('labCases'), 'The app must expose and safely merge local lab cases');
 assert.ok(index.includes('dcos:get-local-inventory') && index.includes('dcos:cloud-inventory'), 'The app must expose and merge branch inventory snapshots');
 assert.ok(index.includes('dcos:appointment-saved'), 'Local appointment changes must trigger cloud synchronization');
 assert.ok(index.includes('dcos:cloud-appointments'), 'The app must merge cloud appointment records into the local schedule');

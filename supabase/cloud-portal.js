@@ -27,6 +27,8 @@ const PATIENT_CONFLICTS_KEY = 'dcos_patient_sync_conflicts_v1';
 let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null, localBackupExported = false, backupExportStarted = false;
 let patientRealtimeUnsubscribe = null, patientRefreshInFlight = false, patientQueueFlushInFlight = false, initialImportComplete = false;
 const appointmentRealtimeChannels = new Map();
+const cloudAutoSyncTimers = new Map();
+const cloudBranchSyncLocks = new Map();
 let appointmentSyncInFlight = false, appointmentSyncQueued = false;
 const el = (tag, attrs = {}, html = '') => {
   const n = document.createElement(tag);
@@ -229,8 +231,10 @@ async function loadWorkspace() {
   $('dcos-sync-clinical-finance').addEventListener('click', () => syncClinicalFinanceAndLabsForBranch($('dcos-cloud-branch').value, true));
   $('dcos-cloud-branch').addEventListener('change', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
-  status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
+  status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة. المزامنة التلقائية مفعّلة.');
   flushPatientSyncQueue();
+  loadPatients();
+  window.dispatchEvent(new CustomEvent('dcos:cloud-user-ready'));
 }
 
 const STAFF_PERMISSION_OPTIONS = [
@@ -855,26 +859,76 @@ async function syncLabsForBranch(branchId, showStatus = false) {
   return { synced: merged.length, conflicts };
 }
 
+async function syncAllCloudModulesForBranch(branchId, showStatus = false) {
+  if (!activeMembership || !branchId) return { skipped: true };
+  const existing = cloudBranchSyncLocks.get(branchId);
+  if (existing) { existing.queued = true; return existing.promise; }
+  const state = { queued: false, promise: null };
+  state.promise = (async () => {
+    let last = [];
+    do {
+      state.queued = false;
+      last = await Promise.allSettled([
+        syncAppointmentsForBranch(branchId, false),
+        syncInventoryForBranch(branchId, false),
+        syncClinicalFinanceAndLabsForBranch(branchId, false)
+      ]);
+      await flushPatientSyncQueue();
+    } while (state.queued && activeMembership && navigator.onLine);
+    const failures = last.filter(item => item.status === 'rejected');
+    if (showStatus) status('المزامنة التلقائية: ' + (failures.length ? failures.length + ' أقسام تحتاج إعادة محاولة.' : 'اكتملت الأقسام المسموح بها.'));
+    return { failures: failures.map(item => item.reason?.message || 'sync_error') };
+  })();
+  cloudBranchSyncLocks.set(branchId, state);
+  try { return await state.promise; }
+  finally { if (cloudBranchSyncLocks.get(branchId) === state) cloudBranchSyncLocks.delete(branchId); }
+}
+function queueAutomaticCloudSync(reason = 'local_change') {
+  if (!activeMembership || !navigator.onLine) return;
+  const branchMap = getSavedBranchMap();
+  for (const branch of activeBranches) {
+    if (!Object.values(branchMap).includes(branch.id)) continue;
+    const previous = cloudAutoSyncTimers.get(branch.id);
+    if (previous) clearTimeout(previous);
+    cloudAutoSyncTimers.set(branch.id, setTimeout(() => {
+      cloudAutoSyncTimers.delete(branch.id);
+      syncAllCloudModulesForBranch(branch.id, false).catch(error => {
+        status('تعذر إكمال المزامنة التلقائية؛ ستتم المحاولة عند عودة الاتصال: ' + (error.message || 'خطأ'));
+      });
+    }, 450));
+  }
+}
 function startAppointmentRealtime(branchId) {
   if (appointmentRealtimeChannels.has(branchId)) getSupabaseClient().removeChannel(appointmentRealtimeChannels.get(branchId));
-  const channel = getSupabaseClient().channel('dcos-appointments-' + branchId)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'clinic_records', filter: 'branch_id=eq.' + branchId }, payload => {
-      if (payload?.new?.module === 'appointments' || payload?.old?.module === 'appointments') {
-        syncAppointmentsForBranch(branchId, false).catch(() => {});
-      }
+  const channel = getSupabaseClient().channel('dcos-clinic-records-' + branchId)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'clinic_records', filter: 'branch_id=eq.' + branchId }, () => {
+      syncAllCloudModulesForBranch(branchId, false).catch(() => {});
     })
     .subscribe(state => {
-      if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') status('المتابعة اللحظية للمواعيد غير متاحة؛ استخدم زر مزامنة المواعيد.');
+      if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') status('الاتصال اللحظي بالسحابة انقطع مؤقتًا؛ ستُستأنف المزامنة عند عودة الاتصال.');
     });
   appointmentRealtimeChannels.set(branchId, channel);
 }
 window.addEventListener('dcos:cloud-user-ready', () => {
   if (!activeMembership) return;
   for (const branch of activeBranches) {
-    syncAppointmentsForBranch(branch.id, false).then(() => startAppointmentRealtime(branch.id)).catch(() => {});
-    const permissions = Array.isArray(activeMembership.permissions) ? activeMembership.permissions : [];
-    if (activeMembership.role === 'owner' || permissions.some(code => ['im','iv'].includes(code))) syncInventoryForBranch(branch.id, false).catch(() => {});
-    if (activeMembership.role === 'owner' || permissions.some(code => ['cl','mv','ex','fv','lv'].includes(code))) syncClinicalFinanceAndLabsForBranch(branch.id, false).catch(() => {});
+    startAppointmentRealtime(branch.id);
+    syncAllCloudModulesForBranch(branch.id, false).catch(() => {});
+  }
+});
+window.addEventListener('dcos:local-data-saved', () => queueAutomaticCloudSync('local_save'));
+window.addEventListener('dcos:patient-saved', () => {
+  flushPatientSyncQueue();
+  queueAutomaticCloudSync('patient_save');
+});
+window.addEventListener('online', () => {
+  flushPatientSyncQueue();
+  queueAutomaticCloudSync('network_restored');
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    flushPatientSyncQueue();
+    queueAutomaticCloudSync('app_resumed');
   }
 });
 window.addEventListener('dcos:lab-saved',event=>{

@@ -226,7 +226,7 @@ async function loadWorkspace() {
   $('dcos-load-patients').addEventListener('click', loadPatients);
   $('dcos-sync-appointments').addEventListener('click', () => syncAppointmentsForBranch($('dcos-cloud-branch').value, true));
   $('dcos-sync-inventory').addEventListener('click', () => syncInventoryForBranch($('dcos-cloud-branch').value, true).catch(error => status('تعذر مزامنة المخزون: ' + (error.message || 'خطأ غير معروف'))));
-  $('dcos-sync-clinical-finance').addEventListener('click', () => syncClinicalAndFinanceForBranch($('dcos-cloud-branch').value, true));
+  $('dcos-sync-clinical-finance').addEventListener('click', () => syncClinicalFinanceAndLabsForBranch($('dcos-cloud-branch').value, true));
   $('dcos-cloud-branch').addEventListener('change', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
@@ -764,16 +764,18 @@ async function syncPatientModuleForBranch(branchId, module, showStatus = false) 
   try { return await task; }
   finally { if (patientModuleLocks.get(lockKey) === task) patientModuleLocks.delete(lockKey); }
 }
-async function syncClinicalAndFinanceForBranch(branchId, showStatus = false) {
+async function syncClinicalFinanceAndLabsForBranch(branchId, showStatus = false) {
   const results = [];
   for (const module of ['treatment','finance']) {
-    try { results.push(await syncPatientModuleForBranch(branchId, module, false)); }
+    try { results.push({ module, ...(await syncPatientModuleForBranch(branchId, module, false)) }); }
     catch (error) { results.push({ module, error }); }
   }
+  try { results.push({ module: 'labs', ...(await syncLabsForBranch(branchId, false)) }); }
+  catch (error) { results.push({ module: 'labs', error }); }
   const failed = results.filter(result => result.error);
   const conflicts = results.reduce((sum,result) => sum + (result.conflicts?.length || 0), 0);
   const synced = results.reduce((sum,result) => sum + (result.synced || 0), 0);
-  if (showStatus) status('مزامنة البيانات الطبية والمالية: ' + synced + ' سجلًا، ' + conflicts + ' تعارضات.' + (failed.length ? ' تعذر إكمال بعض الأقسام: ' + failed.map(x => x.error.message).join('؛ ') : ''));
+  if (showStatus) status('مزامنة الملفات الطبية والحسابات والمعمل: ' + synced + ' سجلًا، ' + conflicts + ' تعارضات.' + (failed.length ? ' تعذر إكمال بعض الأقسام: ' + failed.map(x => x.module + ': ' + x.error.message).join('؛ ') : ''));
   return { synced, conflicts, failed };
 }
 
@@ -859,7 +861,7 @@ window.addEventListener('dcos:cloud-user-ready', () => {
     syncAppointmentsForBranch(branch.id, false).then(() => startAppointmentRealtime(branch.id)).catch(() => {});
     const permissions = Array.isArray(activeMembership.permissions) ? activeMembership.permissions : [];
     if (activeMembership.role === 'owner' || permissions.some(code => ['im','iv'].includes(code))) syncInventoryForBranch(branch.id, false).catch(() => {});
-    if (activeMembership.role === 'owner' || permissions.some(code => ['cl','mv','ex','fv'].includes(code))) syncClinicalAndFinanceForBranch(branch.id, false).catch(() => {});
+    if (activeMembership.role === 'owner' || permissions.some(code => ['cl','mv','ex','fv','lv'].includes(code))) syncClinicalFinanceAndLabsForBranch(branch.id, false).catch(() => {});
   }
 });
 window.addEventListener('dcos:appointment-saved', event => {

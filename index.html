@@ -171,6 +171,50 @@ window.addEventListener('dcos:cloud-patients',event=>{
   if(changed){save();if(!$('#dlg')?.open&&!$('#dlg2')?.open)render()}
   if(conflicts)toast('هناك '+conflicts+' تعارضات في بيانات المرضى؛ احتفظنا بالنسخة المحلية ولم نستبدلها.');
 });
+window.addEventListener('dcos:get-local-appointments',event=>{
+  if(!D||!ME)return;
+  const detail=event.detail||{};
+  if(typeof detail.respond!=='function')return;
+  const branchId=String(detail.localBranchId||'');
+  detail.respond({
+    appointments:(D.appts||[]).filter(item=>item.br===branchId).map(item=>({...item,cloudSnapshot:item.cloudSnapshot?{...item.cloudSnapshot}:null})),
+    patients:(D.patients||[]).filter(item=>item.br===branchId).map(item=>({...item})),
+    users:(D.users||[]).map(item=>({...item})),
+    chairs:(D.chairs||[]).filter(item=>item.br===branchId).map(item=>({...item}))
+  });
+});
+window.addEventListener('dcos:cloud-appointments',event=>{
+  if(!D||!ME)return;
+  const {localBranchId,appointments=[],conflicts=[]}=event.detail||{};
+  if(!localBranchId||!myBr().some(branch=>branch.id===localBranchId))return;
+  D.appts=D.appts||[];
+  let changed=false;
+  for(const incoming of appointments){
+    let local=D.appts.find(item=>item.br===localBranchId&&(
+      String(item.cloudRecordKey||item.id)===String(incoming.cloudRecordKey||incoming.id)||
+      (item.remoteId&&item.remoteId===incoming.remoteId)
+    ));
+    if(local){
+      const keepId=local.id;
+      Object.assign(local,incoming,{id:keepId,br:localBranchId,cloudConflict:''});
+    }else{
+      D.appts.push({...incoming,br:localBranchId,cloudConflict:''});
+    }
+    changed=true;
+  }
+  for(const conflict of conflicts){
+    const local=D.appts.find(item=>item.br===localBranchId&&(
+      String(item.cloudRecordKey||item.id)===String(conflict.localId)||
+      String(item.id)===String(conflict.localId)
+    ));
+    if(local)local.cloudConflict=conflict.reason||'sync_conflict';
+  }
+  if(changed||conflicts.length){
+    save();
+    if(view==='apt'&&!$('#dlg')?.open&&!$('#dlg2')?.open)aptV();
+  }
+  if(conflicts.length)toast('يوجد '+conflicts.length+' تعارض في المواعيد؛ لم يتم استبدال البيانات المتعارضة.');
+});
 function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',2800)}
 function audit(act,ref,det){D.audit.unshift({id:uid(),t:now(),u:ME?ME.name:'—',r:ME?ME.role:'',act,ref:ref||'',det:det||''});D.audit.length=Math.min(D.audit.length,2000)}
 async function hp(p,s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s+':'+p));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
@@ -429,10 +473,10 @@ const dd=D.users.find(u=>u.id===o.dr);if(dd.role!=='owner'&&!dd.branches.include
 const cl=clash(o,id);if(cl.length)return toast('يوجد تعارض في: '+cl.join('، '));
 if(old){const mv=old.start!==o.start||old.dr!==o.dr||old.ch!==o.ch;Object.assign(old,o);if(mv){old.st='new';old.hist.push({t:now(),by:ME.name,act:'تعديل / إعادة جدولة',det:o.start.replace('T',' ')})}else old.hist.push({t:now(),by:ME.name,act:'تعديل بيانات'});audit('appt_edit',p.no,o.start.replace('T',' '))}
 else{D.appts.push(Object.assign(o,{id:uid(),st:'new',hist:[{t:now(),by:ME.name,act:'إنشاء'}]}));audit('appt_add',p.no,o.start.replace('T',' '))}
-save();closeD();AD=o.start.slice(0,10);if(view==='pat'){detV()}else aptV()}
-function ast(id,k){const a=D.appts.find(x=>x.id===id),p=D.patients.find(x=>x.id===a.pid);a.st=k;a.hist.push({t:now(),by:ME.name,act:'الحالة: '+ASN[k]});audit('appt_status',p?p.no:'',ASN[k]);save();aptV()}
+save();window.dispatchEvent(new CustomEvent('dcos:appointment-saved',{detail:{branchId:o.br,appointmentId:old?.id||D.appts[D.appts.length-1]?.id||''}}));closeD();AD=o.start.slice(0,10);if(view==='pat'){detV()}else aptV()}
+function ast(id,k){const a=D.appts.find(x=>x.id===id),p=D.patients.find(x=>x.id===a.pid);a.st=k;a.hist.push({t:now(),by:ME.name,act:'الحالة: '+ASN[k]});audit('appt_status',p?p.no:'',ASN[k]);save();window.dispatchEvent(new CustomEvent('dcos:appointment-saved',{detail:{branchId:a.br,appointmentId:a.id}}));aptV()}
 function acx(id){openD(`<h2>إلغاء الموعد</h2>${sel_('ax_w','الجهة',[['cp','المريض ألغى'],['cc','العيادة ألغت']],'cp')}${fld('ax_r','سبب الإلغاء *','')}<div class="act"><button class="g" onclick="closeD()">رجوع</button><button class="d" onclick="axs('${id}')">إلغاء الموعد</button></div>`)}
-function axs(id){const r=v('ax_r');if(!r)return toast('اكتب سبب الإلغاء');const a=D.appts.find(x=>x.id===id),p=D.patients.find(x=>x.id===a.pid);a.st=v('ax_w');a.hist.push({t:now(),by:ME.name,act:'إلغاء: '+r});audit('appt_cancel',p?p.no:'',r);save();closeD();aptV()}
+function axs(id){const r=v('ax_r');if(!r)return toast('اكتب سبب الإلغاء');const a=D.appts.find(x=>x.id===id),p=D.patients.find(x=>x.id===a.pid);a.st=v('ax_w');a.hist.push({t:now(),by:ME.name,act:'إلغاء: '+r});audit('appt_cancel',p?p.no:'',r);save();window.dispatchEvent(new CustomEvent('dcos:appointment-saved',{detail:{branchId:a.br,appointmentId:a.id}}));closeD();aptV()}
 function ahist(id){const a=D.appts.find(x=>x.id===id);openD(`<h2>سجل الموعد</h2>${a.hist.slice().reverse().map(z=>`<div class="kv"><span>${fd(z.t)} · ${h(z.by)}</span><b>${h(z.act)}${z.det?' ← '+h(z.det):''}</b></div>`).join('')}<div class="act"><button class="g" onclick="closeD()">إغلاق</button></div>`)}
 function chV(){D.chairs=D.chairs||[];openD(`<h2>الكراسي والغرف</h2>${D.chairs.map(c=>`<div class="kv"><span>${h(c.name)} · ${h(bn(c.br))}${c.act===false?' (موقوف)':''}</span><button class="g" onclick="cto('${c.id}')">${c.act===false?'تفعيل':'إيقاف'}</button></div>`).join('')||'<p class="m">لا توجد كراسي بعد.</p>'}${fld('chn_','اسم الكرسي / الغرفة','')}${sel_('chb_','الفرع',myBr().map(b=>[b.id,b.name]),br!=='all'?br:'')}<div class="act"><button class="g" onclick="closeD()">إغلاق</button><button class="b" onclick="cad()">إضافة</button></div>`)}
 function cad(){const n=v('chn_');if(!n)return toast('اكتب اسم الكرسي');D.chairs.push({id:uid(),name:n,br:v('chb_'),act:true});audit('chair_add',n);save();chV()}

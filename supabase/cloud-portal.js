@@ -76,7 +76,7 @@ const status = message => { $('dcos-cloud-status').textContent = message || ''; 
 function friendlyCloudError(error, fallback) {
   const message = String(error?.message || error || '');
   if (/Supabase URL and publishable key are required/i.test(message)) return 'إعداد الاتصال السحابي غير مكتمل. أدخل رابط المشروع والمفتاح العام أو استخدم نسخة التطبيق المجهزة بالإعدادات.';
-  if (/Invalid login credentials/i.test(message)) return 'اسم المستخدم أو كلمة المرور غير صحيحين.';
+  if (/Invalid login credentials|INVALID_CREDENTIALS/i.test(message)) return 'اسم المستخدم أو كلمة المرور غير صحيحين.';
   if (/Failed to fetch|NetworkError|Load failed/i.test(message)) return 'تعذر الاتصال بالخادم. تأكد من الإنترنت وحاول مرة أخرى.';
   if (/does not exist|Could not find the function|schema cache|PGRST202|PGRST205/i.test(message)) return 'قاعدة بيانات Supabase تحتاج تطبيق تحديثات العيادة. يلزم تطبيق ملفات migrations وملف OWNER_STAFF_SETUP.sql في Supabase SQL Editor بواسطة مسؤول المشروع.';
   if (/OWNER_REQUIRED/.test(message)) return 'إنشاء دعوات الموظفين متاح لحساب مالك العيادة فقط.';
@@ -131,7 +131,11 @@ $('dcos-provision-clinic').addEventListener('click', async () => {
       body: { action: 'provision_clinic', clinic_name, branch_name, username, password },
       headers: { 'x-clinic-provisioning-key': key }
     });
-    if (error) throw error;
+    if (error) {
+      let detail = error.message || 'تعذر إنشاء حساب العيادة.';
+      try { const response = error.context?.clone?.(); if (response) { const payload = await response.json(); detail = payload?.error || detail; } } catch {}
+      throw new Error(detail);
+    }
     if (!data?.ok) throw new Error(data?.error || 'تعذر إنشاء حساب العيادة.');
     $('dcos-provision-password').value = ''; $('dcos-provision-key').value = '';
     output.textContent = 'تم إنشاء العيادة. اسم المستخدم الأساسي: ' + data.username + '. احفظ كلمة المرور التي أدخلتها في مكان آمن.';

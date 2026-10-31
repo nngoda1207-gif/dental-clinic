@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 let client=null, clientConfig=null;
+async function functionError(error){try{const response=error?.context?.clone?.();if(response){const body=await response.json();if(body?.error)return String(body.error);}}catch{}return error?.message||'FUNCTION_ERROR';}
 export function configureSupabase({url,publishableKey}) {
  if(!url||!publishableKey) throw new Error('Supabase URL and publishable key are required.');
  if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) throw new Error('Unexpected Supabase project URL.');
@@ -13,14 +14,14 @@ export async function signInWithUsername(username,password){
  const clean=String(username||'').trim().toLowerCase();
  if(!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(clean))throw new Error('اسم المستخدم يجب أن يكون من 3 إلى 32 حرفًا إنجليزيًا أو رقمًا.');
  const {data,error}=await getSupabaseClient().functions.invoke('clinic-auth',{body:{action:'login',username:clean,password:String(password||'')}});
- if(error)throw error;
+ if(error){const detail=await functionError(error);throw new Error(detail==='INVALID_CREDENTIALS'?'اسم المستخدم أو كلمة المرور غير صحيحين.':detail);}
  if(!data?.access_token||!data?.refresh_token)throw new Error(data?.error||'لم يرجع خادم الدخول جلسة صالحة.');
  const {data:sessionData,error:sessionError}=await getSupabaseClient().auth.setSession({access_token:data.access_token,refresh_token:data.refresh_token});
  if(sessionError)throw sessionError;return sessionData;
 }
 export async function createClinicStaffAccount({username,password,role,branchId}){
  const {data,error}=await getSupabaseClient().functions.invoke('clinic-auth',{body:{action:'create_staff',username,password,role,branch_id:branchId}});
- if(error)throw error;if(!data?.ok)throw new Error(data?.error||'تعذر إنشاء حساب الموظف.');return data;
+ if(error)throw new Error(await functionError(error));if(!data?.ok)throw new Error(data?.error||'تعذر إنشاء حساب الموظف.');return data;
 }
 export async function signOutSupabase(){const {error}=await getSupabaseClient().auth.signOut();if(error)throw error;}
 export async function getCurrentSupabaseSession(){const {data,error}=await getSupabaseClient().auth.getSession();if(error)throw error;return data.session;}

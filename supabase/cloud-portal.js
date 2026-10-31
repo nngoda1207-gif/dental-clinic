@@ -872,7 +872,7 @@ function getLocalAuxSnapshot(localBranchId, module) {
   return snapshot;
 }
 const AUX_MODULE_PERMISSIONS = {
-  prices: ['pl','pr'], suppliers: ['im'], settings: ['st'], branches: ['br']
+  prices: ['pl','pr'], suppliers: ['im'], settings: ['st'], branches: ['br'], audit: ['au']
 };
 async function syncAuxModuleForBranch(branchId, module) {
   const permissions = Array.isArray(activeMembership?.permissions) ? activeMembership.permissions : [];
@@ -911,12 +911,45 @@ async function syncAuxModuleForBranch(branchId, module) {
   }));
   return { synced: records.length, conflicts: conflict ? [{ reason: conflict }] : [] };
 }
+
+async function syncAuditForBranch(branchId) {
+  const permissions = Array.isArray(activeMembership?.permissions) ? activeMembership.permissions : [];
+  if (activeMembership?.role !== 'owner' && !permissions.includes('au')) return { synced: 0, skipped: true };
+  const branchMap = getSavedBranchMap();
+  const localBranchId = Object.keys(branchMap).find(id => branchMap[id] === branchId);
+  if (!localBranchId) return { synced: 0, skipped: true };
+  const snapshot = getLocalAuxSnapshot(localBranchId, 'audit');
+  const localItems = Array.isArray(snapshot.payload?.items) ? snapshot.payload.items : [];
+  const remoteRows = await listRecordsForAssignedBranch({ branchId, module: 'audit', limit: 2000 });
+  const remoteByKey = new Map(remoteRows.map(row => [String(row.record_key), row]));
+  const imported = [], conflicts = [];
+  for (const item of localItems) {
+    if (!item?.id) continue;
+    const key = 'audit:' + String(item.id);
+    if (remoteByKey.has(key)) continue;
+    try {
+      const row = await createRecordInAssignedBranch({ branchId, module: 'audit', recordKey: key, payload: { item } });
+      imported.push({ item: row.payload?.item || item });
+    } catch (error) { conflicts.push({ reason: error.message || 'audit_write_failed' }); }
+  }
+  const localIds = new Set(localItems.map(item => String(item.id)));
+  for (const row of remoteRows) {
+    if (!String(row.record_key || '').startsWith('audit:')) continue;
+    const item = row.payload?.item;
+    if (item?.id && !localIds.has(String(item.id))) imported.push({ item });
+  }
+  if (imported.length || conflicts.length) window.dispatchEvent(new CustomEvent('dcos:cloud-audit', { detail: { localBranchId, items: imported, conflicts } }));
+  return { synced: imported.length, conflicts };
+}
+
 async function syncAuxModulesForBranch(branchId) {
   const results = [];
   for (const module of ['prices','suppliers','settings','branches']) {
     try { results.push({ module, ...(await syncAuxModuleForBranch(branchId, module)) }); }
     catch (error) { results.push({ module, error }); }
   }
+  try { results.push({ module: 'audit', ...(await syncAuditForBranch(branchId)) }); }
+  catch (error) { results.push({ module: 'audit', error }); }
   return {
     synced: results.reduce((sum,item) => sum + (item.synced || 0), 0),
     conflicts: results.reduce((sum,item) => sum + (item.conflicts?.length || 0), 0),

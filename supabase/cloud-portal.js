@@ -485,7 +485,7 @@ function getLocalAppointmentSnapshot(localBranchId) {
 }
 function appointmentPayloadEqual(a,b) {
   const keys = ['kind','source_local_id','patient_record_id','patient_file_no','dentist_username','chair_name','starts_at','ends_at','status','source','reason','notes','history'];
-  return keys.every(key => JSON.stringify(a?.[key] ?? null) === JSON.stringify(b?.[key] ?? null));
+  return keys.every(key => cloudPayloadEqual(a?.[key], b?.[key]));
 }
 function dispatchCloudAppointments(localBranchId, records, conflicts = []) {
   window.dispatchEvent(new CustomEvent('dcos:cloud-appointments', { detail: { localBranchId, appointments: records, conflicts } }));
@@ -607,7 +607,7 @@ function inventoryPayload(item, remoteBranchId) {
   delete copy.cloudRevision; delete copy.cloudSnapshot; delete copy.cloudConflict;
   return copy;
 }
-function inventoryPayloadEqual(a,b) { return JSON.stringify(a || null) === JSON.stringify(b || null); }
+function inventoryPayloadEqual(a,b) { return cloudPayloadEqual(a,b); }
 async function syncInventoryForBranch(branchId, showStatus = false) {
   if (!activeMembership || !branchId) return;
   const permissions = Array.isArray(activeMembership.permissions) ? activeMembership.permissions : [];

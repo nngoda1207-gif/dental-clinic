@@ -76,7 +76,7 @@ const v=id=>($('#'+id)||{value:''}).value.trim();
 const age=d=>{if(!d)return'';const a=new Date(d),n=new Date();let y=n.getFullYear()-a.getFullYear();if(n<new Date(n.getFullYear(),a.getMonth(),a.getDate()))y--;return y>=0?y+' سنة':''};
 let D=null,ME=null,view='dash',sel=null,tab='ov',q='',st='active',lim=25,br='all';
 try{const r=localStorage.getItem('dcos1');if(r)D=JSON.parse(r)}catch(e){}
-function save(){try{localStorage.setItem('dcos1',JSON.stringify(D))}catch(e){toast('تعذر الحفظ في المتصفح')}}
+function save(skipCloudSync=false){try{localStorage.setItem('dcos1',JSON.stringify(D));if(!skipCloudSync&&ME)window.dispatchEvent(new CustomEvent('dcos:local-data-saved'))}catch(e){toast('تعذر الحفظ في المتصفح')}}
 window.addEventListener('dcos:cloud-bootstrap',event=>{
   const detail=event.detail||{};
   const branches=Array.isArray(detail.branches)?detail.branches:[];
@@ -117,7 +117,7 @@ window.addEventListener('dcos:patient-sync-conflict',event=>{
   const {localId,localBranchId,reason}=event.detail||{};
   const local=D.patients.find(p=>String(p.id)===String(localId)&&p.br===localBranchId);
   if(!local)return;
-  local.cloudConflict=reason||'sync_conflict';save();
+  local.cloudConflict=reason||'sync_conflict';save(true);
   if(view==='pat'&&sel===local.id&&!$('#dlg')?.open&&!$('#dlg2')?.open)render();
 });
 window.addEventListener('dcos:cloud-patient-links',event=>{
@@ -130,7 +130,7 @@ window.addEventListener('dcos:cloud-patient-links',event=>{
     local.cloudSnapshot=cloudPatientSnapshot(local);local.cloudConflict='';
     changed=true;
   }
-  if(changed){save();if(!$('#dlg')?.open&&!$('#dlg2')?.open)render()}
+  if(changed){save(true);if(!$('#dlg')?.open&&!$('#dlg2')?.open)render()}
 });
 window.addEventListener('dcos:cloud-patients',event=>{
   if(!D||!ME)return;
@@ -168,7 +168,7 @@ window.addEventListener('dcos:cloud-patients',event=>{
     }else if(sameCloudSnapshot(current,incoming)){local.cloudSnapshot=incoming;local.cloudConflict='';changed=true}
     local.remoteId=remote.remoteId;local.remoteBranchId=remote.br;local.cloudUpdatedAt=remote.remoteUpdatedAt||'';
   }
-  if(changed){save();if(!$('#dlg')?.open&&!$('#dlg2')?.open)render()}
+  if(changed){save(true);if(!$('#dlg')?.open&&!$('#dlg2')?.open)render()}
   if(conflicts)toast('هناك '+conflicts+' تعارضات في بيانات المرضى؛ احتفظنا بالنسخة المحلية ولم نستبدلها.');
 });
 window.addEventListener('dcos:get-local-appointments',event=>{
@@ -228,7 +228,7 @@ window.addEventListener('dcos:cloud-patient-modules',event=>{
     const patient=(D.patients||[]).find(item=>item.br===localBranchId&&String(item.no)===String(conflict.patientNo));
     if(patient){patient.cloudModuleConflicts=patient.cloudModuleConflicts||{};patient.cloudModuleConflicts[module]=conflict.reason||'sync_conflict';}
   }
-  if(changed||conflicts.length){save();if(view==='pat'&&sel&&!$('#dlg')?.open&&!$('#dlg2')?.open)detV();}
+  if(changed||conflicts.length){save(true);if(view==='pat'&&sel&&!$('#dlg')?.open&&!$('#dlg2')?.open)detV();}
   if(conflicts.length)toast('يوجد '+conflicts.length+' تعارضات في '+(module==='treatment'?'الملفات الطبية':'الحسابات')+'؛ لم يتم استبدال البيانات المتعارضة.');
 });
 
@@ -264,7 +264,7 @@ window.addEventListener('dcos:cloud-labs',event=>{
     const local=D.lab.find(item=>item.br===localBranchId&&String(item.no)===String(conflict.labNo||''));
     if(local)local.cloudConflict=conflict.reason||'sync_conflict';
   }
-  if(changed||conflicts.length){save();if(view==='lab'&&!$('#dlg')?.open&&!$('#dlg2')?.open)labV();}
+  if(changed||conflicts.length){save(true);if(view==='lab'&&!$('#dlg')?.open&&!$('#dlg2')?.open)labV();}
   if(conflicts.length)toast('يوجد '+conflicts.length+' تعارضات في حالات المعمل؛ احتفظنا بالبيانات المحلية.');
 });
 
@@ -282,7 +282,7 @@ window.addEventListener('dcos:cloud-inventory',event=>{
     const local=D.items.find(item=>item.br===localBranchId&&String(item.id)===String(conflict.localId));
     if(local)local.cloudConflict=conflict.reason||'sync_conflict';
   }
-  if(items.length||conflicts.length){save();if(view==='stk'&&!$('#dlg')?.open&&!$('#dlg2')?.open)stkV();}
+  if(items.length||conflicts.length){save(true);if(view==='stk'&&!$('#dlg')?.open&&!$('#dlg2')?.open)stkV();}
   if(conflicts.length)toast('يوجد '+conflicts.length+' تعارضات في المخزون؛ لم يتم استبدال البيانات المتعارضة.');
 });
 
@@ -313,7 +313,7 @@ window.addEventListener('dcos:cloud-appointments',event=>{
     if(local)local.cloudConflict=conflict.reason||'sync_conflict';
   }
   if(changed||conflicts.length){
-    save();
+    save(true);
     if(view==='apt'&&!$('#dlg')?.open&&!$('#dlg2')?.open)aptV();
   }
   if(conflicts.length)toast('يوجد '+conflicts.length+' تعارض في المواعيد؛ لم يتم استبدال البيانات المتعارضة.');

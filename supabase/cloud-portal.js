@@ -944,13 +944,13 @@ window.addEventListener('dcos:cloud-patient-links', event => {
   if (!activeMembership) return;
   for (const link of event.detail?.links || []) {
     const branchId = getSavedBranchMap()[String(link.localBranchId || '')];
-    if (branchId) syncClinicalAndFinanceForBranch(branchId, false).catch(() => {});
+    if (branchId) syncClinicalFinanceAndLabsForBranch(branchId, false).catch(() => {});
   }
 });
 window.addEventListener('dcos:cloud-patients', event => {
   if (!activeMembership) return;
   const branchId = getSavedBranchMap()[String(event.detail?.localBranchId || '')];
-  if (branchId) syncClinicalAndFinanceForBranch(branchId, false).catch(() => {});
+  if (branchId) syncClinicalFinanceAndLabsForBranch(branchId, false).catch(() => {});
 });
 
 window.addEventListener('dcos:patient-saved', event => {

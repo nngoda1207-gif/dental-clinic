@@ -23,7 +23,7 @@ Deno.serve(async req=>{
    return json({access_token:data.session.access_token,refresh_token:data.session.refresh_token,expires_in:data.session.expires_in,token_type:data.session.token_type,user:{id:data.user.id,username:u}});
   }
   if(action==="create_staff"){
-   const token=(req.headers.get("Authorization")||"").replace(/^Bearer\\s+/i,"");
+   const token=(req.headers.get("Authorization")||"").startsWith("Bearer ")?(req.headers.get("Authorization")||"").slice(7):(req.headers.get("Authorization")||"");
    const {data:caller,error:authError}=await admin.auth.getUser(token);
    if(authError||!caller.user)return json({error:"AUTH_REQUIRED"},401);
    const {data:members,error:memberError}=await admin.from("clinic_members").select("clinic_id,role").eq("user_id",caller.user.id).eq("active",true);
@@ -41,7 +41,7 @@ Deno.serve(async req=>{
    return json({ok:true,user_id:newUser.id,username:u,role,branch_id:branch.id});
   }
   if(action==="provision_clinic"){
-   const expected=Deno.env.get("CLINIC_PROVISIONING_KEY")||"",supplied=(req.headers.get("Authorization")||"").replace(/^Bearer\\s+/i,"");
+   const expected=Deno.env.get("CLINIC_PROVISIONING_KEY")||"",supplied=(req.headers.get("Authorization")||"").startsWith("Bearer ")?(req.headers.get("Authorization")||"").slice(7):(req.headers.get("Authorization")||"");
    if(!expected)return json({error:"PROVISIONING_NOT_CONFIGURED"},503);
    const a=new TextEncoder().encode(supplied),z=new TextEncoder().encode(expected);let diff=a.length^z.length;
    for(let i=0;i<Math.max(a.length,z.length);i++)diff|=(a[i]||0)^(z[i]||0);

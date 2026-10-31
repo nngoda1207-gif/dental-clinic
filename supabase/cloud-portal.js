@@ -10,6 +10,8 @@ import {
 } from './auth-adapter.js';
 import { listAllPatientsForAssignedBranch, watchPatientsForAssignedBranch, upsertPatientInAssignedBranch, updatePatientInAssignedBranch } from './patient-sync-service.js';
 import { preparePatientImport, importNewPatients } from './patient-import-service.js';
+import { listRemoteAppointments, createAppointmentInAssignedBranch, updateAppointmentInAssignedBranch } from './appointment-repository.js';
+import { mapLocalAppointmentToRemote, mapRemoteAppointmentToLocal } from './appointment-mapping.js';
 
 // Public project configuration: safe to ship in the app. Never put service-role/secret keys here.
 window.DCOS_SUPABASE_CONFIG = window.DCOS_SUPABASE_CONFIG || {
@@ -23,6 +25,7 @@ const PATIENT_QUEUE_KEY = 'dcos_patient_sync_queue_v1';
 const PATIENT_CONFLICTS_KEY = 'dcos_patient_sync_conflicts_v1';
 let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null, localBackupExported = false, backupExportStarted = false;
 let patientRealtimeUnsubscribe = null, patientRefreshInFlight = false, patientQueueFlushInFlight = false, initialImportComplete = false;
+let appointmentRealtimeChannel = null, appointmentSyncInFlight = false, appointmentSyncQueued = false;
 const el = (tag, attrs = {}, html = '') => {
   const n = document.createElement(tag);
   Object.entries(attrs).forEach(([k, v]) => k === 'class' ? n.className = v : n.setAttribute(k, v));
@@ -202,8 +205,10 @@ async function loadWorkspace() {
   }
   host.innerHTML = `<p><b>الدور:</b> ${escapeHtml(membership.role)} <span class="muted">· تم التحقق من العضوية النشطة</span></p>
     <label>الفرع السحابي<select id="dcos-cloud-branch">${branches.map(b => `<option value="${escapeAttr(b.id)}">${escapeHtml(b.name)}</option>`).join('')}</select></label>
-    <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
+    <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-sync-appointments" type="button">مزامنة المواعيد</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
     <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
+  $('dcos-sync-appointments').addEventListener('click', () => syncAppointmentsForBranch($('dcos-cloud-branch').value, true));
+  $('dcos-cloud-branch').addEventListener('change', event => { if (appointmentRealtimeChannel) getSupabaseClient().removeChannel(appointmentRealtimeChannel); });
   if (membership.role === 'owner') {
     const staffBox = el('section', { class: 'cloud-row' });
     staffBox.innerHTML = '<h3>إنشاء حساب موظف</h3><p class="muted">أنشئ اسم مستخدم وكلمة مرور لكل فرد في الفريق، وحدد وظيفته والفرع المسموح له. لا نطلب بريدًا إلكترونيًا.</p><label>اسم المستخدم<input id="dcos-staff-username" type="text" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="مثال: nurse01"></label><label>كلمة المرور<input id="dcos-staff-password" type="password" minlength="8" autocomplete="new-password" placeholder="8 أحرف على الأقل"></label><label>الوظيفة<select id="dcos-staff-role"><option value="nurse">تمريض</option><option value="dentist">طبيب</option><option value="reception">استقبال</option><option value="accountant">حسابات</option><option value="manager">مدير</option><option value="invmgr">مسؤول مخزون</option><option value="readonly">قراءة فقط</option></select></label><label>الفرع<select id="dcos-staff-branch">' + branches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('') + '</select></label><button class="primary" id="dcos-create-staff-account" type="button">إنشاء حساب الموظف</button><p id="dcos-staff-create-status" class="muted" role="status"></p>';
@@ -215,6 +220,7 @@ async function loadWorkspace() {
     loadStaffPermissions(permissionsBox);
   }
   $('dcos-load-patients').addEventListener('click', loadPatients);
+  $('dcos-sync-appointments').addEventListener('click', () => syncAppointmentsForBranch($('dcos-cloud-branch').value, true));
   $('dcos-cloud-branch').addEventListener('change', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
@@ -461,6 +467,147 @@ async function refreshPatientsAfterRealtime(branchId) {
     status('وصل إشعار تغيير، لكن تعذر إعادة تحميل القائمة: ' + (e.message || 'خطأ غير معروف'));
   } finally { patientRefreshInFlight = false; }
 }
+// Appointment sync: clinical scheduling is a separate module from patient demographics.
+// Every write uses the server-side overlap and optimistic-revision guard.
+function getLocalAppointmentSnapshot(localBranchId) {
+  let snapshot = null;
+  window.dispatchEvent(new CustomEvent('dcos:get-local-appointments', { detail: {
+    localBranchId, respond(value) { snapshot = value; }
+  } }));
+  if (!snapshot) throw new Error('افتح حساب العيادة داخل التطبيق أولًا حتى يمكن قراءة جدول المواعيد المحلي.');
+  return snapshot;
+}
+function appointmentPayloadEqual(a,b) {
+  const keys = ['kind','source_local_id','patient_record_id','patient_file_no','dentist_username','chair_name','starts_at','ends_at','status','source','reason','notes','history'];
+  return keys.every(key => JSON.stringify(a?.[key] ?? null) === JSON.stringify(b?.[key] ?? null));
+}
+function dispatchCloudAppointments(localBranchId, records, conflicts = []) {
+  window.dispatchEvent(new CustomEvent('dcos:cloud-appointments', { detail: { localBranchId, appointments: records, conflicts } }));
+}
+async function syncAppointmentsForBranch(branchId, showStatus = false) {
+  if (!activeMembership || !branchId) return;
+  if (appointmentSyncInFlight) { appointmentSyncQueued = true; return; }
+  appointmentSyncInFlight = true;
+  try {
+    const branchMap = getSavedBranchMap();
+    const localBranchId = Object.keys(branchMap).find(id => branchMap[id] === branchId);
+    if (!localBranchId) throw new Error('اربط الفرع المحلي بالفرع السحابي أولًا من إعدادات ربط الفروع.');
+    const local = getLocalAppointmentSnapshot(localBranchId);
+    const dentistDirectoryResult = await getSupabaseClient().functions.invoke('clinic-auth', { body: { action: 'list_dentists' } });
+    if (dentistDirectoryResult.error || !dentistDirectoryResult.data?.ok) throw new Error('تعذر تحميل قائمة الأطباء السحابية.');
+    const directory = dentistDirectoryResult.data.dentists || [];
+    const dentistMap = {};
+    for (const user of local.users || []) {
+      const username = String(user.user || user.username || '').trim().toLowerCase();
+      if (username && directory.some(remote => remote.username === username && remote.branch_ids.includes(branchId))) dentistMap[user.id] = username;
+    }
+    const chairMap = Object.fromEntries((local.chairs || []).map(chair => [chair.id, chair.name]));
+    const maps = { branches: { [localBranchId]: branchId }, patients: local.patients || [], dentists: dentistMap, chairs: chairMap };
+    const remoteRows = await listRemoteAppointments({ clinicId: activeMembership.clinic_id, branchId, limit: 2000 });
+    const remoteByKey = new Map(remoteRows.map(row => [String(row.record_key), row]));
+    const localRows = (local.appointments || []).filter(item => item.br === localBranchId);
+    const merged = [], conflicts = [];
+    for (const item of localRows) {
+      let mapped;
+      try { mapped = mapLocalAppointmentToRemote(item, maps); }
+      catch (error) {
+        conflicts.push({ localId: item.id, reason: error.message });
+        continue;
+      }
+      const remote = remoteByKey.get(mapped.recordKey);
+      if (!remote) {
+        try {
+          const created = await createAppointmentInAssignedBranch({ branchId, recordKey: mapped.recordKey, payload: mapped.payload });
+          const localVersion = mapRemoteAppointmentToLocal(created, maps, item);
+          localVersion.cloudSnapshot = created.payload;
+          merged.push(localVersion);
+        } catch (error) {
+          conflicts.push({ localId: item.id, reason: error.message });
+        }
+        continue;
+      }
+      if (item.cloudRevision == null || Number(item.cloudRevision) < Number(remote.revision)) {
+        const baseline = item.cloudSnapshot || null;
+        const localChanged = baseline ? !appointmentPayloadEqual(mapped.payload, baseline) : false;
+        const remoteChanged = baseline ? !appointmentPayloadEqual(remote.payload, baseline) : true;
+        if (localChanged && remoteChanged && !appointmentPayloadEqual(mapped.payload, remote.payload)) {
+          conflicts.push({ localId: item.id, reason: 'تم تعديل الموعد محليًا وعلى جهاز آخر؛ يلزم حل التعارض يدويًا.' });
+          continue;
+        }
+        if (localChanged && !remoteChanged) {
+          try {
+            const updated = await updateAppointmentInAssignedBranch({ branchId, recordKey: mapped.recordKey, payload: mapped.payload, expectedRevision: remote.revision });
+            const localVersion = mapRemoteAppointmentToLocal(updated, maps, item);
+            localVersion.cloudSnapshot = updated.payload;
+            merged.push(localVersion);
+          } catch (error) { conflicts.push({ localId: item.id, reason: error.message }); }
+        } else {
+          const localVersion = mapRemoteAppointmentToLocal(remote, maps, item);
+          localVersion.cloudSnapshot = remote.payload;
+          merged.push(localVersion);
+        }
+        continue;
+      }
+      if (Number(item.cloudRevision) > Number(remote.revision)) {
+        conflicts.push({ localId: item.id, reason: 'إصدار الموعد المحلي أحدث من السحابة؛ أوقفنا الكتابة لحين المراجعة.' });
+        continue;
+      }
+      if (appointmentPayloadEqual(mapped.payload, remote.payload)) {
+        const localVersion = mapRemoteAppointmentToLocal(remote, maps, item);
+        localVersion.cloudSnapshot = remote.payload;
+        merged.push(localVersion);
+      } else {
+        try {
+          const updated = await updateAppointmentInAssignedBranch({ branchId, recordKey: mapped.recordKey, payload: mapped.payload, expectedRevision: remote.revision });
+          const localVersion = mapRemoteAppointmentToLocal(updated, maps, item);
+          localVersion.cloudSnapshot = updated.payload;
+          merged.push(localVersion);
+        } catch (error) { conflicts.push({ localId: item.id, reason: error.message }); }
+      }
+    }
+    for (const remote of remoteRows) {
+      if (localRows.some(item => String(item.cloudRecordKey || item.id) === String(remote.record_key))) continue;
+      try {
+        const localVersion = mapRemoteAppointmentToLocal(remote, maps);
+        localVersion.cloudSnapshot = remote.payload;
+        merged.push(localVersion);
+      } catch (error) { conflicts.push({ localId: remote.record_key, reason: error.message }); }
+    }
+    dispatchCloudAppointments(localBranchId, merged, conflicts);
+    const statusText = 'مزامنة المواعيد: ' + merged.length + ' سجلًا محدثًا' + (conflicts.length ? '، ' + conflicts.length + ' يحتاج مراجعة.' : '.');
+    if (showStatus) status(statusText);
+    return { synced: merged.length, conflicts };
+  } catch (error) {
+    if (showStatus) status('تعذر مزامنة المواعيد: ' + (error.message || 'خطأ غير معروف'));
+    throw error;
+  } finally {
+    appointmentSyncInFlight = false;
+    if (appointmentSyncQueued) {
+      appointmentSyncQueued = false;
+      const selected = $('dcos-cloud-branch')?.value;
+      if (selected) syncAppointmentsForBranch(selected, false).catch(() => {});
+    }
+  }
+}
+function startAppointmentRealtime(branchId) {
+  if (appointmentRealtimeChannel) getSupabaseClient().removeChannel(appointmentRealtimeChannel);
+  appointmentRealtimeChannel = getSupabaseClient().channel('dcos-appointments-' + branchId)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'clinic_records', filter: 'branch_id=eq.' + branchId }, payload => {
+      if (payload?.new?.module === 'appointments' || payload?.old?.module === 'appointments') {
+        syncAppointmentsForBranch(branchId, false).catch(() => {});
+      }
+    })
+    .subscribe(state => {
+      if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') status('المتابعة اللحظية للمواعيد غير متاحة؛ استخدم زر مزامنة المواعيد.');
+    });
+}
+window.addEventListener('dcos:appointment-saved', event => {
+  const branchId = event.detail?.branchId;
+  const map = getSavedBranchMap();
+  const remoteBranchId = map[String(branchId)];
+  if (remoteBranchId && activeMembership) syncAppointmentsForBranch(remoteBranchId, false).catch(() => {});
+});
+
 function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escapeAttr(value) { return escapeHtml(value); }
 

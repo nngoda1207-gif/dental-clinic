@@ -964,7 +964,7 @@ async function syncAllCloudModulesForBranch(branchId, showStatus = false) {
   if (existing) { existing.queued = true; return existing.promise; }
   const state = { queued: false, promise: null };
   state.promise = (async () => {
-    let last = [];
+    let last = [], patientQueue = { synced: 0, blocked: 0, pending: 0, conflicts: 0 };
     do {
       state.queued = false;
       last = await Promise.allSettled([
@@ -973,12 +973,32 @@ async function syncAllCloudModulesForBranch(branchId, showStatus = false) {
         syncClinicalFinanceAndLabsForBranch(branchId, false),
         syncAuxModulesForBranch(branchId)
       ]);
-      await flushPatientSyncQueue();
+      patientQueue = await flushPatientSyncQueue() || patientQueue;
     } while (state.queued && activeMembership && navigator.onLine);
+    const names = ['appointments', 'inventory', 'clinical_finance_labs', 'auxiliary'];
     const failures = last.filter(item => item.status === 'rejected').map(item => item.reason?.message || 'sync_error');
-    for (const item of last) if (item.status === 'fulfilled' && Array.isArray(item.value?.failed)) failures.push(...item.value.failed.map(failure => failure.module + ': ' + (failure.error?.message || 'sync_error')));
-    if (showStatus) status('المزامنة التلقائية: ' + (failures.length ? failures.length + ' أقسام تحتاج إعادة محاولة.' : 'اكتملت الأقسام المسموح بها.'));
-    return { failures };
+    const conflicts = [];
+    let synced = patientQueue.synced || 0;
+    last.forEach((item, index) => {
+      if (item.status !== 'fulfilled') return;
+      const value = item.value || {};
+      synced += Number(value.synced || 0);
+      for (const conflict of value.conflicts || []) conflicts.push({ module: names[index], ...conflict });
+      for (const failure of value.failed || []) failures.push(failure.module + ': ' + (failure.error?.message || 'sync_error'));
+    });
+    const report = {
+      branchId, synced, conflicts, conflictCount: conflicts.length + Number(patientQueue.blocked || 0) + Number(patientQueue.conflicts || 0),
+      failures, pendingPatientWrites: Number(patientQueue.pending || 0), patientWritesBlocked: Number(patientQueue.blocked || 0)
+    };
+    window.dispatchEvent(new CustomEvent('dcos:cloud-sync-complete', { detail: report }));
+    if (showStatus) {
+      const parts = ['المزامنة التلقائية: ' + synced + ' سجلًا'];
+      if (report.conflictCount) parts.push(report.conflictCount + ' تعارضات/سجلات تحتاج مراجعة');
+      if (report.pendingPatientWrites) parts.push(report.pendingPatientWrites + ' عمليات مرضى لم تكتمل');
+      if (failures.length) parts.push(failures.length + ' أقسام بها أخطاء');
+      status(parts.join(' · ') + (report.conflictCount || report.pendingPatientWrites || failures.length ? '.' : ' · اكتملت الأقسام المسموح بها.'));
+    }
+    return report;
   })();
   cloudBranchSyncLocks.set(branchId, state);
   try { return await state.promise; }
@@ -1164,7 +1184,9 @@ function enqueueLocalPatientForSync(patient) {
   flushPatientSyncQueue();
 }
 async function flushPatientSyncQueue() {
-  if (patientQueueFlushInFlight || !navigator.onLine || !activeMembership) return;
+  if (patientQueueFlushInFlight || !navigator.onLine || !activeMembership) {
+    return { synced: 0, blocked: 0, pending: readPatientQueue().length, conflicts: 0, skipped: true };
+  }
   patientQueueFlushInFlight = true;
   const queue = readPatientQueue();
   const initialQueueByKey = new Map(queue.map(item => [String(item.clinicId)+'::'+String(item.localBranchId)+'::'+String(item.id), item]));
@@ -1208,6 +1230,7 @@ async function flushPatientSyncQueue() {
     localStorage.setItem(PATIENT_QUEUE_KEY, JSON.stringify([...finalQueueByKey.values()]));
     localStorage.setItem(PATIENT_CONFLICTS_KEY, JSON.stringify(conflicts));
     if (synced || blocked) status((synced ? 'تمت مزامنة ' + synced + ' سجل مريض أساسي. ' : '') + (blocked ? 'تم إيقاف ' + blocked + ' سجلات متعارضة ونقلها لقائمة المراجعة؛ لم يتم استبدال أي مريض موجود.' : ''));
+    return { synced, blocked, pending: finalQueueByKey.size, conflicts: conflicts.length };
   } finally {
     patientQueueFlushInFlight = false;
   }

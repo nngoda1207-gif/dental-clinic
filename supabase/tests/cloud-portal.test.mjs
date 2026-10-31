@@ -42,6 +42,14 @@ assert.ok(!portal.includes('SUPABASE_SERVICE_ROLE_KEY') && !portal.includes('sb_
 assert.ok(edge.includes('DEFAULT_PERMISSIONS') && edge.includes('manage_permissions') && edge.includes('list_staff'), 'Server function must enforce and manage staff permissions');
 assert.ok(patientRepo.includes(".from('clinic_records')"), 'Patient demographics must use the deployed generic cloud record store');
 assert.ok(!patientRepo.includes(".from('clinic_patients')"), 'Patient sync must not depend on unapplied normalized tables');
+assert.ok(portal.includes('listRemoteAppointments'), 'Appointment reads must use the generic cloud record store');
+assert.ok(portal.includes('createAppointmentInAssignedBranch') && portal.includes('updateAppointmentInAssignedBranch'), 'Appointment writes must use guarded branch-scoped services');
+assert.ok(portal.includes('startAppointmentRealtime'), 'Appointment changes must subscribe to cloud realtime');
+assert.ok(portal.includes('dcos:get-local-appointments') && portal.includes('dcos:cloud-appointments'), 'Cloud appointment sync must cross the app boundary through explicit events');
+assert.ok(portal.includes('appointmentPayloadEqual'), 'Appointment sync must detect concurrent edits against a saved cloud snapshot');
+assert.ok(index.includes('dcos:appointment-saved'), 'Local appointment changes must trigger cloud synchronization');
+assert.ok(index.includes('dcos:cloud-appointments'), 'The app must merge cloud appointment records into the local schedule');
+assert.ok(edge.includes('action==="list_dentists"'), 'Appointment mapping must use the authenticated branch-scoped dentist directory');
 assert.ok(recordRepo.includes(".from('clinic_records')"), 'Generic record repository must use the deployed cloud record store');
 assert.ok(!recordRepo.includes('localStorage') && !recordRepo.includes('dcos1'), 'Generic record repository must never upload the entire local D blob');
 

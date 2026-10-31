@@ -60,6 +60,11 @@ assert.ok(portal.includes('function appointmentPayloadEqual') && portal.includes
 assert.ok(portal.includes('function inventoryPayloadEqual(a,b) { return cloudPayloadEqual(a,b); }'), 'Inventory conflict checks must use canonical payload comparisons');
 assert.ok(portal.includes('syncClinicalFinanceAndLabsForBranch'), 'Clinical, finance and lab sync must be grouped for manual and automatic use');
 assert.ok(portal.includes('function syncAllCloudModulesForBranch'), 'All supported cloud modules must share one automatic sync coordinator');
+assert.ok(portal.includes("new CustomEvent('dcos:cloud-sync-complete'"), 'Cloud sync must publish a structured completion report for migration verification');
+assert.ok(portal.includes('pendingPatientWrites'), 'Cloud sync completion must expose pending patient writes');
+assert.ok(portal.includes('patientWritesBlocked'), 'Cloud sync completion must expose blocked patient writes');
+assert.ok(portal.includes('return { synced, blocked, pending: finalQueueByKey.size, conflicts: conflicts.length };'), 'Patient outbox flush must report synced, blocked, pending and unresolved conflict counts');
+
 assert.ok(portal.includes('function syncAuxModulesForBranch'), 'Prices, suppliers, settings and branch configuration must be included in cloud sync');
 assert.ok(portal.includes('async function syncAuditForBranch'), 'Audit events must synchronize as append-only branch records');
 assert.ok(index.includes("window.addEventListener('dcos:cloud-audit'"), 'The app must merge remote audit events without duplicating local entries');

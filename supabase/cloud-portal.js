@@ -991,7 +991,9 @@ function startAppointmentRealtime(branchId) {
 }
 window.addEventListener('dcos:cloud-user-ready', () => {
   if (!activeMembership) return;
+  const mappedRemoteBranchIds = new Set(Object.values(getSavedBranchMap()).map(String));
   for (const branch of activeBranches) {
+    if (!mappedRemoteBranchIds.has(String(branch.id))) continue;
     startAppointmentRealtime(branch.id);
     syncAllCloudModulesForBranch(branch.id, false).catch(() => {});
   }

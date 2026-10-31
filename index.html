@@ -196,7 +196,13 @@ window.addEventListener('dcos:get-local-cloud-data',event=>{
     rx:patient.rx||[],cons:patient.cons||[],perio:patient.perio||[],pdisc:patient.pdisc||0,
     appr:patient.appr||null,notes:patient.notes||[],pay:patient.pay||[]
   }));
-  detail.respond({patients});
+  const labs=(D.labs||[]).map(lab=>({...lab}));
+  const labCases=(D.lab||[]).filter(item=>item.br===branchId).map(item=>({...item,
+    pays:Array.isArray(item.pays)?item.pays.map(payment=>({...payment})):[],
+    hist:Array.isArray(item.hist)?item.hist.map(entry=>({...entry})):[],
+    cloudSnapshot:item.cloudSnapshot?JSON.parse(JSON.stringify(item.cloudSnapshot)):null
+  }));
+  detail.respond({patients,labs,labCases});
 });
 window.addEventListener('dcos:cloud-patient-modules',event=>{
   if(!D||!ME)return;
@@ -233,6 +239,35 @@ window.addEventListener('dcos:get-local-inventory',event=>{
   const branchId=String(detail.localBranchId||'');
   detail.respond({items:(D.items||[]).filter(item=>item.br===branchId).map(item=>({...item,mv:Array.isArray(item.mv)?item.mv.map(m=>({...m})):[]}))});
 });
+window.addEventListener('dcos:cloud-labs',event=>{
+  if(!D||!ME)return;
+  const {localBranchId,records=[],conflicts=[]}=event.detail||{};
+  if(!localBranchId||!myBr().some(branch=>branch.id===localBranchId))return;
+  D.labs=D.labs||[];D.lab=D.lab||[];
+  let changed=false;
+  for(const entry of records){
+    const payload=entry.payload||{},record=payload.record||{};
+    const patient=(D.patients||[]).find(item=>item.br===localBranchId&&String(item.no)===String(payload.patientNo||''));
+    if(!patient)continue;
+    let lab=D.labs.find(item=>String(item.name||'').trim().toLowerCase()===String(payload.labName||'').trim().toLowerCase());
+    if(!lab&&payload.labName){lab={id:uid(),name:String(payload.labName),ph:''};D.labs.push(lab);changed=true}
+    if(!lab)continue;
+    const labNo=String(payload.labNo||'');
+    let local=D.lab.find(item=>item.br===localBranchId&&String(item.no)===labNo);
+    const merged={...record,id:local?.id||uid(),no:labNo,pid:patient.id,lab:lab.id,br:localBranchId,
+      pays:Array.isArray(record.pays)?record.pays:[],hist:Array.isArray(record.hist)?record.hist:[],
+      cloudRevision:entry.revision,cloudSnapshot:JSON.parse(JSON.stringify(payload)),cloudConflict:''};
+    if(local)Object.assign(local,merged);else D.lab.push(merged);
+    changed=true;
+  }
+  for(const conflict of conflicts){
+    const local=D.lab.find(item=>item.br===localBranchId&&String(item.no)===String(conflict.labNo||''));
+    if(local)local.cloudConflict=conflict.reason||'sync_conflict';
+  }
+  if(changed||conflicts.length){save();if(view==='lab'&&!$('#dlg')?.open&&!$('#dlg2')?.open)labV();}
+  if(conflicts.length)toast('يوجد '+conflicts.length+' تعارضات في حالات المعمل؛ احتفظنا بالبيانات المحلية.');
+});
+
 window.addEventListener('dcos:cloud-inventory',event=>{
   if(!D||!ME)return;
   const {localBranchId,items=[],conflicts=[]}=event.detail||{};

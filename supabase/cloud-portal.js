@@ -11,6 +11,11 @@ import {
 import { listAllPatientsForAssignedBranch, watchPatientsForAssignedBranch, upsertPatientInAssignedBranch, updatePatientInAssignedBranch } from './patient-sync-service.js';
 import { preparePatientImport, importNewPatients } from './patient-import-service.js';
 
+// Public project configuration: safe to ship in the app. Never put service-role/secret keys here.
+window.DCOS_SUPABASE_CONFIG = window.DCOS_SUPABASE_CONFIG || {
+  url: 'https://zvaccqmdqtwrgzqgjtbl.supabase.co',
+  publishableKey: 'sb_publishable_VwUoYJZ2hoEYKbXXZdOINQ_MJbrYDIT'
+};
 const CONFIG_KEY = 'dcos_supabase_public_config_v1';
 const BRANCH_MAP_KEY = 'dcos_supabase_branch_map_v1';
 const PATIENT_QUEUE_KEY = 'dcos_patient_sync_queue_v1';

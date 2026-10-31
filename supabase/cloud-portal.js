@@ -206,12 +206,52 @@ async function loadWorkspace() {
     staffBox.innerHTML = '<h3>إنشاء حساب موظف</h3><p class="muted">أنشئ اسم مستخدم وكلمة مرور لكل فرد في الفريق، وحدد وظيفته والفرع المسموح له. لا نطلب بريدًا إلكترونيًا.</p><label>اسم المستخدم<input id="dcos-staff-username" type="text" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="مثال: nurse01"></label><label>كلمة المرور<input id="dcos-staff-password" type="password" minlength="8" autocomplete="new-password" placeholder="8 أحرف على الأقل"></label><label>الوظيفة<select id="dcos-staff-role"><option value="nurse">تمريض</option><option value="dentist">طبيب</option><option value="reception">استقبال</option><option value="accountant">حسابات</option><option value="manager">مدير</option><option value="invmgr">مسؤول مخزون</option><option value="readonly">قراءة فقط</option></select></label><label>الفرع<select id="dcos-staff-branch">' + branches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('') + '</select></label><button class="primary" id="dcos-create-staff-account" type="button">إنشاء حساب الموظف</button><p id="dcos-staff-create-status" class="muted" role="status"></p>';
     host.prepend(staffBox);
     $('dcos-create-staff-account').addEventListener('click', createStaffAccount);
+    const migrationBox = el('section', { class: 'cloud-row' });
+    migrationBox.innerHTML = '<h3>نقل بيانات العيادة بالكامل إلى السحابة</h3><p class="muted">ينقل بيانات الأقسام من قاعدة هذا الجهاز إلى Supabase، مع فصل المرضى والمدفوعات والخطط العلاجية حسب الصلاحيات. لا يحذف أو يعدّل النسخة المحلية.</p><button class="primary" id="dcos-full-cloud-migration" type="button">مراجعة ونقل بيانات العيادة</button><p id="dcos-full-cloud-migration-status" class="muted" role="status"></p>';
+    host.prepend(migrationBox);
+    $('dcos-full-cloud-migration').addEventListener('click', runFullCloudMigration);
   }
   $('dcos-load-patients').addEventListener('click', loadPatients);
   $('dcos-cloud-branch').addEventListener('change', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
   flushPatientSyncQueue();
+}
+
+async function runFullCloudMigration() {
+  const button = $('dcos-full-cloud-migration');
+  const output = $('dcos-full-cloud-migration-status');
+  try {
+    if (activeMembership?.role !== 'owner') throw new Error('نقل البيانات متاح لمالك العيادة فقط.');
+    if (typeof window.DCOS_LOCAL_EXPORT !== 'function') throw new Error('حدّث صفحة التطبيق ثم أعد فتح لوحة السحابة.');
+    const localState = window.DCOS_LOCAL_EXPORT();
+    const savedMap = getSavedBranchMap();
+    const branchMap = { ...savedMap };
+    for (const local of (localState.branches || [])) {
+      if (branchMap[String(local.id)]) continue;
+      const match = activeBranches.find(remote => String(remote.name || '').trim().toLowerCase() === String(local.name || '').trim().toLowerCase());
+      if (match) branchMap[String(local.id)] = match.id;
+    }
+    const { previewLocalMigration, migrateLocalClinicState } = await import('./cloud-migration.js');
+    const preview = previewLocalMigration(localState, branchMap);
+    const lines = Object.entries(preview.counts).map(([name,count]) => name + ': ' + count).join('\n');
+    if (preview.missingBranchMappings.length) {
+      throw new Error('يلزم ربط الفروع التالية قبل النقل: ' + preview.missingBranchMappings.join('، ') + '. استخدم شاشة استيراد المرضى لربط الفروع أولًا.');
+    }
+    const confirmText = 'سيتم نقل ' + preview.total + ' سجل/عنصر إلى Supabase.\n' + lines + '\n\nلن يتم حذف البيانات المحلية. السجلات الموجودة مسبقًا ستُترك دون استبدال. هل تريد المتابعة؟';
+    if (!window.confirm(confirmText)) return;
+    button.disabled = true;
+    output.textContent = 'جارٍ نقل البيانات… لا تغلق التطبيق.';
+    const result = await migrateLocalClinicState(localState, branchMap, progress => {
+      output.textContent = 'تمت معالجة ' + progress.done + ' من ' + progress.total + ' · نُقل ' + (progress.imported || 0) + ' · تعارضات ' + (progress.conflicts || 0);
+    });
+    output.textContent = 'انتهى النقل: ' + result.imported + ' سجل جديد، ' + result.conflicts.length + ' سجل موجود لم يُستبدل. النسخة المحلية محفوظة كما هي.';
+    status('اكتمل نقل البيانات المتاحة إلى Supabase مع الاحتفاظ بالنسخة المحلية.');
+  } catch (error) {
+    output.textContent = String(error?.message || error);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function createStaffAccount() {

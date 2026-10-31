@@ -129,7 +129,7 @@ $('dcos-provision-clinic').addEventListener('click', async () => {
     button.disabled = true; output.textContent = 'جارٍ إنشاء حساب المالك والعيادة والفرع…';
     const { data, error } = await getSupabaseClient().functions.invoke('clinic-auth', {
       body: { action: 'provision_clinic', clinic_name, branch_name, username, password },
-      headers: { 'x-clinic-provisioning-key': key }
+      headers: { Authorization: 'Bearer ' + key }
     });
     if (error) {
       let detail = error.message || 'تعذر إنشاء حساب العيادة.';

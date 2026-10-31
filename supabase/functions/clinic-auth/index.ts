@@ -41,7 +41,7 @@ Deno.serve(async req=>{
    return json({ok:true,user_id:newUser.id,username:u,role,branch_id:branch.id});
   }
   if(action==="provision_clinic"){
-   const expected=Deno.env.get("CLINIC_PROVISIONING_KEY")||"",supplied=req.headers.get("x-clinic-provisioning-key")||"";
+   const expected=Deno.env.get("CLINIC_PROVISIONING_KEY")||"",supplied=(req.headers.get("Authorization")||"").replace(/^Bearer\\s+/i,"");
    if(!expected)return json({error:"PROVISIONING_NOT_CONFIGURED"},503);
    const a=new TextEncoder().encode(supplied),z=new TextEncoder().encode(expected);let diff=a.length^z.length;
    for(let i=0;i<Math.max(a.length,z.length);i++)diff|=(a[i]||0)^(z[i]||0);

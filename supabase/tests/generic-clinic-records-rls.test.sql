@@ -2,7 +2,8 @@
 
 insert into auth.users(id,email) values
  ('11000000-0000-4000-8000-000000000001','cloud-owner@test.invalid'),
- ('11000000-0000-4000-8000-000000000002','cloud-nurse@test.invalid')
+ ('11000000-0000-4000-8000-000000000002','cloud-nurse@test.invalid'),
+ ('11000000-0000-4000-8000-000000000003','cloud-appointments@test.invalid')
 on conflict (id) do nothing;
 
 insert into public.clinics(id,name,created_by)
@@ -10,19 +11,22 @@ values ('21000000-0000-4000-8000-000000000001','Cloud Record Test','11000000-000
 
 insert into public.clinic_members(clinic_id,user_id,role,permissions) values
  ('21000000-0000-4000-8000-000000000001','11000000-0000-4000-8000-000000000001','owner','[]'::jsonb),
- ('21000000-0000-4000-8000-000000000001','11000000-0000-4000-8000-000000000002','nurse','["pv","pa","pe"]'::jsonb);
+ ('21000000-0000-4000-8000-000000000001','11000000-0000-4000-8000-000000000002','nurse','["pv","pa","pe"]'::jsonb),
+ ('21000000-0000-4000-8000-000000000001','11000000-0000-4000-8000-000000000003','readonly','["aw"]'::jsonb);
 
 insert into public.clinic_branches(id,clinic_id,name) values
  ('31000000-0000-4000-8000-000000000001','21000000-0000-4000-8000-000000000001','Assigned branch'),
  ('31000000-0000-4000-8000-000000000002','21000000-0000-4000-8000-000000000001','Unassigned branch');
 
 insert into public.clinic_member_branches(clinic_id,user_id,branch_id)
-values ('21000000-0000-4000-8000-000000000001','11000000-0000-4000-8000-000000000002','31000000-0000-4000-8000-000000000001');
+values ('21000000-0000-4000-8000-000000000001','11000000-0000-4000-8000-000000000002','31000000-0000-4000-8000-000000000001'),
+ ('21000000-0000-4000-8000-000000000001','11000000-0000-4000-8000-000000000003','31000000-0000-4000-8000-000000000001');
 
 insert into public.clinic_records(clinic_id,branch_id,module,record_key,payload,created_by,updated_by) values
  ('21000000-0000-4000-8000-000000000001','31000000-0000-4000-8000-000000000001','patients','P-001','{"name":"Synthetic patient"}','11000000-0000-4000-8000-000000000001','11000000-0000-4000-8000-000000000001'),
  ('21000000-0000-4000-8000-000000000001','31000000-0000-4000-8000-000000000001','finance','F-001','{"amount":100}','11000000-0000-4000-8000-000000000001','11000000-0000-4000-8000-000000000001'),
- ('21000000-0000-4000-8000-000000000001','31000000-0000-4000-8000-000000000002','patients','P-OTHER','{"name":"Other branch patient"}','11000000-0000-4000-8000-000000000001','11000000-0000-4000-8000-000000000001');
+ ('21000000-0000-4000-8000-000000000001','31000000-0000-4000-8000-000000000002','patients','P-OTHER','{"name":"Other branch patient"}','11000000-0000-4000-8000-000000000001','11000000-0000-4000-8000-000000000001'),
+ ('21000000-0000-4000-8000-000000000001','31000000-0000-4000-8000-000000000001','appointments','A-001','{"start":"2026-10-31T10:00:00"}','11000000-0000-4000-8000-000000000001','11000000-0000-4000-8000-000000000001');
 
 set role authenticated;
 select set_config('request.jwt.claim.sub','11000000-0000-4000-8000-000000000002',false);
@@ -66,5 +70,19 @@ begin
 end;
 $$;
 
+reset role;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','11000000-0000-4000-8000-000000000003',false);
+select set_config('request.jwt.claims','{"sub":"11000000-0000-4000-8000-000000000003","email":"cloud-appointments@test.invalid"}',false);
+do $
+declare appointment_rows integer; patient_rows integer;
+begin
+  select count(*) into appointment_rows from public.clinic_records where module='appointments';
+  select count(*) into patient_rows from public.clinic_records where module='patients';
+  if appointment_rows <> 1 then raise exception 'Appointment write permission must authorize appointment-module records'; end if;
+  if patient_rows <> 0 then raise exception 'Appointment-only permission must not grant patient access'; end if;
+end;
+$;
 reset role;
 select 'generic clinic record RLS tests passed' as result;

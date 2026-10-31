@@ -28,7 +28,9 @@ let activeMembership = null, activeBranches = [], localImportSnapshot = null, im
 let patientRealtimeUnsubscribe = null, patientRefreshInFlight = false, patientQueueFlushInFlight = false, initialImportComplete = false;
 const appointmentRealtimeChannels = new Map();
 const cloudAutoSyncTimers = new Map();
+const cloudAutoSyncAttempts = new Map();
 const cloudBranchSyncLocks = new Map();
+const appointmentSyncQueuedBranches = new Set();
 let appointmentSyncInFlight = false, appointmentSyncQueued = false;
 const el = (tag, attrs = {}, html = '') => {
   const n = document.createElement(tag);
@@ -496,7 +498,7 @@ function dispatchCloudAppointments(localBranchId, records, conflicts = []) {
 }
 async function syncAppointmentsForBranch(branchId, showStatus = false) {
   if (!activeMembership || !branchId) return;
-  if (appointmentSyncInFlight) { appointmentSyncQueued = true; return; }
+  if (appointmentSyncInFlight) { appointmentSyncQueued = true; appointmentSyncQueuedBranches.add(branchId); return; }
   appointmentSyncInFlight = true;
   try {
     const branchMap = getSavedBranchMap();
@@ -594,8 +596,9 @@ async function syncAppointmentsForBranch(branchId, showStatus = false) {
     appointmentSyncInFlight = false;
     if (appointmentSyncQueued) {
       appointmentSyncQueued = false;
-      const selected = $('dcos-cloud-branch')?.value;
-      if (selected) syncAppointmentsForBranch(selected, false).catch(() => {});
+      const queuedBranches = [...appointmentSyncQueuedBranches];
+      appointmentSyncQueuedBranches.clear();
+      for (const queuedBranchId of queuedBranches) syncAppointmentsForBranch(queuedBranchId, false).catch(() => {});
     }
   }
 }
@@ -875,9 +878,10 @@ async function syncAllCloudModulesForBranch(branchId, showStatus = false) {
       ]);
       await flushPatientSyncQueue();
     } while (state.queued && activeMembership && navigator.onLine);
-    const failures = last.filter(item => item.status === 'rejected');
+    const failures = last.filter(item => item.status === 'rejected').map(item => item.reason?.message || 'sync_error');
+    for (const item of last) if (item.status === 'fulfilled' && Array.isArray(item.value?.failed)) failures.push(...item.value.failed.map(failure => failure.module + ': ' + (failure.error?.message || 'sync_error')));
     if (showStatus) status('المزامنة التلقائية: ' + (failures.length ? failures.length + ' أقسام تحتاج إعادة محاولة.' : 'اكتملت الأقسام المسموح بها.'));
-    return { failures: failures.map(item => item.reason?.message || 'sync_error') };
+    return { failures };
   })();
   cloudBranchSyncLocks.set(branchId, state);
   try { return await state.promise; }
@@ -890,11 +894,24 @@ function queueAutomaticCloudSync(reason = 'local_change') {
     if (!Object.values(branchMap).includes(branch.id)) continue;
     const previous = cloudAutoSyncTimers.get(branch.id);
     if (previous) clearTimeout(previous);
-    cloudAutoSyncTimers.set(branch.id, setTimeout(() => {
+    cloudAutoSyncTimers.set(branch.id, setTimeout(async () => {
       cloudAutoSyncTimers.delete(branch.id);
-      syncAllCloudModulesForBranch(branch.id, false).catch(error => {
-        status('تعذر إكمال المزامنة التلقائية؛ ستتم المحاولة عند عودة الاتصال: ' + (error.message || 'خطأ'));
-      });
+      try {
+        const outcome = await syncAllCloudModulesForBranch(branch.id, false);
+        if (outcome?.failures?.length && navigator.onLine) {
+          const attempt = (cloudAutoSyncAttempts.get(branch.id) || 0) + 1;
+          cloudAutoSyncAttempts.set(branch.id, attempt);
+          if (attempt <= 3) {
+            const delay = [2000, 5000, 15000][attempt - 1];
+            cloudAutoSyncTimers.set(branch.id, setTimeout(() => {
+              cloudAutoSyncTimers.delete(branch.id);
+              queueAutomaticCloudSync('retry');
+            }, delay));
+          } else status('تعذر مزامنة بعض البيانات بعد عدة محاولات؛ ستُستأنف عند عودة الاتصال أو فتح التطبيق.');
+        } else cloudAutoSyncAttempts.delete(branch.id);
+      } catch (error) {
+        status('تعذر إكمال المزامنة التلقائية؛ ستتم المحاولة لاحقًا: ' + (error.message || 'خطأ'));
+      }
     }, 450));
   }
 }

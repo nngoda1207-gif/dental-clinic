@@ -20,6 +20,8 @@
 - `cloud-record-repository.js` / `cloud-record-sync-service.js` provide branch-validated, revision-checked generic record CRUD with soft deletion. They are the shared foundation for the next module adapters; they do not upload the complete local `D` object.
 - `patient-repository.js` now uses the deployed `clinic_records` table for demographics only, keyed by branch + file number, with stable local identity, optimistic revision checks, and Realtime filtering. It deliberately excludes nested clinical notes, visits, treatment plans, prescriptions and financial history.
 - New staff accounts created through `clinic-auth` receive the default permission codes corresponding to their assigned app role. Existing staff permissions are not silently broadened by this code change; an owner must review any pre-existing empty permission set before enabling their cloud access.
+- The cloud portal owner workspace now lists existing staff and lets the owner save module permission codes through the protected `list_staff` / `manage_permissions` Edge Function actions. Cloud app feature gates now use the authenticated membership's saved permissions rather than assuming every member of the same role has identical access.
+- `022_staff_invitations.sql` is now present in the migration chain: it stores only hashed, single-use invitation tokens, binds redemption to the invited email, assigns the selected branch, and initializes the same role permission defaults as the username-based staff flow.
 - `.github/workflows/cloud-record-sync-test.yml` runs focused JS safety checks and applies migrations 001, 023, 024 and 025 to a disposable PostgreSQL database before checking the generic record schema.
 
 - `020_lab_sync_identity.sql` adds stable local IDs for lab directories, cases and lab payments, plus optimistic case versioning and an idempotent lab-payment RPC. Repeated identical offline payment submissions return the original ledger row; changed payloads are rejected. This is database groundwork; lab case import/reconciliation and live UI integration remain disabled.
@@ -48,8 +50,8 @@
 
 ## Before running the migration
 
-1. The GitHub Actions PostgreSQL smoke test should pass, then test in a separate Supabase project using synthetic data only.
-2. Apply all twenty SQL files in numerical order (`001` through `020`) in a separate disposable Supabase project.
+1. Both GitHub Actions PostgreSQL workflows should pass, then test in a separate Supabase project using synthetic data only.
+2. Apply all SQL migrations in numerical order (`001` through `025`) in a separate disposable Supabase project.
 3. Follow `TEST_PLAN.md`; do not treat a successful SQL run alone as proof that role/branch security is correct.
 4. Confirm the project has a recent backup.
 5. Review the SQL and confirm the desired owner/member workflow.
@@ -71,7 +73,7 @@ Supabase Auth must also be integrated with the current local login carefully. Th
 
 ## Planned implementation order
 
-1. Review and test all twelve SQL migrations in a separate Supabase project.
+1. Review and test the complete migration chain (`001`–`025`) in a separate Supabase project.
 2. Audit the policies against the clinic's exact role/branch workflow; these are an initial draft and need security testing.
 3. Integrate and test the Auth prototype through a controlled onboarding/invitation flow; do not migrate local password hashes.
 4. Add a controlled migration path for existing local accounts.

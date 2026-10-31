@@ -1083,8 +1083,7 @@ async function verifyCloudMigrationForBranch(branchId, showStatus = true) {
   for (let i = 0; i < recordModules.length; i++) {
     const module = recordModules[i], cloudCount = counts[i + 2];
     if (cloudCount == null) continue;
-    const aux = localAux[module];
-    const localCount = aux ? (aux.isEmpty ? 0 : (module === 'audit' ? localCounts.audit : localCounts[module])) : localCounts[module];
+    const localCount = module === 'audit' ? localCounts.audit : 1;
     add(module, localCount, cloudCount);
   }
   const report = {
@@ -1163,7 +1162,12 @@ window.addEventListener('dcos:cloud-user-ready', async () => {
     // Hydrate the complete remote patient directory before syncing dependent
     // appointments, treatment plans, lab cases and finance records.
     await refreshCloudPatientsForBranch(branch.id);
-    syncAllCloudModulesForBranch(branch.id, false).catch(() => {});
+    try {
+      await syncAllCloudModulesForBranch(branch.id, false);
+      await verifyCloudMigrationForBranch(branch.id, true);
+    } catch (error) {
+      status('تعذر إكمال فحص النقل السحابي: ' + (error.message || 'خطأ'));
+    }
   }
 });
 window.addEventListener('dcos:local-data-saved', () => queueAutomaticCloudSync('local_save'));

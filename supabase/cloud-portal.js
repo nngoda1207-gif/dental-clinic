@@ -864,6 +864,11 @@ window.addEventListener('dcos:cloud-user-ready', () => {
     if (activeMembership.role === 'owner' || permissions.some(code => ['cl','mv','ex','fv','lv'].includes(code))) syncClinicalFinanceAndLabsForBranch(branch.id, false).catch(() => {});
   }
 });
+window.addEventListener('dcos:lab-saved',event=>{
+  const localBranchId=String(event.detail?.branchId||'');
+  const remoteBranchId=getSavedBranchMap()[localBranchId];
+  if(remoteBranchId&&activeMembership)syncLabsForBranch(remoteBranchId,false).catch(error=>status('تعذر مزامنة المعمل: '+(error.message||'خطأ غير معروف')));
+});
 window.addEventListener('dcos:appointment-saved', event => {
   const branchId = event.detail?.branchId;
   const map = getSavedBranchMap();

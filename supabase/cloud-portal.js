@@ -18,6 +18,7 @@ window.DCOS_SUPABASE_CONFIG = window.DCOS_SUPABASE_CONFIG || {
 };
 const CONFIG_KEY = 'dcos_supabase_public_config_v1';
 const BRANCH_MAP_KEY = 'dcos_supabase_branch_map_v1';
+const BRANCH_VIEW_MAP_KEY = 'dcos_supabase_branch_view_map_v1';
 const PATIENT_QUEUE_KEY = 'dcos_patient_sync_queue_v1';
 const PATIENT_CONFLICTS_KEY = 'dcos_patient_sync_conflicts_v1';
 let activeMembership = null, activeBranches = [], localImportSnapshot = null, importBranchMap = null, importPreview = null, localBackupExported = false, backupExportStarted = false;
@@ -193,6 +194,7 @@ async function loadWorkspace() {
   activeMembership = membership;
   const branches = await listAssignedRemoteBranches(membership.clinic_id);
   activeBranches = branches;
+  if (branches.length) await bootstrapEmptyDevice(membership, branches);
   if (!branches.length) {
     host.innerHTML = '<p>الحساب عضو في العيادة، لكن لا يوجد فرع مسند إليه. اطلب من مالك العيادة إسناد فرع لهذا الحساب.</p>';
     status('تم التحقق من العضوية، ولا توجد فروع مسندة.');
@@ -476,7 +478,35 @@ function getSavedBranchConfig() {
 function getSavedBranchMap() {
   const saved = getSavedBranchConfig();
   if (saved?.clinicId === activeMembership?.clinic_id) return saved.map;
+  try {
+    const view = JSON.parse(localStorage.getItem(BRANCH_VIEW_MAP_KEY) || 'null');
+    if (view?.clinicId === activeMembership?.clinic_id && view?.map && typeof view.map === 'object') return view.map;
+  } catch {}
   return {};
+}
+function hasLocalClinicState() {
+  try {
+    const state = JSON.parse(localStorage.getItem('dcos1') || 'null');
+    return !!(state && Array.isArray(state.branches) && state.branches.length);
+  } catch { return false; }
+}
+async function bootstrapEmptyDevice(membership, branches) {
+  if (hasLocalClinicState() || !branches?.length) return;
+  const map = Object.fromEntries(branches.map(branch => [branch.id, branch.id]));
+  localStorage.setItem(BRANCH_VIEW_MAP_KEY, JSON.stringify({ clinicId: membership.clinic_id, map }));
+  let clinicName = 'عيادة الأسنان';
+  try {
+    const { data } = await getSupabaseClient().from('clinics').select('name').eq('id', membership.clinic_id).maybeSingle();
+    if (data?.name) clinicName = data.name;
+  } catch {}
+  let dentists = [];
+  try {
+    const { data, error } = await getSupabaseClient().functions.invoke('clinic-auth', { body: { action: 'list_dentists' } });
+    if (!error && data?.ok && Array.isArray(data.dentists)) dentists = data.dentists;
+  } catch {}
+  window.dispatchEvent(new CustomEvent('dcos:cloud-bootstrap', {
+    detail: { clinicId: membership.clinic_id, clinicName, branches, dentists }
+  }));
 }
 
 window.addEventListener('dcos:patient-saved', event => {

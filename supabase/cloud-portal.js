@@ -225,7 +225,7 @@ async function loadWorkspace() {
   }
   $('dcos-load-patients').addEventListener('click', loadPatients);
   $('dcos-sync-appointments').addEventListener('click', () => syncAppointmentsForBranch($('dcos-cloud-branch').value, true));
-  $('dcos-sync-inventory').addEventListener('click', () => syncInventoryForBranch($('dcos-cloud-branch').value, true));
+  $('dcos-sync-inventory').addEventListener('click', () => syncInventoryForBranch($('dcos-cloud-branch').value, true).catch(error => status('تعذر مزامنة المخزون: ' + (error.message || 'خطأ غير معروف'))));
   $('dcos-cloud-branch').addEventListener('change', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
@@ -609,6 +609,8 @@ function inventoryPayload(item, remoteBranchId) {
 function inventoryPayloadEqual(a,b) { return JSON.stringify(a || null) === JSON.stringify(b || null); }
 async function syncInventoryForBranch(branchId, showStatus = false) {
   if (!activeMembership || !branchId) return;
+  const permissions = Array.isArray(activeMembership.permissions) ? activeMembership.permissions : [];
+  if (activeMembership.role !== 'owner' && !permissions.some(code => ['im','iv'].includes(code))) return { synced: 0, conflicts: [], skipped: true };
   const branchMap = getSavedBranchMap();
   const localBranchId = Object.keys(branchMap).find(id => branchMap[id] === branchId);
   if (!localBranchId) throw new Error('اربط الفرع المحلي بالفرع السحابي أولًا.');
@@ -673,7 +675,8 @@ window.addEventListener('dcos:cloud-user-ready', () => {
   if (!activeMembership) return;
   for (const branch of activeBranches) {
     syncAppointmentsForBranch(branch.id, false).then(() => startAppointmentRealtime(branch.id)).catch(() => {});
-    syncInventoryForBranch(branch.id, false).catch(() => {});
+    const permissions = Array.isArray(activeMembership.permissions) ? activeMembership.permissions : [];
+    if (activeMembership.role === 'owner' || permissions.some(code => ['im','iv'].includes(code))) syncInventoryForBranch(branch.id, false).catch(() => {});
   }
 });
 window.addEventListener('dcos:appointment-saved', event => {

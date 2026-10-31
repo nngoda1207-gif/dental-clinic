@@ -1038,6 +1038,70 @@ async function syncAllCloudModulesForBranch(branchId, showStatus = false) {
   try { return await state.promise; }
   finally { if (cloudBranchSyncLocks.get(branchId) === state) cloudBranchSyncLocks.delete(branchId); }
 }
+async function verifyCloudMigrationForBranch(branchId, showStatus = true) {
+  if (!activeMembership || !branchId) return { skipped: true, reason: 'not_authenticated' };
+  const branchMap = getSavedBranchMap();
+  const localBranchId = Object.keys(branchMap).find(id => String(branchMap[id]) === String(branchId));
+  if (!localBranchId) return { skipped: true, reason: 'branch_not_mapped' };
+  const localPatients = getLocalPatientModuleSnapshot(localBranchId);
+  const localAppointments = getLocalAppointmentSnapshot(localBranchId);
+  const localInventory = getLocalInventorySnapshot(localBranchId);
+  const localAux = Object.fromEntries(['prices','suppliers','settings','branches','audit'].map(module => [module, getLocalAuxSnapshot(localBranchId, module)]));
+  const modules = [];
+  const add = (module, localCount, cloudCount) => {
+    const local = Math.max(0, Number(localCount) || 0);
+    const cloud = Math.max(0, Number(cloudCount) || 0);
+    modules.push({ module, localCount: local, cloudCount: cloud, difference: local - cloud, status: local === cloud ? 'count_match' : 'count_mismatch' });
+  };
+  const tasks = await Promise.allSettled([
+    listAllPatientsForAssignedBranch({ branchId }),
+    listRemoteAppointments({ clinicId: activeMembership.clinic_id, branchId, limit: 2000 }),
+    ...['inventory','treatment','finance','labs','prices','suppliers','settings','branches','audit'].map(module =>
+      listRecordsForAssignedBranch({ branchId, module, limit: 2000 })
+    )
+  ]);
+  const values = tasks.map(item => item.status === 'fulfilled' ? item.value : null);
+  const errors = tasks.map((item,index) => item.status === 'rejected' ? {
+    module: ['patients','appointments','inventory','treatment','finance','labs','prices','suppliers','settings','branches','audit'][index],
+    message: item.reason?.message || 'verification_read_failed'
+  } : null).filter(Boolean);
+  const counts = values.map(value => Array.isArray(value) ? value.length : null);
+  if (counts[0] != null) add('patients', (localPatients.patients || []).length, counts[0]);
+  if (counts[1] != null) add('appointments', (localAppointments.appointments || []).length, counts[1]);
+  const recordModules = ['inventory','treatment','finance','labs','prices','suppliers','settings','branches','audit'];
+  const localCounts = {
+    inventory: (localInventory.items || []).filter(item => item?.id).length,
+    treatment: (localPatients.patients || []).filter(patient => patient?.no).length,
+    finance: (localPatients.patients || []).filter(patient => patient?.no).length,
+    labs: (localPatients.labCases || []).filter(item => item?.no).length,
+    prices: 1,
+    suppliers: 1,
+    settings: 1,
+    branches: 1,
+    audit: (localAux.audit.payload?.items || []).filter(item => item?.id).length
+  };
+  for (let i = 0; i < recordModules.length; i++) {
+    const module = recordModules[i], cloudCount = counts[i + 2];
+    if (cloudCount == null) continue;
+    const aux = localAux[module];
+    const localCount = aux ? (aux.isEmpty ? 0 : (module === 'audit' ? localCounts.audit : localCounts[module])) : localCounts[module];
+    add(module, localCount, cloudCount);
+  }
+  const report = {
+    branchId, localBranchId, verifiedAt: new Date().toISOString(), modules, errors,
+    countMismatches: modules.filter(item => item.status === 'count_mismatch').length,
+    complete: errors.length === 0 && modules.length === 11 && modules.every(item => item.status === 'count_match')
+  };
+  window.dispatchEvent(new CustomEvent('dcos:cloud-migration-verified', { detail: report }));
+  if (showStatus) {
+    const mismatches = report.countMismatches;
+    status('فحص النقل السحابي: ' + modules.length + ' أقسام تمت مراجعتها، ' +
+      (mismatches ? mismatches + ' أقسام بها اختلاف في العدد' : 'الأعداد متطابقة') +
+      (errors.length ? '، ' + errors.length + ' أقسام تعذر فحصها' : '') +
+      '. تطابق الأعداد لا يغني عن مراجعة عينة من البيانات.');
+  }
+  return report;
+}
 function queueAutomaticCloudSync(reason = 'local_change') {
   if (!activeMembership || !navigator.onLine) return;
   const branchMap = getSavedBranchMap();

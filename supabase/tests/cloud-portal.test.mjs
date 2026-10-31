@@ -59,6 +59,15 @@ assert.ok(portal.includes('cloudPayloadEqual(a,b)'), 'Patient and lab payloads m
 assert.ok(portal.includes('function appointmentPayloadEqual') && portal.includes('cloudPayloadEqual(a?.[key], b?.[key])'), 'Appointment conflict checks must use canonical field comparisons');
 assert.ok(portal.includes('function inventoryPayloadEqual(a,b) { return cloudPayloadEqual(a,b); }'), 'Inventory conflict checks must use canonical payload comparisons');
 assert.ok(portal.includes('syncClinicalFinanceAndLabsForBranch'), 'Clinical, finance and lab sync must be grouped for manual and automatic use');
+assert.ok(portal.includes('function syncAllCloudModulesForBranch'), 'All supported cloud modules must share one automatic sync coordinator');
+assert.ok(portal.includes("window.addEventListener('dcos:local-data-saved'"), 'Every local save must queue automatic cloud synchronization');
+assert.ok(portal.includes("window.addEventListener('online'"), 'Offline changes must resume synchronization when connectivity returns');
+assert.ok(portal.includes("document.addEventListener('visibilitychange'"), 'Returning to the app must resume pending cloud synchronization');
+assert.ok(portal.includes("table: 'clinic_records'"), 'Realtime updates must watch all branch cloud records, not appointments only');
+assert.ok(portal.includes('loadPatients();') && portal.includes("new CustomEvent('dcos:cloud-user-ready')"), 'Cloud login must automatically load patients and start realtime sync');
+assert.ok(index.includes('function save(skipCloudSync=false)'), 'Local saves must notify the cloud sync coordinator');
+assert.ok(index.includes("new CustomEvent('dcos:local-data-saved')"), 'Local app changes must emit the automatic sync event');
+assert.ok(index.includes('save(true);'), 'Applying remote changes must not recursively trigger another local sync cycle');
 assert.ok((portal.match(/syncClinicalFinanceAndLabsForBranch\(branchId, false\)/g) || []).length >= 2, 'Patient import links and patient refresh must re-run clinical, finance and lab sync');
 assert.ok(portal.includes("for (const module of ['treatment','finance'])"), 'Patient treatment and finance must use separate cloud modules');
 assert.ok(index.includes('dcos:get-local-cloud-data') && index.includes('cloudModules'), 'The app must expose branch-scoped clinical and financial snapshots');

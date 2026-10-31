@@ -175,6 +175,8 @@ $('dcos-sb-logout').addEventListener('click', async () => {
   try {
     await signOutSupabase();
     if (patientRealtimeUnsubscribe) { patientRealtimeUnsubscribe(); patientRealtimeUnsubscribe = null; }
+    for (const channel of appointmentRealtimeChannels.values()) getSupabaseClient().removeChannel(channel);
+    appointmentRealtimeChannels.clear();
     $('dcos-cloud-workspace').hidden = true;
     $('dcos-cloud-workspace').innerHTML = '';
     $('dcos-sb-logout').hidden = true;

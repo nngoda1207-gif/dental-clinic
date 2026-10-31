@@ -24,6 +24,6 @@ assert.ok(portal.includes("body: { action: 'list_staff' }"), 'owner UI must list
 assert.ok(portal.includes("action: 'manage_permissions'"), 'owner UI must save cloud permissions');
 assert.ok(portal.includes('permissions: Array.isArray(membership.permissions)'), 'cloud login must return saved membership permissions');
 assert.ok(app.includes("invmgr:'مسؤول المخزون'"), 'inventory manager must have a visible role label');
-assert.ok(app.includes("invmgr:['im','iv']"), 'inventory manager UI gates must remain explicit');
+assert.ok(app.includes("invmgr:['pv','im','iv']"), 'inventory manager UI gates must remain explicit');
 assert.ok(app.includes('const role=identity.role;'), 'login must not downgrade inventory managers to read-only');
 console.log('Cloud staff permission mapping checks passed.');

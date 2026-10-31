@@ -64,6 +64,9 @@ assert.ok(portal.includes("new CustomEvent('dcos:cloud-sync-complete'"), 'Cloud 
 assert.ok(portal.includes('pendingPatientWrites'), 'Cloud sync completion must expose pending patient writes');
 assert.ok(portal.includes('async function verifyCloudMigrationForBranch'), 'Migration verification must compare local and cloud module counts without writing data');
 assert.ok(portal.includes("status: local === cloud ? 'count_match' : 'count_mismatch'"), 'Migration verification must expose explicit count mismatches');
+assert.ok(portal.includes("verificationLevel: 'count_only'") && portal.includes('contentVerified: false'), 'Count equality must never be presented as full content verification');
+assert.ok(portal.includes('requiresContentVerification: true') && portal.includes('complete: false'), 'Migration must remain incomplete until record identities and contents are checked');
+assert.ok(portal.includes('truncatedModules'), 'Migration verification must flag remote lists that reach the 2,000-record cap');
 assert.ok(portal.includes("new CustomEvent('dcos:cloud-migration-verified'"), 'Migration verification must publish a structured report');
 assert.ok(portal.includes("await verifyCloudMigrationForBranch(branch.id, true)"), 'Migration verification must run after the initial cloud load');
 assert.ok(portal.includes("reason === 'branch_mapping_approved'"), 'Migration verification must run after the initial import and branch mapping');

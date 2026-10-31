@@ -48,10 +48,15 @@ jobs:
           node --input-type=module --check < supabase/cloud-record-sync-service.js
           node --input-type=module --check < supabase/patient-repository.js
           node --input-type=module --check < supabase/patient-sync-service.js
+          node --input-type=module --check < supabase/appointment-mapping.js
+          node --input-type=module --check < supabase/appointment-repository.js
+          node --input-type=module --check < supabase/appointment-sync-service.js
           node supabase/tests/cloud-record-sync-service.test.mjs
           node supabase/tests/cloud-staff-permissions.test.mjs
           node supabase/tests/patient-repository.test.mjs
           node supabase/tests/cloud-portal.test.mjs
+          node supabase/tests/appointment-mapping.test.mjs
+          node supabase/tests/appointment-repository.test.mjs
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Bootstrap Supabase Auth compatibility
@@ -63,9 +68,12 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/023_username_accounts.sql
           psql -v ON_ERROR_STOP=1 -f supabase/024_private_rls_helpers.sql
           psql -v ON_ERROR_STOP=1 -f supabase/025_generic_clinic_records.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/026_server_guarded_appointments.sql
       - name: Verify staff invitation redemption and single-use tokens
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/staff-invitations.test.sql
       - name: Verify generic cloud records schema
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/generic-clinic-records.test.sql
       - name: Verify module and branch RLS isolation
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/generic-clinic-records-rls.test.sql
+      - name: Verify guarded appointment writes and overlap prevention
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/appointment-records.test.sql

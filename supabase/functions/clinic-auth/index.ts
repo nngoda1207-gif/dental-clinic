@@ -66,6 +66,39 @@ Deno.serve(async req=>{
    if(updateError)throw updateError;
    return json({ok:true,user_id:userId,permissions});
   }
+  if(action==="list_dentists"){
+   const token=(req.headers.get("Authorization")||"").replace(/^Bearer /,"");
+   const {data:caller,error:authError}=await admin.auth.getUser(token);
+   if(authError||!caller.user)return json({error:"AUTH_REQUIRED"},401);
+   const {data:members,error:memberError}=await admin.from("clinic_members").select("clinic_id,role").eq("user_id",caller.user.id).eq("active",true);
+   if(memberError)throw memberError;
+   if((members||[]).length!==1)return json({error:"CLINIC_MEMBERSHIP_REQUIRED"},403);
+   const membership=members[0];
+   let branchIds:string[]=[];
+   if(membership.role==="owner"){
+    const {data:branches,error:e1}=await admin.from("clinic_branches").select("id").eq("clinic_id",membership.clinic_id).eq("active",true);
+    if(e1)throw e1;branchIds=(branches||[]).map(x=>x.id);
+   }else{
+    const {data:assignments,error:e1}=await admin.from("clinic_member_branches").select("branch_id").eq("clinic_id",membership.clinic_id).eq("user_id",caller.user.id);
+    if(e1)throw e1;branchIds=[...new Set((assignments||[]).map(x=>x.branch_id))];
+   }
+   if(!branchIds.length)return json({ok:true,dentists:[]});
+   const {data:assignments,error:e2}=await admin.from("clinic_member_branches").select("user_id,branch_id").eq("clinic_id",membership.clinic_id).in("branch_id",branchIds);
+   if(e2)throw e2;
+   const assigned=(assignments||[]).reduce((acc,x)=>{(acc[x.user_id]??=[]).push(x.branch_id);return acc;},{});
+   const ids=Object.keys(assigned);
+   if(!ids.length)return json({ok:true,dentists:[]});
+   const {data:staff,error:e3}=await admin.from("clinic_members").select("user_id,role,active").eq("clinic_id",membership.clinic_id).eq("active",true).in("user_id",ids).in("role",["owner","manager","dentist"]);
+   if(e3)throw e3;
+   const staffIds=(staff||[]).map(x=>x.user_id);
+   const {data:names,error:e4}=staffIds.length?await admin.from("clinic_usernames").select("user_id,username").in("user_id",staffIds):{data:[],error:null};
+   if(e4)throw e4;
+   return json({ok:true,dentists:(staff||[]).map(m=>({
+    user_id:m.user_id,role:m.role,
+    username:(names||[]).find(n=>n.user_id===m.user_id)?.username||"",
+    branch_ids:assigned[m.user_id]||[]
+   })).filter(m=>m.username)});
+  }
   if(action==="provision_clinic"){
    const expected=Deno.env.get("CLINIC_PROVISIONING_KEY")||"",supplied=(req.headers.get("Authorization")||"").startsWith("Bearer ")?(req.headers.get("Authorization")||"").slice(7):(req.headers.get("Authorization")||"");
    if(!expected)return json({error:"PROVISIONING_NOT_CONFIGURED"},503);

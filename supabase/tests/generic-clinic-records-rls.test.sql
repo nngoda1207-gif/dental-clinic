@@ -75,7 +75,7 @@ reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub','11000000-0000-4000-8000-000000000003',false);
 select set_config('request.jwt.claims','{"sub":"11000000-0000-4000-8000-000000000003","email":"cloud-appointments@test.invalid"}',false);
-do $
+do $$
 declare appointment_rows integer; patient_rows integer;
 begin
   select count(*) into appointment_rows from public.clinic_records where module='appointments';
@@ -83,6 +83,6 @@ begin
   if appointment_rows <> 1 then raise exception 'Appointment write permission must authorize appointment-module records'; end if;
   if patient_rows <> 0 then raise exception 'Appointment-only permission must not grant patient access'; end if;
 end;
-$;
+$$;
 reset role;
 select 'generic clinic record RLS tests passed' as result;

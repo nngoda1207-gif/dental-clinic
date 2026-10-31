@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dental Clinic OS — Supabase connection check</title>
+<style>
+:root{color-scheme:light dark;font:16px/1.5 system-ui,sans-serif}body{max-width:760px;margin:32px auto;padding:0 16px}label{display:block;margin:14px 0 5px;font-weight:600}input{box-sizing:border-box;width:100%;padding:11px;border:1px solid #888;border-radius:8px;font:inherit}button{margin:16px 8px 0 0;padding:10px 15px;border:0;border-radius:8px;font:inherit;cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:14px;border:1px solid #888;border-radius:8px;min-height:100px}.note{opacity:.85;font-size:.93rem}
+</style>
+</head>
+<body>
+<h1>Supabase connection check</h1>
+<p>This standalone diagnostic checks the public project endpoint, signs in a test user, and reads that user's active clinic membership. It does not create, update, or delete records and does not modify the existing app.</p>
+<p class="note"><strong>Use only a test account and synthetic data.</strong> Do not enter a service-role/secret key. The URL and publishable key are used in this browser to contact only the Supabase project you enter. Do not host this page publicly with credentials prefilled.</p>
+<form id="form">
+<label for="url">Supabase project URL</label>
+<input id="url" type="url" placeholder="https://your-project.supabase.co" required autocomplete="url">
+<label for="key">Publishable (or legacy anon) key</label>
+<input id="key" type="password" required autocomplete="off">
+<label for="email">Test user's email</label>
+<input id="email" type="email" required autocomplete="username">
+<label for="password">Test user's password</label>
+<input id="password" type="password" required autocomplete="current-password">
+<button type="submit" id="run">Run checks</button>
+<button type="button" id="clear">Clear results</button>
+</form>
+<h2>Results</h2>
+<pre id="output" aria-live="polite">Ready. No connection has been made.</pre>
+<script type="module">
+const form=document.querySelector('#form'), output=document.querySelector('#output');
+const run=document.querySelector('#run');
+const log=(...parts)=>{output.textContent+=parts.join(' ')+'\n';};
+document.querySelector('#clear').addEventListener('click',()=>{output.textContent='Ready. No connection has been made.';});
+form.addEventListener('submit',async event=>{
+ event.preventDefault(); run.disabled=true; output.textContent='';
+ let client;
+ try {
+  const url=document.querySelector('#url').value.trim().replace(/\/$/,'');
+  const key=document.querySelector('#key').value.trim();
+  const email=document.querySelector('#email').value.trim();
+  const password=document.querySelector('#password').value;
+  if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) throw new Error('Project URL must look like https://your-project.supabase.co');
+  log('1. Loading Supabase client…');
+  const {createClient}=await import('https://esm.sh/@supabase/supabase-js@2');
+  client=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+  log('2. Checking project Auth endpoint…');
+  const health=await fetch(url+'/auth/v1/health',{headers:{apikey:key}});
+  log('Auth endpoint HTTP status:',String(health.status));
+  if(!health.ok) throw new Error('Auth endpoint check failed. Verify project URL/key and Auth service availability.');
+  log('3. Signing in test user…');
+  const {data,error}=await client.auth.signInWithPassword({email,password});
+  if(error) throw error;
+  if(!data.user) throw new Error('Sign-in returned no user.');
+  log('Sign-in succeeded. User ID:',data.user.id);
+  log('4. Reading active clinic membership under RLS…');
+  const {data:members,error:memberError}=await client.from('clinic_members').select('clinic_id,user_id,role,active,created_at').eq('user_id',data.user.id).eq('active',true).limit(3);
+  if(memberError) throw memberError;
+  if(!members?.length) log('No active membership found. This account may need owner provisioning or an active clinic_members row.');
+  else if(members.length>1) log('Multiple active memberships found. App must show a clinic-selection step before proceeding.');
+  else log('One active membership found. Role:',members[0].role,'Clinic ID:',members[0].clinic_id);
+  log('5. Signing out…');
+  const {error:signOutError}=await client.auth.signOut();
+  if(signOutError) throw signOutError;
+  log('PASS: Auth and membership read completed. No clinic data was changed.');
+ } catch(error) {
+  log('FAIL:',error?.message||String(error));
+  log('No clinic data writes are performed by this diagnostic.');
+  if(client) {
+   try {
+    const {error:cleanupError}=await client.auth.signOut();
+    if(cleanupError) log('Cleanup sign-out warning:',cleanupError.message);
+    else log('Cleanup sign-out completed.');
+   } catch(cleanupError) {
+    log('Cleanup sign-out warning:',cleanupError?.message||String(cleanupError));
+   }
+  }
+ } finally {
+  run.disabled=false;
+ }
+});
+</script>
+</body>
+</html>

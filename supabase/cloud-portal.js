@@ -206,12 +206,71 @@ async function loadWorkspace() {
     staffBox.innerHTML = '<h3>إنشاء حساب موظف</h3><p class="muted">أنشئ اسم مستخدم وكلمة مرور لكل فرد في الفريق، وحدد وظيفته والفرع المسموح له. لا نطلب بريدًا إلكترونيًا.</p><label>اسم المستخدم<input id="dcos-staff-username" type="text" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="مثال: nurse01"></label><label>كلمة المرور<input id="dcos-staff-password" type="password" minlength="8" autocomplete="new-password" placeholder="8 أحرف على الأقل"></label><label>الوظيفة<select id="dcos-staff-role"><option value="nurse">تمريض</option><option value="dentist">طبيب</option><option value="reception">استقبال</option><option value="accountant">حسابات</option><option value="manager">مدير</option><option value="invmgr">مسؤول مخزون</option><option value="readonly">قراءة فقط</option></select></label><label>الفرع<select id="dcos-staff-branch">' + branches.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(b.name) + '</option>').join('') + '</select></label><button class="primary" id="dcos-create-staff-account" type="button">إنشاء حساب الموظف</button><p id="dcos-staff-create-status" class="muted" role="status"></p>';
     host.prepend(staffBox);
     $('dcos-create-staff-account').addEventListener('click', createStaffAccount);
+    const permissionsBox = el('section', { class: 'cloud-row', id: 'dcos-staff-permissions' });
+    permissionsBox.innerHTML = '<h3>إدارة صلاحيات الموظفين</h3><p class="muted">راجع صلاحيات كل حساب على حدة. التغييرات تطبق من قاعدة البيانات، وليس من واجهة الهاتف فقط.</p><p class="muted" id="dcos-staff-permissions-status">جارٍ تحميل حسابات الفريق…</p>';
+    host.append(permissionsBox);
+    loadStaffPermissions(permissionsBox);
   }
   $('dcos-load-patients').addEventListener('click', loadPatients);
   $('dcos-cloud-branch').addEventListener('change', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
   flushPatientSyncQueue();
+}
+
+const STAFF_PERMISSION_OPTIONS = [
+  ['pv','عرض المرضى'],['pa','إضافة المرضى'],['pe','تعديل المرضى'],
+  ['pi','عرض المواعيد'],['aw','إدارة المواعيد'],
+  ['pr','عرض الأسعار'],['pl','تعديل الأسعار'],
+  ['ex','المصروفات'],['fv','المالية والمدفوعات'],['lv','المعمل'],
+  ['im','الموردون وإدارة المخزون'],['iv','عرض المخزون'],
+  ['rp','التقارير'],['br','الفروع'],['au','سجل التدقيق'],
+  ['cl','خطط العلاج'],['mv','الزيارات والوصفات']
+];
+
+async function loadStaffPermissions(host) {
+  if (!host) return;
+  const output = host.querySelector('#dcos-staff-permissions-status');
+  try {
+    if (output) output.textContent = 'جارٍ تحميل حسابات الفريق…';
+    const { data, error } = await getSupabaseClient().functions.invoke('clinic-auth', { body: { action: 'list_staff' } });
+    if (error) throw error;
+    if (!data?.ok || !Array.isArray(data.staff)) throw new Error(data?.error || 'تعذر تحميل حسابات الموظفين.');
+    host.querySelectorAll('.dcos-staff-permission-row').forEach(node => node.remove());
+    if (!data.staff.length) {
+      if (output) output.textContent = 'لا توجد حسابات موظفين إضافية حتى الآن.';
+      return;
+    }
+    for (const member of data.staff) {
+      const row = el('div', { class: 'cloud-row dcos-staff-permission-row' });
+      const selected = new Set(Array.isArray(member.permissions) ? member.permissions : []);
+      row.innerHTML = '<b>' + escapeHtml(member.username || member.user_id) + '</b> · ' + escapeHtml(member.role) +
+        '<div class="muted" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:4px;margin:8px 0">' +
+        STAFF_PERMISSION_OPTIONS.map(([code,label]) => '<label style="display:flex;align-items:center;gap:6px"><input type="checkbox" value="' + escapeAttr(code) + '" ' + (selected.has(code) ? 'checked' : '') + '>' + escapeHtml(label) + '</label>').join('') +
+        '</div><button class="primary" type="button">حفظ الصلاحيات</button><span class="muted" role="status"></span>';
+      const saveButton = row.querySelector('button');
+      const result = row.querySelector('span[role="status"]');
+      saveButton.addEventListener('click', async () => {
+        try {
+          saveButton.disabled = true;
+          result.textContent = 'جارٍ الحفظ…';
+          const permissions = [...row.querySelectorAll('input[type="checkbox"]:checked')].map(input => input.value);
+          const response = await getSupabaseClient().functions.invoke('clinic-auth', {
+            body: { action: 'manage_permissions', user_id: member.user_id, permissions }
+          });
+          if (response.error) throw response.error;
+          if (!response.data?.ok) throw new Error(response.data?.error || 'تعذر حفظ الصلاحيات.');
+          result.textContent = 'تم حفظ ' + permissions.length + ' صلاحية.';
+        } catch (error) {
+          result.textContent = friendlyCloudError(error, 'تعذر حفظ الصلاحيات.');
+        } finally { saveButton.disabled = false; }
+      });
+      host.append(row);
+    }
+    if (output) output.textContent = 'تم تحميل ' + data.staff.length + ' حسابات. راجع صلاحيات كل موظف ثم احفظ التعديلات.';
+  } catch (error) {
+    if (output) output.textContent = friendlyCloudError(error, 'تعذر تحميل صلاحيات الموظفين.');
+  }
 }
 
 async function createStaffAccount() {
@@ -224,6 +283,7 @@ async function createStaffAccount() {
   $('dcos-staff-password').value='';
   output.textContent='تم إنشاء حساب '+created.username+' بوظيفة '+created.role+'. سلّم الموظف بيانات الدخول بشكل آمن.';
   status('تم إنشاء حساب الموظف وربطه بفرع العيادة.');
+  if ($('dcos-staff-permissions')) await loadStaffPermissions($('dcos-staff-permissions'));
  }catch(e){
   const m=String(e?.message||'');
   output.textContent=m.includes('OWNER_REQUIRED')?'إنشاء حسابات الفريق متاح لمالك العيادة فقط.':m.includes('INVALID_USERNAME')?'اسم المستخدم غير صالح أو مستخدم بالفعل.':m.includes('INVALID_PASSWORD')?'كلمة المرور يجب أن تكون من 8 إلى 128 حرفًا.':m.includes('BRANCH_NOT_AVAILABLE')?'الفرع المحدد غير متاح لهذه العيادة.':m||'تعذر إنشاء الحساب.';
@@ -506,7 +566,7 @@ window.DCOS_CLOUD_AUTH = {
       activeBranches = branches;
       const savedMap = getSavedBranchMap();
       const mappedBranches = branches.map(branch => ({ ...branch, localBranchId: Object.keys(savedMap).find(localId => savedMap[localId] === branch.id) || '' }));
-      return { userId: result.session.user.id, role: membership.role, clinicId: membership.clinic_id, branches: mappedBranches };
+      return { userId: result.session.user.id, role: membership.role, permissions: Array.isArray(membership.permissions) ? membership.permissions : [], clinicId: membership.clinic_id, branches: mappedBranches };
     } catch (error) {
       await signOutSupabase().catch(() => {});
       throw error;

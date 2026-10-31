@@ -77,6 +77,35 @@ const age=d=>{if(!d)return'';const a=new Date(d),n=new Date();let y=n.getFullYea
 let D=null,ME=null,view='dash',sel=null,tab='ov',q='',st='active',lim=25,br='all';
 try{const r=localStorage.getItem('dcos1');if(r)D=JSON.parse(r)}catch(e){}
 function save(){try{localStorage.setItem('dcos1',JSON.stringify(D))}catch(e){toast('تعذر الحفظ في المتصفح')}}
+window.addEventListener('dcos:cloud-bootstrap',event=>{
+  const detail=event.detail||{};
+  const branches=Array.isArray(detail.branches)?detail.branches:[];
+  if(D&&Array.isArray(D.branches)&&D.branches.length)return; // never replace an existing local clinic
+  if(!branches.length)return;
+  const localBranches=branches.map(branch=>({
+    id:String(branch.id),name:String(branch.name||'الفرع'),
+    address:branch.address||'',phone:branch.phone||'',hours:branch.hours||''
+  }));
+  const users=(Array.isArray(detail.dentists)?detail.dentists:[]).map(staff=>{
+    const role=['owner','manager','dentist'].includes(staff.role)?staff.role:'dentist';
+    return {
+      id:String(staff.user_id),name:String(staff.username||staff.user_id),
+      user:String(staff.username||'').toLowerCase(),role,
+      branches:(staff.branch_ids||[]).map(String).filter(id=>localBranches.some(branch=>branch.id===id)),
+      permissions:[],active:true,cloud:true
+    };
+  });
+  D={
+    v:1,seq:0,
+    settings:{clinic:String(detail.clinicName||'عيادة الأسنان'),ph:''},
+    branches:localBranches,users,patients:[],audit:[]
+  };
+  save();
+  view='dash';sel=null;br='all';
+  render();
+  toast('تم تحميل بيانات العيادة والفروع من السحابة. سجّل الدخول بحسابك.');
+});
+
 
 const CLOUD_PATIENT_FIELDS=['name','en','gov','so','tg','ph','ph2','em','dob','g','ad','ec','st'];
 function cloudPatientSnapshot(p){const x={};for(const k of CLOUD_PATIENT_FIELDS)x[k]=k==='tg'?(Array.isArray(p?.[k])?p[k]:[]):(p?.[k]??'');return x}

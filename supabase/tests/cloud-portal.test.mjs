@@ -62,6 +62,8 @@ assert.ok(portal.includes('syncClinicalFinanceAndLabsForBranch'), 'Clinical, fin
 assert.ok(portal.includes('function syncAllCloudModulesForBranch'), 'All supported cloud modules must share one automatic sync coordinator');
 assert.ok(portal.includes("window.addEventListener('dcos:local-data-saved'"), 'Every local save must queue automatic cloud synchronization');
 assert.ok(portal.includes("window.addEventListener('online'"), 'Offline changes must resume synchronization when connectivity returns');
+assert.ok(portal.includes('cloudAutoSyncAttempts') && portal.includes('[2000, 5000, 15000]'), 'Transient sync failures must use bounded automatic retries');
+assert.ok(portal.includes('appointmentSyncQueuedBranches'), 'Queued appointment sync must preserve every affected branch');
 assert.ok(portal.includes("document.addEventListener('visibilitychange'"), 'Returning to the app must resume pending cloud synchronization');
 assert.ok(portal.includes("table: 'clinic_records'"), 'Realtime updates must watch all branch cloud records, not appointments only');
 assert.ok(portal.includes('loadPatients();') && portal.includes("new CustomEvent('dcos:cloud-user-ready')"), 'Cloud login must automatically load patients and start realtime sync');

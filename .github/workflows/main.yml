@@ -22,8 +22,11 @@ jobs:
       - name: Validate JavaScript modules and app script
         run: |
           set -e
-          for file in supabase/*.js scripts/*.js; do
-            [ -f "$file" ] && node --check "$file"
+          for file in supabase/*.js; do
+            node --input-type=module --check < "$file"
+          done
+          for file in scripts/*.js; do
+            node --check "$file"
           done
           python3 - <<'PY'
           import re

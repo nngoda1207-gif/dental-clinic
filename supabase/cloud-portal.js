@@ -476,13 +476,15 @@ function getSavedBranchConfig() {
   return null;
 }
 function getSavedBranchMap() {
-  const saved = getSavedBranchConfig();
-  if (saved?.clinicId === activeMembership?.clinic_id) return saved.map;
+  const clinicId = activeMembership?.clinic_id;
+  const merged = {};
   try {
     const view = JSON.parse(localStorage.getItem(BRANCH_VIEW_MAP_KEY) || 'null');
-    if (view?.clinicId === activeMembership?.clinic_id && view?.map && typeof view.map === 'object') return view.map;
+    if (view?.clinicId === clinicId && view?.map && typeof view.map === 'object') Object.assign(merged, view.map);
   } catch {}
-  return {};
+  const saved = getSavedBranchConfig();
+  if (saved?.clinicId === clinicId && saved?.map && typeof saved.map === 'object') Object.assign(merged, saved.map);
+  return merged;
 }
 function hasLocalClinicState() {
   try {

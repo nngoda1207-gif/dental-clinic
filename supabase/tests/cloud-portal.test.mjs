@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const portal = readFileSync(new URL('../cloud-portal.js', import.meta.url), 'utf8');
 const index = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+const auth = readFileSync(new URL('../auth-adapter.js', import.meta.url), 'utf8');
 assert.ok(index.includes('./supabase/cloud-portal.js'), 'App must load the isolated cloud portal');
 assert.ok(portal.includes('signInWithIdentity'), 'Cloud portal must route sign-in through the identity adapter');
 assert.ok(auth.includes('signInWithPassword'), 'Email sign-in must use Supabase Auth password authentication');

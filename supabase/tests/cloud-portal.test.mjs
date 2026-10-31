@@ -63,6 +63,13 @@ assert.ok(portal.includes('function syncAllCloudModulesForBranch'), 'All support
 assert.ok(portal.includes("new CustomEvent('dcos:cloud-sync-complete'"), 'Cloud sync must publish a structured completion report for migration verification');
 assert.ok(portal.includes('pendingPatientWrites'), 'Cloud sync completion must expose pending patient writes');
 assert.ok(portal.includes('patientWritesBlocked'), 'Cloud sync completion must expose blocked patient writes');
+assert.ok(portal.includes('conflictCount'), 'Cloud sync completion must report unresolved conflicts instead of treating partial sync as success');
+assert.ok(portal.includes('return { synced, blocked, pending: finalQueueByKey.size, conflicts: conflicts.length };'), 'Patient outbox flush must report synced, blocked, pending and unresolved conflict counts');
+assert.ok(portal.includes('if (Array.isArray(value.conflicts))'), 'Sync coordinator must safely handle both detailed conflict arrays and summarized conflict counts');
+
+assert.ok(portal.includes("new CustomEvent('dcos:cloud-sync-complete'"), 'Cloud sync must publish a structured completion report for migration verification');
+assert.ok(portal.includes('pendingPatientWrites'), 'Cloud sync completion must expose pending patient writes');
+assert.ok(portal.includes('patientWritesBlocked'), 'Cloud sync completion must expose blocked patient writes');
 assert.ok(portal.includes('return { synced, blocked, pending: finalQueueByKey.size, conflicts: conflicts.length };'), 'Patient outbox flush must report synced, blocked, pending and unresolved conflict counts');
 
 assert.ok(portal.includes('function syncAuxModulesForBranch'), 'Prices, suppliers, settings and branch configuration must be included in cloud sync');

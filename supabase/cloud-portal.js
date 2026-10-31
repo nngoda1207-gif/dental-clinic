@@ -176,20 +176,8 @@ async function loadWorkspace() {
   host.innerHTML = '<p class="muted">جارٍ تحميل صلاحياتك والفروع المتاحة…</p>';
   const result = await getCurrentClinicMembership();
   if (!result) {
-    host.innerHTML = `<section class="cloud-row"><h3>انضمام مباشر برابط الدعوة</h3>
-      <p class="muted">افتح الرابط الذي أرسله صاحب العيادة، وسجّل أو ادخل بالإيميل نفسه الذي استلم الدعوة. سيتم التحقق من الإيميل وصلاحية الرابط قبل الانضمام.</p>
-      <label>كود الدعوة<input id="dcos-staff-invite-code" autocomplete="off" spellcheck="false" placeholder="الصق كود الدعوة هنا"></label>
-      <button class="primary" id="dcos-redeem-staff-invite" type="button">قبول الدعوة والانضمام</button></section>
-      <details class="cloud-row" id="dcos-owner-setup"><summary><b>أنا صاحب العيادة وأجهّزها لأول مرة</b></summary>
-      <p class="muted">استخدم هذا القسم مرة واحدة فقط بحساب المالك. لا تستخدمه لحسابات الموظفين.</p>
-      <label>اسم العيادة<input id="dcos-new-clinic" maxlength="160"></label>
-      <label>اسم الفرع الرئيسي<input id="dcos-new-branch" maxlength="160" value="الفرع الرئيسي"></label>
-      <button class="primary" id="dcos-create-clinic" type="button">إنشاء العيادة والفرع</button></details>`;
-    $('dcos-create-clinic').addEventListener('click', createClinic);
-    $('dcos-redeem-staff-invite').addEventListener('click', redeemStaffInvite);
-    const inviteFromLink = new URLSearchParams(location.search).get('invite');
-    if (inviteFromLink) $('dcos-staff-invite-code').value = inviteFromLink;
-    status(inviteFromLink ? 'تم فتح رابط الدعوة. راجع البريد المستخدم ثم اضغط قبول الدعوة والانضمام.' : 'الحساب غير مرتبط بعيادة بعد. اختر الانضمام بدعوة أو إعداد العيادة إذا كنت المالك.');
+    host.innerHTML = '<section class="cloud-row"><h3>الحساب غير مرتبط بعيادة</h3><p class="muted">راجع مسؤول النظام للتأكد من إنشاء حساب العيادة وربطه بالعيادة الصحيحة. إنشاء الحسابات الأساسية يتم بواسطة مسؤول النظام فقط.</p></section>';
+    status('تم تسجيل الدخول، لكن الحساب غير مرتبط بعضوية عيادة نشطة.');
     return;
   }
   const membership = result.membership;

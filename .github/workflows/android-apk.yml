@@ -10,9 +10,10 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'capacitor.config.json'
+      - 'scripts/**'
       - '.github/workflows/android-apk.yml'
   push:
-    branches: [feature/supabase-shared-clinic, fix/persistent-cloud-account]
+    branches: [feature/supabase-shared-clinic, fix/persistent-cloud-account, feat/cloud-migration-verification-v2]
     paths:
       - 'index.html'
       - 'supabase/**'

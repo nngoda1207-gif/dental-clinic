@@ -89,6 +89,22 @@ document.body.append(launch, panel);
 
 const $ = id => document.getElementById(id);
 const status = message => { $('dcos-cloud-status').textContent = message || ''; };
+window.addEventListener('dcos:cloud-sync-complete', event => {
+  const report = event.detail || {};
+  const modules = Array.isArray(report.modules) ? report.modules : [];
+  const lines = modules.map(item => {
+    const parts = [item.module + ': ' + (Number(item.synced) || 0) + ' سجل'];
+    if (Number(item.conflicts)) parts.push(Number(item.conflicts) + ' تعارض');
+    if (Number(item.pending)) parts.push(Number(item.pending) + ' معلّق');
+    if (Array.isArray(item.failures) && item.failures.length) parts.push(item.failures.length + ' خطأ');
+    return parts.join('، ');
+  });
+  const summary = 'اكتملت دورة المزامنة — ' + lines.join(' | ') +
+    (report.failures?.length ? ' | إجمالي الأخطاء: ' + report.failures.length : '') +
+    (report.pendingPatientWrites ? ' | عمليات مرضى معلّقة: ' + report.pendingPatientWrites : '');
+  status(summary);
+});
+
 function friendlyCloudError(error, fallback) {
   const message = String(error?.message || error || '');
   if (/Supabase URL and publishable key are required/i.test(message)) return 'إعداد الاتصال السحابي غير مكتمل. أدخل رابط المشروع والمفتاح العام أو استخدم نسخة التطبيق المجهزة بالإعدادات.';
@@ -964,7 +980,7 @@ async function syncAllCloudModulesForBranch(branchId, showStatus = false) {
   if (existing) { existing.queued = true; return existing.promise; }
   const state = { queued: false, promise: null };
   state.promise = (async () => {
-    let last = [];
+    let last = [], patientQueue = { synced: 0, blocked: 0, pending: 0, conflicts: 0 };
     do {
       state.queued = false;
       last = await Promise.allSettled([
@@ -973,23 +989,133 @@ async function syncAllCloudModulesForBranch(branchId, showStatus = false) {
         syncClinicalFinanceAndLabsForBranch(branchId, false),
         syncAuxModulesForBranch(branchId)
       ]);
-      await flushPatientSyncQueue();
+      patientQueue = await flushPatientSyncQueue() || patientQueue;
     } while (state.queued && activeMembership && navigator.onLine);
+    const names = ['appointments', 'inventory', 'clinical_finance_labs', 'auxiliary'];
     const failures = last.filter(item => item.status === 'rejected').map(item => item.reason?.message || 'sync_error');
-    let synced = 0, conflicts = 0;
-    for (const item of last) {
-      if (item.status !== 'fulfilled') continue;
+    const conflicts = [];
+    const modules = [];
+    let synced = Number(patientQueue.synced || 0);
+    last.forEach((item, index) => {
+      if (item.status !== 'fulfilled') {
+        modules.push({ module: names[index], synced: 0, conflicts: 0, failures: [item.reason?.message || 'sync_error'] });
+        return;
+      }
       const value = item.value || {};
-      synced += Number(value.synced) || 0;
-      conflicts += Array.isArray(value.conflicts) ? value.conflicts.length : (Number(value.conflicts) || 0);
-      if (Array.isArray(value.failed)) failures.push(...value.failed.map(failure => failure.module + ': ' + (failure.error?.message || 'sync_error')));
+      const moduleConflicts = Array.isArray(value.conflicts) ? value.conflicts.length : (Number(value.conflicts) || 0);
+      const moduleFailures = (value.failed || []).map(failure => failure.module + ': ' + (failure.error?.message || 'sync_error'));
+      synced += Number(value.synced || 0);
+      if (Array.isArray(value.conflicts)) {
+        for (const conflict of value.conflicts) conflicts.push({ ...conflict, module: names[index] });
+      } else if (Number(value.conflicts) > 0) {
+        conflicts.push({ module: names[index], count: Number(value.conflicts) });
+      }
+      failures.push(...moduleFailures);
+      modules.push({ module: names[index], synced: Number(value.synced || 0), conflicts: moduleConflicts, failures: moduleFailures });
+    });
+    const patientConflicts = Math.max(Number(patientQueue.blocked || 0), Number(patientQueue.conflicts || 0));
+    modules.push({
+      module: 'patients', synced: Number(patientQueue.synced || 0),
+      conflicts: patientConflicts, pending: Number(patientQueue.pending || 0), failures: []
+    });
+    const conflictCount = conflicts.reduce((sum, item) => sum + Number(item.count || 1), 0) + patientConflicts;
+    const report = {
+      branchId, completedAt: new Date().toISOString(), synced, modules, conflicts, conflictCount, failures,
+      pendingPatientWrites: Number(patientQueue.pending || 0),
+      patientWritesBlocked: Number(patientQueue.blocked || 0)
+    };
+    window.dispatchEvent(new CustomEvent('dcos:cloud-sync-complete', { detail: report }));
+    if (showStatus) {
+      const parts = ['نتيجة المزامنة السحابية: ' + synced + ' سجلًا تمت مراجعته/مزامنته'];
+      if (conflictCount) parts.push(conflictCount + ' تعارضات/سجلات تحتاج مراجعة');
+      if (report.pendingPatientWrites) parts.push(report.pendingPatientWrites + ' عمليات مرضى معلّقة');
+      if (failures.length) parts.push(failures.length + ' أخطاء');
+      status(parts.join('، ') + '.');
     }
-    if (showStatus) status('نتيجة المزامنة السحابية: ' + synced + ' سجلًا تمت مراجعته/مزامنته، ' + conflicts + ' تعارضات تحتاج مراجعة، ' + failures.length + ' أخطاء.');
-    return { failures, synced, conflicts };
+    return report;
   })();
   cloudBranchSyncLocks.set(branchId, state);
   try { return await state.promise; }
   finally { if (cloudBranchSyncLocks.get(branchId) === state) cloudBranchSyncLocks.delete(branchId); }
+}
+async function verifyCloudMigrationForBranch(branchId, showStatus = true) {
+  if (!activeMembership || !branchId) return { skipped: true, reason: 'not_authenticated' };
+  const branchMap = getSavedBranchMap();
+  const localBranchId = Object.keys(branchMap).find(id => String(branchMap[id]) === String(branchId));
+  if (!localBranchId) return { skipped: true, reason: 'branch_not_mapped' };
+  const localPatients = getLocalPatientModuleSnapshot(localBranchId);
+  const localAppointments = getLocalAppointmentSnapshot(localBranchId);
+  const localInventory = getLocalInventorySnapshot(localBranchId);
+  const localAux = Object.fromEntries(['prices','suppliers','settings','branches','audit'].map(module => [module, getLocalAuxSnapshot(localBranchId, module)]));
+  const modules = [];
+  const add = (module, localCount, cloudCount) => {
+    const local = Math.max(0, Number(localCount) || 0);
+    const cloud = Math.max(0, Number(cloudCount) || 0);
+    modules.push({ module, localCount: local, cloudCount: cloud, difference: local - cloud, status: local === cloud ? 'count_match' : 'count_mismatch' });
+  };
+  const tasks = await Promise.allSettled([
+    listAllPatientsForAssignedBranch({ branchId }),
+    listRemoteAppointments({ clinicId: activeMembership.clinic_id, branchId, limit: 2000 }),
+    ...['inventory','treatment','finance','labs','prices','suppliers','settings','branches','audit'].map(module =>
+      listRecordsForAssignedBranch({ branchId, module, limit: 2000 })
+    )
+  ]);
+  const values = tasks.map(item => item.status === 'fulfilled' ? item.value : null);
+  const errors = tasks.map((item,index) => item.status === 'rejected' ? {
+    module: ['patients','appointments','inventory','treatment','finance','labs','prices','suppliers','settings','branches','audit'][index],
+    message: item.reason?.message || 'verification_read_failed'
+  } : null).filter(Boolean);
+  const counts = values.map(value => Array.isArray(value) ? value.length : null);
+  if (counts[0] != null) add('patients', (localPatients.patients || []).length, counts[0]);
+  if (counts[1] != null) add('appointments', (localAppointments.appointments || []).length, counts[1]);
+  const recordModules = ['inventory','treatment','finance','labs','prices','suppliers','settings','branches','audit'];
+  const localCounts = {
+    inventory: (localInventory.items || []).filter(item => item?.id).length,
+    treatment: (localPatients.patients || []).filter(patient => patient?.no).length,
+    finance: (localPatients.patients || []).filter(patient => patient?.no).length,
+    labs: (localPatients.labCases || []).filter(item => item?.no).length,
+    prices: 1,
+    suppliers: 1,
+    settings: 1,
+    branches: 1,
+    audit: (localAux.audit.payload?.items || []).filter(item => item?.id).length
+  };
+  for (let i = 0; i < recordModules.length; i++) {
+    const module = recordModules[i], cloudCount = counts[i + 2];
+    if (cloudCount == null) continue;
+    const localCount = module === 'audit' ? localCounts.audit : 1;
+    add(module, localCount, cloudCount);
+  }
+  const countMismatches = modules.filter(item => item.status === 'count_mismatch').length;
+  const truncatedModules = [];
+  // The current remote list APIs are capped at 2,000 rows. Reaching that cap
+  // cannot be treated as an exhaustive count until cursor pagination is verified.
+  if (counts[1] === 2000) truncatedModules.push('appointments');
+  for (let i = 0; i < recordModules.length; i++) {
+    if (counts[i + 2] === 2000) truncatedModules.push(recordModules[i]);
+  }
+  const countsMatch = errors.length === 0 && countMismatches === 0 &&
+    modules.length === 11 && truncatedModules.length === 0;
+  const report = {
+    branchId, localBranchId, verifiedAt: new Date().toISOString(), modules, errors,
+    countMismatches, truncatedModules, countsMatch,
+    verificationLevel: 'count_only',
+    contentVerified: false,
+    requiresContentVerification: true,
+    // Never declare a migration complete from counts alone. Stable identity
+    // and canonical payload/checksum comparisons are still required.
+    complete: false
+  };
+  window.dispatchEvent(new CustomEvent('dcos:cloud-migration-verified', { detail: report }));
+  if (showStatus) {
+    const mismatches = report.countMismatches;
+    status('فحص النقل السحابي الأولي: ' + modules.length + ' أقسام، ' +
+      (mismatches ? mismatches + ' اختلافات في العدد' : 'الأعداد متطابقة') +
+      (errors.length ? '، ' + errors.length + ' أخطاء قراءة' : '') +
+      (truncatedModules.length ? '، توجد نتائج وصلت لحد القراءة' : '') +
+      '. لم يتم اعتماد اكتمال النقل؛ يلزم فحص هوية ومحتوى السجلات.');
+  }
+  return report;
 }
 function queueAutomaticCloudSync(reason = 'local_change') {
   if (!activeMembership || !navigator.onLine) return;
@@ -1002,7 +1128,11 @@ function queueAutomaticCloudSync(reason = 'local_change') {
       cloudAutoSyncTimers.delete(branch.id);
       try {
         const outcome = await syncAllCloudModulesForBranch(branch.id, reason === 'branch_mapping_approved');
-        if (outcome?.failures?.length && navigator.onLine) {
+        if (reason === 'branch_mapping_approved') {
+          try { await verifyCloudMigrationForBranch(branch.id, true); }
+          catch (error) { status('تعذر فحص اكتمال النقل بعد ربط الفروع: ' + (error.message || 'خطأ')); }
+        }
+        if ((outcome?.failures?.length || outcome?.pendingPatientWrites) && navigator.onLine) {
           const attempt = (cloudAutoSyncAttempts.get(branch.id) || 0) + 1;
           cloudAutoSyncAttempts.set(branch.id, attempt);
           if (attempt <= 3) {
@@ -1052,7 +1182,12 @@ window.addEventListener('dcos:cloud-user-ready', async () => {
     // Hydrate the complete remote patient directory before syncing dependent
     // appointments, treatment plans, lab cases and finance records.
     await refreshCloudPatientsForBranch(branch.id);
-    syncAllCloudModulesForBranch(branch.id, false).catch(() => {});
+    try {
+      await syncAllCloudModulesForBranch(branch.id, false);
+      await verifyCloudMigrationForBranch(branch.id, true);
+    } catch (error) {
+      status('تعذر إكمال فحص النقل السحابي: ' + (error.message || 'خطأ'));
+    }
   }
 });
 window.addEventListener('dcos:local-data-saved', () => queueAutomaticCloudSync('local_save'));
@@ -1154,7 +1289,10 @@ window.addEventListener('dcos:patient-saved', event => {
   if (!branchMap[String(patient.localBranchId)]) return; // no outbox until this local branch is linked to the signed-in clinic
   enqueueLocalPatientForSync({ ...patient, clinicId: activeMembership.clinic_id });
 });
-window.addEventListener('online', () => flushPatientSyncQueue());
+window.addEventListener('online', () => {
+  flushPatientSyncQueue();
+  queueAutomaticCloudSync('online_restore');
+});
 function readPatientQueue() {
   try {
     const queue = JSON.parse(localStorage.getItem(PATIENT_QUEUE_KEY) || '[]');
@@ -1171,7 +1309,9 @@ function enqueueLocalPatientForSync(patient) {
   flushPatientSyncQueue();
 }
 async function flushPatientSyncQueue() {
-  if (patientQueueFlushInFlight || !navigator.onLine || !activeMembership) return;
+  if (patientQueueFlushInFlight || !navigator.onLine || !activeMembership) {
+    return { synced: 0, blocked: 0, pending: readPatientQueue().length, conflicts: 0, skipped: true };
+  }
   patientQueueFlushInFlight = true;
   const queue = readPatientQueue();
   const initialQueueByKey = new Map(queue.map(item => [String(item.clinicId)+'::'+String(item.localBranchId)+'::'+String(item.id), item]));
@@ -1214,7 +1354,11 @@ async function flushPatientSyncQueue() {
     }
     localStorage.setItem(PATIENT_QUEUE_KEY, JSON.stringify([...finalQueueByKey.values()]));
     localStorage.setItem(PATIENT_CONFLICTS_KEY, JSON.stringify(conflicts));
-    if (synced || blocked) status((synced ? 'تمت مزامنة ' + synced + ' سجل مريض أساسي. ' : '') + (blocked ? 'تم إيقاف ' + blocked + ' سجلات متعارضة ونقلها لقائمة المراجعة؛ لم يتم استبدال أي مريض موجود.' : ''));
+    if (synced || blocked) status(
+      (synced ? 'تمت مزامنة ' + synced + ' سجل مريض أساسي. ' : '') +
+      (blocked ? 'تم إيقاف ' + blocked + ' سجلات متعارضة ونقلها لقائمة المراجعة؛ لم يتم استبدال أي مريض موجود.' : '')
+    );
+    return { synced, blocked, pending: finalQueueByKey.size, conflicts: conflicts.length };
   } finally {
     patientQueueFlushInFlight = false;
   }
@@ -1262,19 +1406,26 @@ try {
   const savedConfig = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
   const embeddedConfig = window.DCOS_SUPABASE_CONFIG;
   const configured = embeddedConfig?.url && embeddedConfig?.publishableKey ? embeddedConfig : savedConfig;
-  if (configured?.url && configured?.publishableKey) {
-    configureSupabase({ url: configured.url, publishableKey: configured.publishableKey });
-    (async () => {
-      try {
-        const { data, error } = await getSupabaseClient().auth.getSession();
-        if (error) throw error;
-        if (data?.session) {
-          await loadWorkspace();
-          flushPatientSyncQueue();
-        }
-      } catch (e) {
-        status(e.message || 'تعذر استعادة جلسة المزامنة السحابية.');
+  if (!configured?.url || !configured?.publishableKey) throw new Error('إعداد الاتصال السحابي غير موجود في هذه النسخة.');
+  configureSupabase({ url: configured.url, publishableKey: configured.publishableKey });
+  window.DCOS_CLOUD_AUTH_STATE = 'ready';
+  window.DCOS_CLOUD_AUTH_ERROR = '';
+  window.dispatchEvent(new CustomEvent('dcos:cloud-auth-ready'));
+  (async () => {
+    try {
+      const { data, error } = await getSupabaseClient().auth.getSession();
+      if (error) throw error;
+      if (data?.session) {
+        await loadWorkspace();
+        flushPatientSyncQueue();
       }
-    })();
-  }
-} catch (e) { status(e.message || 'تعذر تهيئة الاتصال السحابي.'); }
+    } catch (e) {
+      status(e.message || 'تعذر استعادة جلسة المزامنة السحابية.');
+    }
+  })();
+} catch (e) {
+  window.DCOS_CLOUD_AUTH_STATE = 'error';
+  window.DCOS_CLOUD_AUTH_ERROR = String(e?.message || 'تعذر تهيئة الاتصال السحابي.');
+  window.dispatchEvent(new CustomEvent('dcos:cloud-auth-error', { detail: { message: window.DCOS_CLOUD_AUTH_ERROR } }));
+  status(window.DCOS_CLOUD_AUTH_ERROR);
+}

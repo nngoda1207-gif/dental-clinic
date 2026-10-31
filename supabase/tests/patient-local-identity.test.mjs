@@ -42,7 +42,7 @@ assert.match(portal, /dcos:patient-saved/);
 assert.match(portal, /enablePatientSync/);
 assert.match(portal, /new Set\(mappedBranches\)\.size !== mappedBranches\.length/);
 assert.match(portal, /initialImportComplete/);
-assert.match(portal, /if \(!saved\?\.map\?\.\[String\(patient\.localBranchId\)\]\) return/);
+assert.match(portal, /if \(!branchMap\[String\(patient\.localBranchId\)\]\) return/, 'patient outbox must only accept records from an explicitly linked local branch');
 assert.match(index, /dcos:patient-saved/);
 assert.match(index, /localBranchId/);
 assert.match(index, /cloudSnapshot/);

@@ -60,6 +60,35 @@ assert.ok(portal.includes('function appointmentPayloadEqual') && portal.includes
 assert.ok(portal.includes('function inventoryPayloadEqual(a,b) { return cloudPayloadEqual(a,b); }'), 'Inventory conflict checks must use canonical payload comparisons');
 assert.ok(portal.includes('syncClinicalFinanceAndLabsForBranch'), 'Clinical, finance and lab sync must be grouped for manual and automatic use');
 assert.ok(portal.includes('function syncAllCloudModulesForBranch'), 'All supported cloud modules must share one automatic sync coordinator');
+assert.ok(portal.includes("new CustomEvent('dcos:cloud-sync-complete'"), 'Cloud sync must publish a structured completion report for migration verification');
+assert.ok(portal.includes('pendingPatientWrites'), 'Cloud sync completion must expose pending patient writes');
+assert.ok(portal.includes('async function verifyCloudMigrationForBranch'), 'Migration verification must compare local and cloud module counts without writing data');
+assert.ok(portal.includes("status: local === cloud ? 'count_match' : 'count_mismatch'"), 'Migration verification must expose explicit count mismatches');
+assert.ok(portal.includes("verificationLevel: 'count_only'") && portal.includes('contentVerified: false'), 'Count equality must never be presented as full content verification');
+assert.ok(portal.includes('requiresContentVerification: true') && portal.includes('complete: false'), 'Migration must remain incomplete until record identities and contents are checked');
+assert.ok(portal.includes('truncatedModules'), 'Migration verification must flag remote lists that reach the 2,000-record cap');
+assert.ok(portal.includes("new CustomEvent('dcos:cloud-migration-verified'"), 'Migration verification must publish a structured report');
+assert.ok(portal.includes("await verifyCloudMigrationForBranch(branch.id, true)"), 'Migration verification must run after the initial cloud load');
+assert.ok(portal.includes("reason === 'branch_mapping_approved'"), 'Migration verification must run after the initial import and branch mapping');
+const queueFlush = portal.slice(portal.indexOf('async function flushPatientSyncQueue'), portal.indexOf('// Main-app username login bridge'));
+assert.ok(queueFlush.indexOf("if (synced || blocked) status(") < queueFlush.indexOf("return { synced, blocked, pending: finalQueueByKey.size"), 'Patient sync result must be reported before returning');
+assert.ok(portal.includes('modules.push({ module: names[index]'), 'Cloud sync completion must report each module independently');
+assert.ok(portal.includes("module: 'patients', synced: Number(patientQueue.synced || 0)"), 'Cloud sync completion must include patient migration counts');
+assert.ok(portal.includes('completedAt: new Date().toISOString()'), 'Cloud sync completion must be timestamped for migration verification');
+assert.ok(portal.includes("window.addEventListener('dcos:cloud-sync-complete'"), 'Cloud portal must display structured completion reports in its live status region');
+assert.ok(portal.includes("'اكتملت دورة المزامنة — ' + lines.join(' | ')"), 'Cloud portal status must summarize each synced module and its unresolved work');
+
+
+assert.ok(portal.includes('patientWritesBlocked'), 'Cloud sync completion must expose blocked patient writes');
+assert.ok(portal.includes('conflictCount'), 'Cloud sync completion must report unresolved conflicts instead of treating partial sync as success');
+assert.ok(portal.includes('return { synced, blocked, pending: finalQueueByKey.size, conflicts: conflicts.length };'), 'Patient outbox flush must report synced, blocked, pending and unresolved conflict counts');
+assert.ok(portal.includes('if (Array.isArray(value.conflicts))'), 'Sync coordinator must safely handle both detailed conflict arrays and summarized conflict counts');
+
+assert.ok(portal.includes("new CustomEvent('dcos:cloud-sync-complete'"), 'Cloud sync must publish a structured completion report for migration verification');
+assert.ok(portal.includes('pendingPatientWrites'), 'Cloud sync completion must expose pending patient writes');
+assert.ok(portal.includes('patientWritesBlocked'), 'Cloud sync completion must expose blocked patient writes');
+assert.ok(portal.includes('return { synced, blocked, pending: finalQueueByKey.size, conflicts: conflicts.length };'), 'Patient outbox flush must report synced, blocked, pending and unresolved conflict counts');
+
 assert.ok(portal.includes('function syncAuxModulesForBranch'), 'Prices, suppliers, settings and branch configuration must be included in cloud sync');
 assert.ok(portal.includes('async function syncAuditForBranch'), 'Audit events must synchronize as append-only branch records');
 assert.ok(index.includes("window.addEventListener('dcos:cloud-audit'"), 'The app must merge remote audit events without duplicating local entries');
@@ -72,6 +101,9 @@ assert.ok(index.includes("map(item=>({name:item.name,act:item.act!==false}))"), 
 assert.ok(portal.includes("branches: ['br']"), 'Branch settings sync must respect the branch permission required by RLS');
 assert.ok(portal.includes("window.addEventListener('dcos:local-data-saved'"), 'Every local save must queue automatic cloud synchronization');
 assert.ok(portal.includes("window.addEventListener('online'"), 'Offline changes must resume synchronization when connectivity returns');
+assert.ok(portal.includes("queueAutomaticCloudSync('online_restore')"), 'All mapped cloud modules must resume automatically when connectivity returns');
+assert.ok(portal.includes('outcome?.pendingPatientWrites'), 'Transient pending patient writes must trigger bounded automatic retries');
+
 assert.ok(portal.includes('cloudAutoSyncAttempts') && portal.includes('[2000, 5000, 15000]'), 'Transient sync failures must use bounded automatic retries');
 assert.ok(portal.includes('appointmentSyncQueuedBranches'), 'Queued appointment sync must preserve every affected branch');
 assert.ok(portal.includes("document.addEventListener('visibilitychange'"), 'Returning to the app must resume pending cloud synchronization');
@@ -102,4 +134,9 @@ assert.ok(edge.includes('action==="list_dentists"'), 'Appointment mapping must u
 assert.ok(recordRepo.includes(".from('clinic_records')"), 'Generic record repository must use the deployed cloud record store');
 assert.ok(!recordRepo.includes('localStorage') && !recordRepo.includes('dcos1'), 'Generic record repository must never upload the entire local D blob');
 
+
+assert.ok(portal.includes("window.DCOS_CLOUD_AUTH_STATE = 'ready'") && portal.includes("dcos:cloud-auth-ready"), 'Cloud auth must announce readiness only after client configuration');
+assert.ok(portal.includes("window.DCOS_CLOUD_AUTH_STATE = 'error'") && portal.includes("dcos:cloud-auth-error"), 'Cloud auth initialization errors must be surfaced');
+assert.ok(index.includes('waitForCloudAuthReady()') && index.includes('dcos:cloud-auth-error'), 'Main login must wait for cloud auth module instead of failing on startup race');
+assert.ok(index.includes('12 ثانية') && index.includes('onerror='), 'Cloud module load failures and timeouts must produce actionable feedback');
 console.log('Cloud portal and cloud permission integration safety checks passed.');

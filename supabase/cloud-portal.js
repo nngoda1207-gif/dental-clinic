@@ -4,7 +4,7 @@
  * branch-scoped patient reads. It does not upload or overwrite local D.
  */
 import {
-  configureSupabase, getSupabaseClient, signInWithPassword,
+  configureSupabase, getSupabaseClient, signInWithIdentity, createClinicStaff, listClinicStaff,
   signOutSupabase, signUpWithEmail, resendSignupConfirmation,
   getCurrentClinicMembership, listAssignedRemoteBranches
 } from './auth-adapter.js';
@@ -46,7 +46,7 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
     <p class="muted">لا تضع Service Role أو Secret Key هنا. الإعدادات تحفظ على هذا الجهاز فقط.</p>
   </div>
   <div id="dcos-cloud-auth">
-    <label>البريد الإلكتروني<input id="dcos-sb-email" type="email" autocomplete="username"></label>
+    <label>البريد الإلكتروني أو اسم المستخدم<input id="dcos-sb-email" type="text" autocomplete="username"></label>
     <label>كلمة مرور Supabase<input id="dcos-sb-password" type="password" autocomplete="current-password"></label>
     <div class="cloud-actions"><button class="primary" id="dcos-sb-login" type="button">تسجيل الدخول السحابي</button><button id="dcos-sb-signup" type="button">إنشاء حساب جديد</button><button id="dcos-sb-resend" type="button" hidden>إعادة إرسال رسالة التأكيد</button><button id="dcos-sb-logout" type="button" hidden>تسجيل الخروج</button></div>
     <p class="muted">إنشاء الحساب مخصص لمالك عيادة جديدة. بعد تأكيد البريد، ارجع وسجّل الدخول. حسابات الموظفين تحتاج إضافة من إدارة العيادة؛ لا يتم منح الموظف صلاحية مالك تلقائيًا.</p>
@@ -137,7 +137,7 @@ $('dcos-sb-login').addEventListener('click', async () => {
   try {
     configure();
     status('جارٍ تسجيل الدخول والتحقق من عضوية العيادة…');
-    await signInWithPassword($('dcos-sb-email').value, $('dcos-sb-password').value);
+    await signInWithIdentity($('dcos-sb-email').value, $('dcos-sb-password').value);
     $('dcos-sb-password').value = '';
     $('dcos-sb-logout').hidden = false;
     await loadWorkspace();
@@ -180,11 +180,75 @@ async function loadWorkspace() {
   host.innerHTML = `<p><b>الدور:</b> ${escapeHtml(membership.role)} <span class="muted">· تم التحقق من العضوية النشطة</span></p>
     <label>الفرع السحابي<select id="dcos-cloud-branch">${branches.map(b => `<option value="${escapeAttr(b.id)}">${escapeHtml(b.name)}</option>`).join('')}</select></label>
     <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button">تحميل مرضى الفرع</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
-    <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
+    <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>
+    \${membership.role === 'owner' ? \`<div class="cloud-row" id="dcos-staff-manager">
+      <h3>حسابات العاملين</h3><div id="dcos-staff-list" class="muted">جارٍ تحميل الحسابات…</div>
+      <h4>إضافة حساب فرعي</h4>
+      <label>اسم الموظف<input id="dcos-staff-name" maxlength="120"></label>
+      <label>اسم المستخدم<input id="dcos-staff-username" maxlength="32" autocomplete="off"></label>
+      <label>كلمة المرور (8 أحرف على الأقل)<input id="dcos-staff-password" type="password" minlength="8" autocomplete="new-password"></label>
+      <label>الدور<select id="dcos-staff-role"><option value="dentist">طبيب</option><option value="nurse">ممرضة</option><option value="reception">استقبال</option><option value="manager">مدير فرع</option><option value="accountant">محاسب</option><option value="invmgr">مسؤول المخزون</option><option value="readonly">قراءة فقط</option></select></label>
+      <label>الفرع<select id="dcos-staff-branch">\${branches.map(b => \`<option value="\${escapeAttr(b.id)}">\${escapeHtml(b.name)}</option>\`).join('')}</select></label>
+      <button class="primary" id="dcos-create-staff" type="button">إنشاء حساب الموظف</button>
+    </div>\` : ''}`;
   $('dcos-load-patients').addEventListener('click', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
+  if (membership.role === 'owner') {
+    $('dcos-create-staff').addEventListener('click', createStaff);
+    loadStaff();
+  }
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
 }
+async function loadStaff() {
+  const host = $('dcos-staff-list');
+  if (!host) return;
+  host.textContent = 'جارٍ تحميل حسابات العاملين…';
+  try {
+    const staff = await listClinicStaff();
+    const roleNames = {manager:'مدير فرع',dentist:'طبيب',nurse:'ممرضة',reception:'استقبال',accountant:'محاسب',readonly:'قراءة فقط',invmgr:'مسؤول المخزون'};
+    host.innerHTML = staff.length ? staff.map(member => {
+      const branchNames = (member.branch_ids || []).map(id => activeBranches.find(b => b.id === id)?.name || '').filter(Boolean);
+      return '<div class="cloud-row"><b>' + escapeHtml(member.display_name || member.username) + '</b> · ' +
+        escapeHtml(member.username) + '<div class="muted">' + escapeHtml(roleNames[member.role] || member.role) +
+        ' · ' + escapeHtml(branchNames.join('، ') || 'لا يوجد فرع مسند') +
+        ' · ' + (member.active ? 'نشط' : 'موقوف') + '</div></div>';
+    }).join('') : '<p class="muted">لا توجد حسابات فرعية بعد.</p>';
+  } catch (e) {
+    host.textContent = 'تعذر تحميل حسابات العاملين: ' + (e.message || 'خطأ غير معروف');
+  }
+}
+
+async function createStaff() {
+  const displayName = $('dcos-staff-name').value.trim();
+  const username = $('dcos-staff-username').value.trim().toLowerCase();
+  const password = $('dcos-staff-password').value;
+  const role = $('dcos-staff-role').value;
+  const branchId = $('dcos-staff-branch').value;
+  if (!displayName || !username || !password || !branchId) {
+    status('أكمل اسم الموظف واسم المستخدم وكلمة المرور والفرع.');
+    return;
+  }
+  if (password.length < 8) {
+    status('كلمة المرور يجب ألا تقل عن 8 أحرف.');
+    return;
+  }
+  const button = $('dcos-create-staff');
+  button.disabled = true;
+  status('جارٍ إنشاء الحساب الفرعي وربطه بالعيادة والفرع…');
+  try {
+    const result = await createClinicStaff({displayName, username, password, role, branchId});
+    $('dcos-staff-password').value = '';
+    $('dcos-staff-name').value = '';
+    $('dcos-staff-username').value = '';
+    await loadStaff();
+    status('تم إنشاء حساب ' + result.username + ' وربطه بالفرع المحدد.');
+  } catch (e) {
+    status('تعذر إنشاء الحساب: ' + (e.message || 'خطأ غير معروف'));
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function createClinic() {
   try {
     const name = $('dcos-new-clinic').value.trim();

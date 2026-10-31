@@ -2,7 +2,7 @@ name: Cloud record sync safety tests
 
 on:
   push:
-    branches: [feature/cloud-record-sync-foundation]
+    branches: [feature/cloud-record-sync-foundation, fix/persistent-cloud-account]
     paths:
       - 'supabase/**'
       - 'index.html'

@@ -21,7 +21,7 @@ const el = (tag, attrs = {}, html = '') => {
 };
 const style = el('style');
 style.textContent = `
-#dcos-cloud-launch{position:fixed;left:14px;bottom:16px;z-index:80;border:0;border-radius:10px;padding:10px 14px;background:#17324d;color:#fff;font:600 14px Cairo, sans-serif;box-shadow:0 3px 14px #0003;cursor:pointer}
+#dcos-cloud-launch{position:static;flex:0 0 auto;left:auto;bottom:auto;z-index:80;border:0;border-radius:10px;padding:7px 13px;background:#17324d;color:#fff;font:600 14px Cairo, sans-serif;box-shadow:0 2px 8px #0002;cursor:pointer;white-space:nowrap}body>#dcos-cloud-launch{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:14px;bottom:auto}
 #dcos-cloud-panel{position:fixed;inset:0;z-index:100;background:#0008;display:none;align-items:center;justify-content:center;padding:12px;font-family:Cairo, sans-serif}
 #dcos-cloud-panel.open{display:flex}
 #dcos-cloud-card{background:var(--cd,#fff);color:var(--tx,#14262e);width:min(680px,100%);max-height:92vh;overflow:auto;border-radius:14px;padding:18px;border:1px solid var(--bd,#d8e2e0);direction:rtl}
@@ -34,7 +34,7 @@ style.textContent = `
 `;
 document.head.append(style);
 
-const launch = el('button', { id: 'dcos-cloud-launch', type: 'button' }, '☁ المزامنة السحابية');
+const launch = el('button', { id: 'dcos-cloud-launch', type: 'button', title: 'Open cloud account and staff management' }, 'Open');
 const panel = el('div', { id: 'dcos-cloud-panel' });
 panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true" aria-labelledby="dcos-cloud-title">
   <div style="display:flex;align-items:center;gap:10px;justify-content:space-between"><h2 id="dcos-cloud-title" style="margin:0">اتصال العيادة بـ Supabase</h2><button id="dcos-cloud-close" type="button">إغلاق</button></div>
@@ -55,6 +55,28 @@ panel.innerHTML = `<section id="dcos-cloud-card" role="dialog" aria-modal="true"
   <p id="dcos-cloud-status" class="muted" role="status" aria-live="polite"></p>
 </section>`;
 document.body.append(launch, panel);
+
+// Keep the account-linking control visible at the top of the app, including
+// the login/setup screens. The app rebuilds its toolbar during navigation.
+function placeCloudLauncher() {
+  const top = document.querySelector('#app .top');
+  if (top) {
+    if (launch.parentElement !== top) top.append(launch);
+    launch.style.position = 'static';
+    launch.style.top = 'auto';
+    launch.style.left = 'auto';
+    launch.style.bottom = 'auto';
+  } else {
+    if (launch.parentElement !== document.body) document.body.prepend(launch);
+    launch.style.position = 'fixed';
+    launch.style.top = 'calc(env(safe-area-inset-top, 0px) + 10px)';
+    launch.style.left = '14px';
+    launch.style.bottom = 'auto';
+  }
+}
+placeCloudLauncher();
+const cloudLauncherObserver = new MutationObserver(placeCloudLauncher);
+cloudLauncherObserver.observe(document.getElementById('app'), { childList: true, subtree: true });
 
 const $ = id => document.getElementById(id);
 const status = message => { $('dcos-cloud-status').textContent = message || ''; };

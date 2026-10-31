@@ -872,7 +872,7 @@ function getLocalAuxSnapshot(localBranchId, module) {
   return snapshot;
 }
 const AUX_MODULE_PERMISSIONS = {
-  prices: ['pl','pr'], suppliers: ['im'], settings: ['st'], branches: ['br','st']
+  prices: ['pl','pr'], suppliers: ['im'], settings: ['st'], branches: ['br']
 };
 async function syncAuxModuleForBranch(branchId, module) {
   const permissions = Array.isArray(activeMembership?.permissions) ? activeMembership.permissions : [];

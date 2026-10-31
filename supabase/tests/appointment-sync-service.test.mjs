@@ -9,7 +9,7 @@ for (const fn of ['listRemoteAppointments','listRemoteAppointmentEvents','create
   assert.ok(repo.includes('export async function '+fn), 'repository exports '+fn);
 }
 assert.ok(repo.includes(".eq('clinic_id', clinicId).eq('branch_id', branchId)"), 'appointment operations must be clinic and branch scoped');
-assert.ok(repo.includes(".eq('updated_at', expectedUpdatedAt)"), 'updates must use optimistic concurrency');
+assert.ok(repo.includes('expectedRevision') && repo.includes('p_expected_revision: expectedRevision') && repo.includes("rpc('save_clinic_appointment_record'"), 'appointment updates must use atomic optimistic revision through the guarded RPC');
 assert.ok(repo.includes('source_local_id: stableLocalId'), 'local identity must be stable and explicit');
 assert.ok(repo.includes('Mapped remote dentist user ID'), 'local dentist IDs must never be mistaken for Auth IDs');
 assert.ok(repo.includes('Mapped remote chair ID'), 'local chair IDs must never be mistaken for remote IDs');

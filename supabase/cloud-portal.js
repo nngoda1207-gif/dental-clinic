@@ -1125,11 +1125,10 @@ window.addEventListener('dcos:cloud-patients', event => {
 
 window.addEventListener('dcos:patient-saved', event => {
   const patient = event.detail;
-  if (!patient || !patient.id || !patient.localBranchId) return;
-  const saved = getSavedBranchConfig();
-  if (!saved?.map?.[String(patient.localBranchId)]) return; // no outbox until owner opt-in
-  if (activeMembership && saved.clinicId !== activeMembership.clinic_id) return;
-  enqueueLocalPatientForSync({ ...patient, clinicId: saved.clinicId });
+  if (!patient || !patient.id || !patient.localBranchId || !activeMembership) return;
+  const branchMap = getSavedBranchMap();
+  if (!branchMap[String(patient.localBranchId)]) return; // no outbox until this local branch is linked to the signed-in clinic
+  enqueueLocalPatientForSync({ ...patient, clinicId: activeMembership.clinic_id });
 });
 window.addEventListener('online', () => flushPatientSyncQueue());
 function readPatientQueue() {

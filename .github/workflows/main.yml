@@ -29,7 +29,7 @@ jobs:
           import re
           from pathlib import Path
           html = Path("index.html").read_text(encoding="utf-8")
-          scripts = re.findall(r'<script(?![^>]*\\bsrc=)[^>]*>(.*?)</script>', html, flags=re.S)
+          scripts = re.findall(r'<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>', html, flags=re.S)
           if not scripts:
               raise SystemExit("No inline application script found")
           Path("/tmp/dcos-index-inline.js").write_text(scripts[-1], encoding="utf-8")

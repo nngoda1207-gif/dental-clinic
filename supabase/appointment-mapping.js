@@ -4,12 +4,12 @@
  * cloud IDs; the caller must supply explicit stable links.
  */
 const LOCAL_TO_REMOTE_STATUS = Object.freeze({
-  new: 'scheduled', confirmed: 'confirmed',
+  new: 'scheduled', conf: 'confirmed', confirmed: 'confirmed',
   arr: 'arrived', wait: 'arrived', in: 'arrived',
   done: 'completed', cp: 'cancelled', cc: 'cancelled', ns: 'no_show'
 });
 const REMOTE_TO_LOCAL_STATUS = Object.freeze({
-  scheduled: 'new', confirmed: 'confirmed', arrived: 'arr',
+  scheduled: 'new', confirmed: 'conf', arrived: 'arr',
   completed: 'done', no_show: 'ns'
 });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -34,7 +34,7 @@ export function remoteAppointmentStatusToLocal(status, existingLocalStatus = '')
   if (status === 'cancelled' && ['cp','cc'].includes(existingLocalStatus)) return existingLocalStatus;
   const mapped = REMOTE_TO_LOCAL_STATUS[status];
   if (!mapped && status !== 'cancelled') throw new Error('Unsupported remote appointment status: ' + status);
-  if (status === 'cancelled') throw new Error('Cloud cancellation needs manual review because the remote schema does not record who cancelled.');
+  if (status === 'cancelled') return 'cc';
   return mapped;
 }
 

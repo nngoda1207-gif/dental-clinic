@@ -1011,11 +1011,24 @@ function queueAutomaticCloudSync(reason = 'local_change') {
     }, 450));
   }
 }
+async function refreshCloudPatientsForBranch(branchId) {
+  const branchMap = getSavedBranchMap();
+  const localBranchId = Object.keys(branchMap).find(id => String(branchMap[id]) === String(branchId));
+  if (!localBranchId || !activeMembership) return;
+  try {
+    const patients = await listAllPatientsForAssignedBranch({ branchId });
+    dispatchCloudPatientsToLocal(branchId, patients);
+  } catch (error) {
+    status('وصل تحديث للمرضى لكن تعذر تحميله تلقائيًا: ' + (error.message || 'خطأ'));
+  }
+}
 function startAppointmentRealtime(branchId) {
   if (appointmentRealtimeChannels.has(branchId)) getSupabaseClient().removeChannel(appointmentRealtimeChannels.get(branchId));
   const channel = getSupabaseClient().channel('dcos-clinic-records-' + branchId)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'clinic_records', filter: 'branch_id=eq.' + branchId }, () => {
-      syncAllCloudModulesForBranch(branchId, false).catch(() => {});
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'clinic_records', filter: 'branch_id=eq.' + branchId }, payload => {
+      const module = payload?.new?.module || payload?.old?.module;
+      if (module === 'patients') refreshCloudPatientsForBranch(branchId).catch(() => {});
+      else syncAllCloudModulesForBranch(branchId, false).catch(() => {});
     })
     .subscribe(state => {
       if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') status('الاتصال اللحظي بالسحابة انقطع مؤقتًا؛ ستُستأنف المزامنة عند عودة الاتصال.');

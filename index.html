@@ -233,6 +233,23 @@ window.addEventListener('dcos:cloud-patient-modules',event=>{
 });
 
 
+
+window.addEventListener('dcos:cloud-audit',event=>{
+  if(!D||!ME)return;
+  const {localBranchId,items=[],conflicts=[]}=event.detail||{};
+  if(!localBranchId||!myBr().some(branch=>String(branch.id)===String(localBranchId)))return;
+  D.audit=D.audit||[];
+  const seen=new Set(D.audit.map(item=>String(item.id)));
+  let changed=false;
+  for(const entry of items){
+    const item=entry?.item;
+    if(!item?.id||seen.has(String(item.id)))continue;
+    D.audit.push({...item,br:localBranchId});seen.add(String(item.id));changed=true;
+  }
+  if(changed){D.audit.sort((a,b)=>String(b.t||'').localeCompare(String(a.t||'')));D.audit.length=Math.min(D.audit.length,2000);save(true);}
+  if(conflicts.length)toast('بعض سجلات العمليات لم تُرفع بعد؛ ستتم إعادة المحاولة تلقائيًا.');
+});
+
 window.addEventListener('dcos:get-local-aux',event=>{
   if(!D||!ME)return;
   const detail=event.detail||{};
@@ -241,7 +258,8 @@ window.addEventListener('dcos:get-local-aux',event=>{
   D.cloudAuxState=D.cloudAuxState||{};
   const baseline=D.cloudAuxState[module]?.[branchId]?.snapshot||null;
   let payload={},isEmpty=false;
-  if(module==='prices'){payload={items:(D.procs||[]).map(item=>({...item}))};isEmpty=!payload.items.length;}
+  if(module==='audit'){payload={items:(D.audit||[]).filter(item=>String(item.br||'')===branchId).map(item=>({...item}))};isEmpty=!payload.items.length;}
+  else if(module==='prices'){payload={items:(D.procs||[]).map(item=>({...item}))};isEmpty=!payload.items.length;}
   else if(module==='suppliers'){payload={items:(D.sups||[]).map(item=>({...item}))};isEmpty=!payload.items.length;}
   else if(module==='settings'){payload={settings:{...(D.settings||{})}};isEmpty=!Object.keys(payload.settings).length;}
   else if(module==='branches'){
@@ -367,7 +385,7 @@ window.addEventListener('dcos:cloud-appointments',event=>{
   if(conflicts.length)toast('يوجد '+conflicts.length+' تعارض في المواعيد؛ لم يتم استبدال البيانات المتعارضة.');
 });
 function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',2800)}
-function audit(act,ref,det){D.audit.unshift({id:uid(),t:now(),u:ME?ME.name:'—',r:ME?ME.role:'',act,ref:ref||'',det:det||''});D.audit.length=Math.min(D.audit.length,2000)}
+function audit(act,ref,det){const patient=(D.patients||[]).find(p=>String(p.no)===String(ref));const branchId=patient?.br||(typeof br==='string'&&br!=='all'?br:'')||(ME?.branches?.length===1?ME.branches[0]:'');D.audit.unshift({id:uid(),br:branchId,t:now(),u:ME?ME.name:'—',r:ME?ME.role:'',act,ref:ref||'',det:det||''});D.audit.length=Math.min(D.audit.length,2000)}
 async function hp(p,s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s+':'+p));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 const R={owner:'مالك العيادة',manager:'مدير فرع',dentist:'طبيب',nurse:'تمريض',reception:'استقبال',accountant:'محاسب',invmgr:'مسؤول المخزون',readonly:'قراءة فقط'};
 const P={owner:['*'],manager:['pv','pa','pe','pr','ex','au','br'],dentist:['pv','pa','pe'],nurse:['pv','pa','pe'],reception:['pv','pa','pe'],accountant:['pv','ex'],invmgr:['pv','im','iv'],readonly:['pv']};

@@ -6,10 +6,10 @@ const app = readFileSync('index.html', 'utf8');
 const portal = readFileSync('supabase/cloud-portal.js', 'utf8');
 assert.ok(auth.includes('const DEFAULT_PERMISSIONS:Record<string,string[]>'), 'staff provisioning must define role permissions');
 for (const [role, codes] of Object.entries({
-  manager: ['pv','pa','pe','pr','ex','au','br'],
-  dentist: ['pv','pa','pe'],
+  manager: ['pv','pa','pe','pr','ex','au','br','aw'],
+  dentist: ['pv','pa','pe','aw'],
   nurse: ['pv','pa','pe'],
-  reception: ['pv','pa','pe'],
+  reception: ['pv','pa','pe','aw'],
   accountant: ['pv','ex'],
   readonly: ['pv'],
   invmgr: ['pv','im','iv']

@@ -27,7 +27,7 @@ export async function signOutSupabase(){const {error}=await getSupabaseClient().
 export async function getCurrentSupabaseSession(){const {data,error}=await getSupabaseClient().auth.getSession();if(error)throw error;return data.session;}
 export async function getCurrentClinicMembership(){
  const supabase=getSupabaseClient(),session=await getCurrentSupabaseSession();if(!session?.user)return null;
- const {data,error}=await supabase.from('clinic_members').select('clinic_id,user_id,role,active,created_at').eq('user_id',session.user.id).eq('active',true).limit(2);
+ const {data,error}=await supabase.from('clinic_members').select('clinic_id,user_id,role,active,created_at,permissions').eq('user_id',session.user.id).eq('active',true).limit(2);
  if(error)throw error;if(!data?.length)return null;if(data.length>1)throw new Error('هذا الحساب مرتبط بأكثر من عيادة؛ يلزم تحديد العيادة.');
  return {session,membership:data[0]};
 }

@@ -47,6 +47,11 @@ assert.ok(portal.includes('createAppointmentInAssignedBranch') && portal.include
 assert.ok(portal.includes('startAppointmentRealtime'), 'Appointment changes must subscribe to cloud realtime');
 assert.ok(portal.includes('dcos:get-local-appointments') && portal.includes('dcos:cloud-appointments'), 'Cloud appointment sync must cross the app boundary through explicit events');
 assert.ok(portal.includes('appointmentPayloadEqual'), 'Appointment sync must detect concurrent edits against a saved cloud snapshot');
+assert.ok(portal.includes('syncInventoryForBranch'), 'Inventory sync must be branch-scoped and available from the cloud workspace');
+assert.ok(portal.includes("module: 'inventory'"), 'Inventory sync must use the guarded generic inventory module');
+assert.ok(portal.includes('inventoryPayloadEqual'), 'Inventory sync must detect concurrent edits before writing');
+assert.ok(portal.includes('dcos:get-local-inventory') && portal.includes('dcos:cloud-inventory'), 'Inventory sync must cross the app boundary through explicit events');
+assert.ok(index.includes('dcos:get-local-inventory') && index.includes('dcos:cloud-inventory'), 'The app must expose and merge branch inventory snapshots');
 assert.ok(index.includes('dcos:appointment-saved'), 'Local appointment changes must trigger cloud synchronization');
 assert.ok(index.includes('dcos:cloud-appointments'), 'The app must merge cloud appointment records into the local schedule');
 assert.ok(edge.includes('action==="list_dentists"'), 'Appointment mapping must use the authenticated branch-scoped dentist directory');

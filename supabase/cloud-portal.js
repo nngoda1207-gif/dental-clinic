@@ -675,7 +675,20 @@ function patientModulePayload(patient, module) {
   };
   throw new Error('Unsupported patient data module.');
 }
-function patientModuleEqual(a,b) { return JSON.stringify(a ?? null) === JSON.stringify(b ?? null); }
+function canonicalCloudValue(value) {
+  if (Array.isArray(value)) return value.map(canonicalCloudValue);
+  if (value && typeof value === 'object') {
+    return Object.keys(value).sort().reduce((result, key) => {
+      if (value[key] !== undefined) result[key] = canonicalCloudValue(value[key]);
+      return result;
+    }, {});
+  }
+  return value;
+}
+function cloudPayloadEqual(a,b) {
+  return JSON.stringify(canonicalCloudValue(a ?? null)) === JSON.stringify(canonicalCloudValue(b ?? null));
+}
+function patientModuleEqual(a,b) { return cloudPayloadEqual(a,b); }
 function patientModuleIsEmpty(payload, module) {
   if (module === 'finance') return !Array.isArray(payload?.pay) || payload.pay.length === 0;
   const mh = payload?.mh || {};
@@ -789,7 +802,7 @@ function labCloudPayload(item, localPatients, localLabs) {
   for (const key of ['id','pid','lab','br','cloudRevision','cloudSnapshot','cloudConflict']) delete record[key];
   return { labNo: String(item.no || ''), patientNo: String(patient.no), labName: String(lab.name), record };
 }
-function labCloudEqual(a,b) { return JSON.stringify(a ?? null) === JSON.stringify(b ?? null); }
+function labCloudEqual(a,b) { return cloudPayloadEqual(a,b); }
 async function syncLabsForBranch(branchId, showStatus = false) {
   const permissions = Array.isArray(activeMembership?.permissions) ? activeMembership.permissions : [];
   if (!activeMembership || (activeMembership.role !== 'owner' && !permissions.includes('lv'))) return { synced: 0, conflicts: [], skipped: true };

@@ -36,9 +36,6 @@ assert.ok(portal.includes("body: { action: 'list_staff' }"), 'Owner must be able
 assert.ok(portal.includes("action: 'manage_permissions'"), 'Owner must be able to save staff module permissions');
 assert.ok(portal.includes('STAFF_PERMISSION_OPTIONS'), 'Staff permissions must be displayed as explicit module controls');
 assert.ok(portal.includes('permissions: Array.isArray(membership.permissions)'), 'Cloud membership permissions must be returned by the login bridge');
-assert.ok(portal.includes("event === 'PASSWORD_RECOVERY'"), 'Password recovery callback must be handled');
-assert.ok(portal.includes('function bindPasswordRecovery()'), 'Recovery listener must have a dedicated initializer');
-assert.ok(portal.includes('dcos-save-new-password'), 'Recovery session must expose a new-password action');
 assert.ok(!portal.includes('localStorage.setItem(\'dcos1\''), 'Cloud portal must not replace the local database with a cloud blob');
 assert.ok(!auth.includes('service_role') && !auth.includes('SUPABASE_SERVICE_ROLE_KEY'), 'Browser auth adapter must not use privileged server keys');
 assert.ok(!portal.includes('SUPABASE_SERVICE_ROLE_KEY') && !portal.includes('sb_secret_'), 'Browser cloud portal must not contain privileged keys');

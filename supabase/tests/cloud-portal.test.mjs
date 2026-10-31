@@ -55,6 +55,7 @@ assert.ok(portal.includes('dcos:get-local-inventory') && portal.includes('dcos:c
 assert.ok(portal.includes('syncLabsForBranch'), 'Lab cases must synchronize through the guarded labs module');
 assert.ok(portal.includes("module: 'labs'"), 'Lab cases must use the guarded generic labs module');
 assert.ok(portal.includes('dcos:cloud-labs'), 'Lab sync must return cloud records to the local app');
+assert.ok(portal.includes("window.addEventListener('dcos:lab-saved'"), 'Lab edits and payments must trigger cloud sync');
 assert.ok(index.includes('dcos:cloud-labs') && index.includes('labCases'), 'The app must expose and safely merge local lab cases');
 assert.ok(index.includes('dcos:get-local-inventory') && index.includes('dcos:cloud-inventory'), 'The app must expose and merge branch inventory snapshots');
 assert.ok(index.includes('dcos:appointment-saved'), 'Local appointment changes must trigger cloud synchronization');

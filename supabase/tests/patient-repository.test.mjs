@@ -35,7 +35,7 @@ assert.match(validation, /Sex must be male, female, other, or empty/, 'unknown s
 assert.match(validation, /Patient email address is invalid/, 'malformed email must be rejected');
 assert.match(validation, /One or more patient profile fields are too long/, 'oversized patient profile fields must be rejected');
 assert.doesNotMatch(repo, /localStorage|dcos1|\.from\(['"]clinic_state['"]\)/, 'repository must not sync the local D blob');
-assert.match(auth, /storageKey: 'dcos_supabase_auth_v1'/, 'Supabase auth storage must be isolated from the app dataset');
+assert.match(auth, /storageKey:\s*'dcos_supabase_auth_v1'/, 'Supabase auth storage must be isolated from the app dataset');
 assert.ok(auth.includes('export async function listAssignedRemoteBranches(clinicId)'), 'assigned branch listing must be explicit');
 assert.ok(auth.includes(".eq('user_id', session.user.id)"), 'branch assignments must be scoped to the authenticated user');
 assert.ok(auth.includes(".eq('active', true)"), 'inactive branches must not be returned');

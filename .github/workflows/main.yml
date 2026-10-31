@@ -27,6 +27,7 @@ jobs:
         run: |
           mkdir -p www
           cp index.html www/index.html
+          if [ -d supabase ]; then cp -R supabase www/supabase; fi
           npx cap add android
           npx cap sync android
 

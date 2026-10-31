@@ -89,6 +89,22 @@ document.body.append(launch, panel);
 
 const $ = id => document.getElementById(id);
 const status = message => { $('dcos-cloud-status').textContent = message || ''; };
+window.addEventListener('dcos:cloud-sync-complete', event => {
+  const report = event.detail || {};
+  const modules = Array.isArray(report.modules) ? report.modules : [];
+  const lines = modules.map(item => {
+    const parts = [item.module + ': ' + (Number(item.synced) || 0) + ' سجل'];
+    if (Number(item.conflicts)) parts.push(Number(item.conflicts) + ' تعارض');
+    if (Number(item.pending)) parts.push(Number(item.pending) + ' معلّق');
+    if (Array.isArray(item.failures) && item.failures.length) parts.push(item.failures.length + ' خطأ');
+    return parts.join('، ');
+  });
+  const summary = 'اكتملت دورة المزامنة — ' + lines.join(' | ') +
+    (report.failures?.length ? ' | إجمالي الأخطاء: ' + report.failures.length : '') +
+    (report.pendingPatientWrites ? ' | عمليات مرضى معلّقة: ' + report.pendingPatientWrites : '');
+  status(summary);
+});
+
 function friendlyCloudError(error, fallback) {
   const message = String(error?.message || error || '');
   if (/Supabase URL and publishable key are required/i.test(message)) return 'إعداد الاتصال السحابي غير مكتمل. أدخل رابط المشروع والمفتاح العام أو استخدم نسخة التطبيق المجهزة بالإعدادات.';
@@ -964,7 +980,7 @@ async function syncAllCloudModulesForBranch(branchId, showStatus = false) {
   if (existing) { existing.queued = true; return existing.promise; }
   const state = { queued: false, promise: null };
   state.promise = (async () => {
-    let last = [];
+    let last = [], patientQueue = { synced: 0, blocked: 0, pending: 0, conflicts: 0 };
     do {
       state.queued = false;
       last = await Promise.allSettled([
@@ -973,19 +989,50 @@ async function syncAllCloudModulesForBranch(branchId, showStatus = false) {
         syncClinicalFinanceAndLabsForBranch(branchId, false),
         syncAuxModulesForBranch(branchId)
       ]);
-      await flushPatientSyncQueue();
+      patientQueue = await flushPatientSyncQueue() || patientQueue;
     } while (state.queued && activeMembership && navigator.onLine);
+    const names = ['appointments', 'inventory', 'clinical_finance_labs', 'auxiliary'];
     const failures = last.filter(item => item.status === 'rejected').map(item => item.reason?.message || 'sync_error');
-    let synced = 0, conflicts = 0;
-    for (const item of last) {
-      if (item.status !== 'fulfilled') continue;
+    const conflicts = [];
+    const modules = [];
+    let synced = Number(patientQueue.synced || 0);
+    last.forEach((item, index) => {
+      if (item.status !== 'fulfilled') {
+        modules.push({ module: names[index], synced: 0, conflicts: 0, failures: [item.reason?.message || 'sync_error'] });
+        return;
+      }
       const value = item.value || {};
-      synced += Number(value.synced) || 0;
-      conflicts += Array.isArray(value.conflicts) ? value.conflicts.length : (Number(value.conflicts) || 0);
-      if (Array.isArray(value.failed)) failures.push(...value.failed.map(failure => failure.module + ': ' + (failure.error?.message || 'sync_error')));
+      const moduleConflicts = Array.isArray(value.conflicts) ? value.conflicts.length : (Number(value.conflicts) || 0);
+      const moduleFailures = (value.failed || []).map(failure => failure.module + ': ' + (failure.error?.message || 'sync_error'));
+      synced += Number(value.synced || 0);
+      if (Array.isArray(value.conflicts)) {
+        for (const conflict of value.conflicts) conflicts.push({ ...conflict, module: names[index] });
+      } else if (Number(value.conflicts) > 0) {
+        conflicts.push({ module: names[index], count: Number(value.conflicts) });
+      }
+      failures.push(...moduleFailures);
+      modules.push({ module: names[index], synced: Number(value.synced || 0), conflicts: moduleConflicts, failures: moduleFailures });
+    });
+    const patientConflicts = Math.max(Number(patientQueue.blocked || 0), Number(patientQueue.conflicts || 0));
+    modules.push({
+      module: 'patients', synced: Number(patientQueue.synced || 0),
+      conflicts: patientConflicts, pending: Number(patientQueue.pending || 0), failures: []
+    });
+    const conflictCount = conflicts.reduce((sum, item) => sum + Number(item.count || 1), 0) + patientConflicts;
+    const report = {
+      branchId, completedAt: new Date().toISOString(), synced, modules, conflicts, conflictCount, failures,
+      pendingPatientWrites: Number(patientQueue.pending || 0),
+      patientWritesBlocked: Number(patientQueue.blocked || 0)
+    };
+    window.dispatchEvent(new CustomEvent('dcos:cloud-sync-complete', { detail: report }));
+    if (showStatus) {
+      const parts = ['نتيجة المزامنة السحابية: ' + synced + ' سجلًا تمت مراجعته/مزامنته'];
+      if (conflictCount) parts.push(conflictCount + ' تعارضات/سجلات تحتاج مراجعة');
+      if (report.pendingPatientWrites) parts.push(report.pendingPatientWrites + ' عمليات مرضى معلّقة');
+      if (failures.length) parts.push(failures.length + ' أخطاء');
+      status(parts.join('، ') + '.');
     }
-    if (showStatus) status('نتيجة المزامنة السحابية: ' + synced + ' سجلًا تمت مراجعته/مزامنته، ' + conflicts + ' تعارضات تحتاج مراجعة، ' + failures.length + ' أخطاء.');
-    return { failures, synced, conflicts };
+    return report;
   })();
   cloudBranchSyncLocks.set(branchId, state);
   try { return await state.promise; }
@@ -1002,7 +1049,7 @@ function queueAutomaticCloudSync(reason = 'local_change') {
       cloudAutoSyncTimers.delete(branch.id);
       try {
         const outcome = await syncAllCloudModulesForBranch(branch.id, reason === 'branch_mapping_approved');
-        if (outcome?.failures?.length && navigator.onLine) {
+        if ((outcome?.failures?.length || outcome?.pendingPatientWrites) && navigator.onLine) {
           const attempt = (cloudAutoSyncAttempts.get(branch.id) || 0) + 1;
           cloudAutoSyncAttempts.set(branch.id, attempt);
           if (attempt <= 3) {
@@ -1154,7 +1201,10 @@ window.addEventListener('dcos:patient-saved', event => {
   if (!branchMap[String(patient.localBranchId)]) return; // no outbox until this local branch is linked to the signed-in clinic
   enqueueLocalPatientForSync({ ...patient, clinicId: activeMembership.clinic_id });
 });
-window.addEventListener('online', () => flushPatientSyncQueue());
+window.addEventListener('online', () => {
+  flushPatientSyncQueue();
+  queueAutomaticCloudSync('online_restore');
+});
 function readPatientQueue() {
   try {
     const queue = JSON.parse(localStorage.getItem(PATIENT_QUEUE_KEY) || '[]');
@@ -1171,7 +1221,9 @@ function enqueueLocalPatientForSync(patient) {
   flushPatientSyncQueue();
 }
 async function flushPatientSyncQueue() {
-  if (patientQueueFlushInFlight || !navigator.onLine || !activeMembership) return;
+  if (patientQueueFlushInFlight || !navigator.onLine || !activeMembership) {
+    return { synced: 0, blocked: 0, pending: readPatientQueue().length, conflicts: 0, skipped: true };
+  }
   patientQueueFlushInFlight = true;
   const queue = readPatientQueue();
   const initialQueueByKey = new Map(queue.map(item => [String(item.clinicId)+'::'+String(item.localBranchId)+'::'+String(item.id), item]));
@@ -1214,7 +1266,9 @@ async function flushPatientSyncQueue() {
     }
     localStorage.setItem(PATIENT_QUEUE_KEY, JSON.stringify([...finalQueueByKey.values()]));
     localStorage.setItem(PATIENT_CONFLICTS_KEY, JSON.stringify(conflicts));
+    return { synced, blocked, pending: finalQueueByKey.size, conflicts: conflicts.length };
     if (synced || blocked) status((synced ? 'تمت مزامنة ' + synced + ' سجل مريض أساسي. ' : '') + (blocked ? 'تم إيقاف ' + blocked + ' سجلات متعارضة ونقلها لقائمة المراجعة؛ لم يتم استبدال أي مريض موجود.' : ''));
+    return { synced, blocked, pending: finalQueueByKey.size, conflicts: conflicts.length };
   } finally {
     patientQueueFlushInFlight = false;
   }

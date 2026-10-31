@@ -676,6 +676,17 @@ function patientModulePayload(patient, module) {
   throw new Error('Unsupported patient data module.');
 }
 function patientModuleEqual(a,b) { return JSON.stringify(a ?? null) === JSON.stringify(b ?? null); }
+function patientModuleIsEmpty(payload, module) {
+  if (module === 'finance') return !Array.isArray(payload?.pay) || payload.pay.length === 0;
+  const mh = payload?.mh || {};
+  const historyEmpty = !(mh.c || []).length && !mh.al && !mh.md && !mh.sg && !mh.sm && !mh.pr && !mh.nt;
+  const teethEmpty = !payload?.teeth || Object.keys(payload.teeth).length === 0;
+  return historyEmpty && teethEmpty &&
+    !(payload?.plan || []).length && !(payload?.visits || []).length &&
+    !(payload?.rx || []).length && !(payload?.cons || []).length &&
+    !(payload?.perio || []).length && !(payload?.notes || []).length &&
+    !Number(payload?.pdisc || 0) && !payload?.appr;
+}
 function getLocalPatientModuleSnapshot(localBranchId) {
   let snapshot = null;
   window.dispatchEvent(new CustomEvent('dcos:get-local-cloud-data', { detail: {
@@ -710,7 +721,7 @@ async function syncPatientModuleForBranchUnlocked(branchId, module, showStatus =
       continue;
     }
     if (!baseline) {
-      if (patientModuleEqual(payload, remote.payload)) {
+      if (patientModuleEqual(payload, remote.payload) || patientModuleIsEmpty(payload, module)) {
         merged.push({ patientNo, module, payload: remote.payload, revision: remote.revision });
       } else {
         conflicts.push({ patientNo, module, reason: 'السجل موجود على السحابة دون بصمة محلية؛ لم نستبدل أي بيانات.' });

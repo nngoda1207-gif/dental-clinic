@@ -134,4 +134,9 @@ assert.ok(edge.includes('action==="list_dentists"'), 'Appointment mapping must u
 assert.ok(recordRepo.includes(".from('clinic_records')"), 'Generic record repository must use the deployed cloud record store');
 assert.ok(!recordRepo.includes('localStorage') && !recordRepo.includes('dcos1'), 'Generic record repository must never upload the entire local D blob');
 
+
+assert.ok(portal.includes("window.DCOS_CLOUD_AUTH_STATE = 'ready'") && portal.includes("dcos:cloud-auth-ready"), 'Cloud auth must announce readiness only after client configuration');
+assert.ok(portal.includes("window.DCOS_CLOUD_AUTH_STATE = 'error'") && portal.includes("dcos:cloud-auth-error"), 'Cloud auth initialization errors must be surfaced');
+assert.ok(index.includes('waitForCloudAuthReady()') && index.includes('dcos:cloud-auth-error'), 'Main login must wait for cloud auth module instead of failing on startup race');
+assert.ok(index.includes('12 ثانية') && index.includes('onerror='), 'Cloud module load failures and timeouts must produce actionable feedback');
 console.log('Cloud portal and cloud permission integration safety checks passed.');

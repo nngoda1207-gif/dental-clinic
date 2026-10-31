@@ -12,6 +12,7 @@ import { listAllPatientsForAssignedBranch, watchPatientsForAssignedBranch, upser
 import { preparePatientImport, importNewPatients } from './patient-import-service.js';
 import { listRemoteAppointments, createAppointmentInAssignedBranch, updateAppointmentInAssignedBranch } from './appointment-repository.js';
 import { mapLocalAppointmentToRemote, mapRemoteAppointmentToLocal } from './appointment-mapping.js';
+import { listRecordsForAssignedBranch, createRecordInAssignedBranch, updateRecordInAssignedBranch } from './cloud-record-sync-service.js';
 
 // Public project configuration: safe to ship in the app. Never put service-role/secret keys here.
 window.DCOS_SUPABASE_CONFIG = window.DCOS_SUPABASE_CONFIG || {
@@ -208,9 +209,10 @@ async function loadWorkspace() {
   }
   host.innerHTML = `<p><b>الدور:</b> ${escapeHtml(membership.role)} <span class="muted">· تم التحقق من العضوية النشطة</span></p>
     <label>الفرع السحابي<select id="dcos-cloud-branch">${branches.map(b => `<option value="${escapeAttr(b.id)}">${escapeHtml(b.name)}</option>`).join('')}</select></label>
-    <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-sync-appointments" type="button">مزامنة المواعيد</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
+    <div class="cloud-actions"><button class="primary" id="dcos-load-patients" type="button" >تحديث ومتابعة مرضى الفرع</button><button id="dcos-sync-appointments" type="button">مزامنة المواعيد</button><button id="dcos-sync-inventory" type="button">مزامنة المخزون</button><button id="dcos-start-patient-import" type="button">استيراد المرضى المحليين</button></div>
     <div id="dcos-cloud-patients" class="muted">بيانات المرضى لا تُحمّل إلا بعد اختيار الفرع والضغط على الزر.</div><div id="dcos-patient-import" class="cloud-row" hidden></div>`;
   $('dcos-sync-appointments').addEventListener('click', async () => { const branchId = $('dcos-cloud-branch').value; try { await syncAppointmentsForBranch(branchId, true); startAppointmentRealtime(branchId); } catch {} });
+  $('dcos-sync-inventory').addEventListener('click', async () => { try { await syncInventoryForBranch($('dcos-cloud-branch').value, true); } catch {} });
   $('dcos-cloud-branch').addEventListener('change', () => { for (const channel of appointmentRealtimeChannels.values()) getSupabaseClient().removeChannel(channel); appointmentRealtimeChannels.clear(); });
   if (membership.role === 'owner') {
     const staffBox = el('section', { class: 'cloud-row' });
@@ -224,6 +226,7 @@ async function loadWorkspace() {
   }
   $('dcos-load-patients').addEventListener('click', loadPatients);
   $('dcos-sync-appointments').addEventListener('click', () => syncAppointmentsForBranch($('dcos-cloud-branch').value, true));
+  $('dcos-sync-inventory').addEventListener('click', () => syncInventoryForBranch($('dcos-cloud-branch').value, true));
   $('dcos-cloud-branch').addEventListener('change', loadPatients);
   $('dcos-start-patient-import').addEventListener('click', beginPatientImport);
   status('الاتصال ناجح. تم التحقق من العضوية والفروع المسندة.');
@@ -592,6 +595,68 @@ async function syncAppointmentsForBranch(branchId, showStatus = false) {
     }
   }
 }
+
+function getLocalInventorySnapshot(localBranchId) {
+  let snapshot = null;
+  window.dispatchEvent(new CustomEvent('dcos:get-local-inventory', { detail: { localBranchId, respond(value) { snapshot = value; } } }));
+  if (!snapshot) throw new Error('افتح حساب العيادة داخل التطبيق أولًا حتى يمكن قراءة المخزون المحلي.');
+  return snapshot;
+}
+function inventoryPayload(item, remoteBranchId) {
+  const copy = { ...item, br: remoteBranchId };
+  delete copy.cloudRevision; delete copy.cloudSnapshot; delete copy.cloudConflict;
+  return copy;
+}
+function inventoryPayloadEqual(a,b) { return JSON.stringify(a || null) === JSON.stringify(b || null); }
+async function syncInventoryForBranch(branchId, showStatus = false) {
+  if (!activeMembership || !branchId) return;
+  const branchMap = getSavedBranchMap();
+  const localBranchId = Object.keys(branchMap).find(id => branchMap[id] === branchId);
+  if (!localBranchId) throw new Error('اربط الفرع المحلي بالفرع السحابي أولًا.');
+  const local = getLocalInventorySnapshot(localBranchId);
+  const remoteRows = await listRecordsForAssignedBranch({ branchId, module: 'inventory', limit: 2000 });
+  const remoteByKey = new Map(remoteRows.map(row => [String(row.record_key), row]));
+  const merged = [], conflicts = [];
+  for (const item of local.items || []) {
+    const key = String(item.id || '');
+    if (!key) continue;
+    const payload = inventoryPayload(item, branchId), remote = remoteByKey.get(key);
+    if (!remote) {
+      try {
+        const created = await createRecordInAssignedBranch({ branchId, module: 'inventory', recordKey: key, payload });
+        merged.push({ ...created.payload, id: item.id, br: localBranchId, cloudRevision: created.revision, cloudSnapshot: created.payload });
+      } catch (error) { conflicts.push({ localId: key, reason: error.message }); }
+      continue;
+    }
+    const baseline = item.cloudSnapshot || null;
+    const localChanged = baseline ? !inventoryPayloadEqual(payload, baseline) : false;
+    const remoteChanged = baseline ? !inventoryPayloadEqual(remote.payload, baseline) : true;
+    if (!baseline && item.cloudRevision == null) {
+      conflicts.push({ localId: key, reason: 'السجل موجود على السحابة بدون بصمة مزامنة محلية؛ لم نستبدل أي نسخة.' });
+      continue;
+    }
+    if (localChanged && remoteChanged && !inventoryPayloadEqual(payload, remote.payload)) {
+      conflicts.push({ localId: key, reason: 'تم تعديل الصنف على الجهاز والسحابة؛ يلزم مراجعة التعارض.' });
+      continue;
+    }
+    if (localChanged && !remoteChanged) {
+      try {
+        const updated = await updateRecordInAssignedBranch({ branchId, module: 'inventory', recordKey: key, payload, expectedRevision: remote.revision });
+        merged.push({ ...updated.payload, id: item.id, br: localBranchId, cloudRevision: updated.revision, cloudSnapshot: updated.payload });
+      } catch (error) { conflicts.push({ localId: key, reason: error.message }); }
+    } else {
+      merged.push({ ...remote.payload, id: item.id, br: localBranchId, cloudRevision: remote.revision, cloudSnapshot: remote.payload });
+    }
+  }
+  const localKeys = new Set((local.items || []).map(item => String(item.id)));
+  for (const remote of remoteRows) if (!localKeys.has(String(remote.record_key))) {
+    merged.push({ ...remote.payload, id: String(remote.payload?.id || remote.record_key), br: localBranchId, cloudRevision: remote.revision, cloudSnapshot: remote.payload });
+  }
+  window.dispatchEvent(new CustomEvent('dcos:cloud-inventory', { detail: { localBranchId, items: merged, conflicts } }));
+  if (showStatus) status('مزامنة المخزون: ' + merged.length + ' صنفًا، ' + conflicts.length + ' تعارضات تحتاج مراجعة.');
+  return { synced: merged.length, conflicts };
+}
+
 function startAppointmentRealtime(branchId) {
   if (appointmentRealtimeChannels.has(branchId)) getSupabaseClient().removeChannel(appointmentRealtimeChannels.get(branchId));
   const channel = getSupabaseClient().channel('dcos-appointments-' + branchId)
@@ -609,6 +674,7 @@ window.addEventListener('dcos:cloud-user-ready', () => {
   if (!activeMembership) return;
   for (const branch of activeBranches) {
     syncAppointmentsForBranch(branch.id, false).then(() => startAppointmentRealtime(branch.id)).catch(() => {});
+    syncInventoryForBranch(branch.id, false).catch(() => {});
   }
 });
 window.addEventListener('dcos:appointment-saved', event => {

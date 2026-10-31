@@ -57,7 +57,7 @@ as $$
             when p_module = 'patients' and p_action = 'read' then m.permissions ?| array['pv','pa','pe']
             when p_module = 'patients' and p_action = 'create' then m.permissions ? 'pa'
             when p_module = 'patients' and p_action in ('update','delete') then m.permissions ? 'pe'
-            when p_module = 'appointments' then m.permissions ?| array['pi','pa','pe']
+            when p_module = 'appointments' then m.permissions ?| array['pi','pa','pe','aw']
             when p_module = 'finance' then m.permissions ?| array['ex','fv']
             when p_module = 'prices' then m.permissions ?| array['pr','pl']
             when p_module = 'inventory' then m.permissions ?| array['im','iv']

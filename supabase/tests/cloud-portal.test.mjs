@@ -64,6 +64,7 @@ assert.ok(portal.includes('function syncAuxModulesForBranch'), 'Prices, supplier
 assert.ok(portal.includes("'prices','suppliers','settings','branches'"), 'Auxiliary cloud modules must be synchronized automatically');
 assert.ok(index.includes("window.addEventListener('dcos:get-local-aux'"), 'The app must expose local auxiliary module snapshots');
 assert.ok(index.includes("window.addEventListener('dcos:cloud-aux'"), 'The app must safely apply remote auxiliary module snapshots');
+assert.ok(portal.includes("map(item => ({name:item.name,act:item.act!==false}))"), 'Chair sync must not depend on device-specific local IDs');
 assert.ok(portal.includes("window.addEventListener('dcos:local-data-saved'"), 'Every local save must queue automatic cloud synchronization');
 assert.ok(portal.includes("window.addEventListener('online'"), 'Offline changes must resume synchronization when connectivity returns');
 assert.ok(portal.includes('cloudAutoSyncAttempts') && portal.includes('[2000, 5000, 15000]'), 'Transient sync failures must use bounded automatic retries');

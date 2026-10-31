@@ -493,6 +493,13 @@ async function flushPatientSyncQueue() {
 }
 
 // Main-app username login bridge. Keep credentials in Supabase Auth only; never persist them locally.
+window.DCOS_CLOUD_BRANCH_CONTEXT = async () => {
+  const result = await getCurrentClinicMembership();
+  if (!result?.membership || result.membership.role !== 'owner') throw new Error('OWNER_ONLY_BRANCH_CONTEXT');
+  const branches = await listAssignedRemoteBranches(result.membership.clinic_id);
+  return { clinicId: result.membership.clinic_id, branches, branchMap: { ...getSavedBranchMap() } };
+};
+
 window.DCOS_CLOUD_AUTH = {
   async login(username, password) {
     await signInWithUsername(username, password);

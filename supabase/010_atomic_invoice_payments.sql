@@ -67,8 +67,8 @@ begin
   if not found then
     raise exception 'Invoice not found' using errcode = 'P0002';
   end if;
-  if not public.has_clinic_role(v_invoice.clinic_id, array['owner','manager','accountant'])
-     or not public.can_access_clinic_branch(v_invoice.clinic_id, v_invoice.branch_id) then
+  if not private.has_clinic_role(v_invoice.clinic_id, array['owner','manager','accountant'])
+     or not private.can_access_clinic_branch(v_invoice.clinic_id, v_invoice.branch_id) then
     raise exception 'Not allowed to post invoice payments' using errcode = '42501';
   end if;
   if v_invoice.status in ('void','refunded') then
@@ -146,8 +146,8 @@ begin
   if not found then
     raise exception 'Invoice not found' using errcode = 'P0002';
   end if;
-  if not public.has_clinic_role(v_invoice.clinic_id, array['owner','manager','accountant'])
-     or not public.can_access_clinic_branch(v_invoice.clinic_id, v_invoice.branch_id) then
+  if not private.has_clinic_role(v_invoice.clinic_id, array['owner','manager','accountant'])
+     or not private.can_access_clinic_branch(v_invoice.clinic_id, v_invoice.branch_id) then
     raise exception 'Not allowed to refund invoice payments' using errcode = '42501';
   end if;
   if v_invoice.status = 'void' then

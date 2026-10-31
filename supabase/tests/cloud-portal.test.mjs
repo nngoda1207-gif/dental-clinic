@@ -59,7 +59,7 @@ assert.ok(portal.includes('cloudPayloadEqual(a,b)'), 'Patient and lab payloads m
 assert.ok(portal.includes('function appointmentPayloadEqual') && portal.includes('cloudPayloadEqual(a?.[key], b?.[key])'), 'Appointment conflict checks must use canonical field comparisons');
 assert.ok(portal.includes('function inventoryPayloadEqual(a,b) { return cloudPayloadEqual(a,b); }'), 'Inventory conflict checks must use canonical payload comparisons');
 assert.ok(portal.includes('syncClinicalFinanceAndLabsForBranch'), 'Clinical, finance and lab sync must be grouped for manual and automatic use');
-assert.ok(portal.includes("module: 'treatment'") && portal.includes("module: 'finance'"), 'Patient treatment and finance must use separate cloud modules');
+assert.ok(portal.includes("for (const module of ['treatment','finance'])"), 'Patient treatment and finance must use separate cloud modules');
 assert.ok(index.includes('dcos:get-local-cloud-data') && index.includes('cloudModules'), 'The app must expose branch-scoped clinical and financial snapshots');
 assert.ok(index.includes("window.addEventListener('dcos:cloud-patient-modules'"), 'The app must merge treatment and finance modules into the matching patient');
 assert.ok(index.includes("window.addEventListener('dcos:get-local-cloud-data'") && index.includes('labCases'), 'The app must expose branch-scoped lab cases to the cloud portal');

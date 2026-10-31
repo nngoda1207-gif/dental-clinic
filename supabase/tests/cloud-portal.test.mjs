@@ -86,6 +86,7 @@ assert.ok((portal.match(/syncClinicalFinanceAndLabsForBranch\(branchId, false\)/
 assert.ok(portal.includes("for (const module of ['treatment','finance'])"), 'Patient treatment and finance must use separate cloud modules');
 assert.ok(index.includes('dcos:get-local-cloud-data') && index.includes('cloudModules'), 'The app must expose branch-scoped clinical and financial snapshots');
 assert.ok(index.includes("window.addEventListener('dcos:cloud-patient-modules'"), 'The app must merge treatment and finance modules into the matching patient');
+assert.ok(index.includes('const remoteSequence=/^P-(\\\\d+)$/.exec(String(remote.no||\'\'))'), 'Cloud patient imports must advance the local patient-number sequence even when a local profile already exists');
 assert.ok(index.includes("window.addEventListener('dcos:get-local-cloud-data'") && index.includes('labCases'), 'The app must expose branch-scoped lab cases to the cloud portal');
 assert.ok(index.includes("window.addEventListener('dcos:cloud-labs'"), 'The app must merge lab cases received from the cloud');
 assert.ok(index.includes("window.dispatchEvent(new CustomEvent('dcos:lab-saved'"), 'Lab case edits and payments must notify the cloud sync layer');
